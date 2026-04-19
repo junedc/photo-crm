@@ -28,3 +28,15 @@ Homestead.json
 .env.production
 .phpactor.json
 auth.json
+
+.deploy
+.idea
+.DS_Store
+storage
+*.sqlite
+
+.env.deploy
+
+.env.deploy.example
+
+.env.prod
