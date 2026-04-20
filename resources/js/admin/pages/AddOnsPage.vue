@@ -22,10 +22,10 @@ const filteredAddOns = computed(() =>
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-emerald-200">Add-Ons Workspace</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">Create and review package add-ons</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">Create and review package add-ons</h2>
+        <p class="text-sm text-stone-300">
             Manage optional add-ons with their product code, pricing, image, and duration.
         </p>
     </section>
@@ -59,7 +59,7 @@ const filteredAddOns = computed(() =>
                 v-for="entry in filteredAddOns"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[140px_minmax(0,1fr)_auto] gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
+                class="grid w-full grid-cols-[140px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
             >
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-stone-300">{{ entry.product_code }}</p>
@@ -68,7 +68,7 @@ const filteredAddOns = computed(() =>
                     <p class="truncate text-sm font-medium text-white">{{ entry.name }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.duration || 'No duration set' }}</p>
                 </div>
-                <span class="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
+                <span class="inline-flex h-8 items-center justify-center rounded-full bg-emerald-400/15 px-3 text-[11px] font-medium leading-none text-emerald-200">
                     ${{ entry.price }}
                 </span>
             </a>

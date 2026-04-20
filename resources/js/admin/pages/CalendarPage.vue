@@ -183,7 +183,7 @@ const openBooking = (booking) => {
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-sm text-stone-300">
             <span class="text-[11px] uppercase tracking-[0.35em] text-cyan-200">Calendar Workspace</span>
             <span class="mx-2 text-stone-500">•</span>

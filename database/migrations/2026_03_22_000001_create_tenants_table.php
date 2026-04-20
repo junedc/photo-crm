@@ -26,7 +26,6 @@ return new class extends Migration
             $table->decimal('invoice_deposit_percentage', 5, 2)->nullable();
             $table->decimal('travel_free_kilometers', 8, 2)->nullable();
             $table->decimal('travel_fee_per_kilometer', 8, 2)->nullable();
-            $table->string('google_maps_api_key')->nullable();
             $table->string('packages_api_key')->nullable();
             $table->text('stripe_secret')->nullable();
             $table->text('stripe_webhook_secret')->nullable();

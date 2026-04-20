@@ -160,25 +160,21 @@ const confirmRemoveCampaign = () => {
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-pink-200">Campaign Studio</p>
-        <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h2 class="text-xl font-semibold tracking-tight">{{ campaignRecord.subject }}</h2>
-                <p class="mt-2 text-sm text-stone-300">
-                    Status: <span class="font-semibold" :class="campaignRecord.status === 'sent' ? 'text-emerald-200' : 'text-amber-200'">{{ campaignRecord.status_label }}</span>
-                    <span v-if="campaignRecord.sent_at_label"> · Sent {{ campaignRecord.sent_at_label }}</span>
-                </p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <button type="button" class="rounded-xl bg-pink-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-pink-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="sending" @click="sendCampaign">
-                    {{ sending ? 'Sending...' : 'Send campaign' }}
-                </button>
-                <button type="button" class="rounded-xl border border-rose-400/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeCampaign">
-                    Delete
-                </button>
-                <a :href="data.routes.campaigns" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">Back</a>
-            </div>
+        <h2 class="text-sm font-bold italic text-white">{{ campaignRecord.subject }}</h2>
+        <p class="text-sm text-stone-300">
+            Status: <span class="font-semibold" :class="campaignRecord.status === 'sent' ? 'text-emerald-200' : 'text-amber-200'">{{ campaignRecord.status_label }}</span>
+            <span v-if="campaignRecord.sent_at_label"> · Sent {{ campaignRecord.sent_at_label }}</span>
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="rounded-xl bg-pink-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-pink-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="sending" @click="sendCampaign">
+                {{ sending ? 'Sending...' : 'Send campaign' }}
+            </button>
+            <button type="button" class="rounded-xl border border-rose-400/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeCampaign">
+                Delete
+            </button>
+            <a :href="data.routes.campaigns" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">Back</a>
         </div>
     </section>
 

@@ -27,10 +27,10 @@ const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (ch
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-cyan-200">Equipment Workspace</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">Create and review photobooth equipment</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">Create and review photobooth equipment</h2>
+        <p class="text-sm text-stone-300">
             Browse equipment records in a simple list view. Click a row to open its full page.
         </p>
     </section>
@@ -69,13 +69,13 @@ const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (ch
                 v-for="entry in filteredEquipment"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
+                class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
             >
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.name }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.category || 'Uncategorized' }} · ${{ entry.daily_rate }}/day</p>
                 </div>
-                <span class="rounded-full px-2.5 py-1 text-[11px] font-medium" :class="entry.maintenance_status === 'ready' ? 'bg-emerald-400/15 text-emerald-200' : entry.maintenance_status === 'maintenance' ? 'bg-amber-300/15 text-amber-200' : 'bg-rose-400/15 text-rose-200'">
+                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-medium leading-none" :class="entry.maintenance_status === 'ready' ? 'bg-emerald-400/15 text-emerald-200' : entry.maintenance_status === 'maintenance' ? 'bg-amber-300/15 text-amber-200' : 'bg-rose-400/15 text-rose-200'">
                     {{ statusLabel(entry.maintenance_status) }}
                 </span>
             </a>

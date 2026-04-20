@@ -29,10 +29,10 @@ const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-sky-200">Quotes Workspace</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">Review quote requests and customer responses</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">Review quote requests and customer responses</h2>
+        <p class="text-sm text-stone-300">
             Track sent quotes, monitor whether customers accepted or rejected them, and open the linked booking when you need the full details.
         </p>
     </section>
@@ -72,7 +72,7 @@ const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\
                 v-for="entry in filteredQuotes"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_120px_140px] gap-3 border-b border-white/10 px-3 py-3 text-left transition hover:bg-white/[0.03]"
+                class="grid w-full grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_120px_140px] items-center gap-3 border-b border-white/10 px-3 py-3 text-left transition hover:bg-white/[0.03]"
             >
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.customer_name }}</p>
@@ -83,10 +83,10 @@ const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.package_name || 'No package' }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.event_date_label || 'No event date' }}</p>
                 </div>
-                <span class="rounded-full px-2.5 py-1 text-center text-[11px] font-medium" :class="entry.customer_response_status === 'accepted' ? 'bg-emerald-400/15 text-emerald-200' : entry.customer_response_status === 'rejected' ? 'bg-rose-400/15 text-rose-200' : 'bg-amber-300/15 text-amber-200'">
+                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-center text-[11px] font-medium leading-none" :class="entry.customer_response_status === 'accepted' ? 'bg-emerald-400/15 text-emerald-200' : entry.customer_response_status === 'rejected' ? 'bg-rose-400/15 text-rose-200' : 'bg-amber-300/15 text-amber-200'">
                     {{ entry.customer_response_label }}
                 </span>
-                <span class="rounded-full px-2.5 py-1 text-center text-[11px] font-medium" :class="entry.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : entry.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : entry.status === 'cancelled' ? 'bg-rose-400/15 text-rose-200' : 'bg-amber-300/15 text-amber-200'">
+                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-center text-[11px] font-medium leading-none" :class="entry.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : entry.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : entry.status === 'cancelled' ? 'bg-rose-400/15 text-rose-200' : 'bg-amber-300/15 text-amber-200'">
                     {{ statusLabel(entry.status) }}
                 </span>
             </a>

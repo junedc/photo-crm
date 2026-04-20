@@ -656,3 +656,8 @@ Deploy flow:
   - `php artisan config:cache`
   - `php artisan route:cache`
   - `php artisan view:cache`
+
+
+
+/opt/alt/php84/usr/bin/php artisan migrate
+/opt/alt/php84/usr/bin/php artisan db:seed --class=MemoShotSeeder --force
