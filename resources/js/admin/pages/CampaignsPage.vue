@@ -341,26 +341,24 @@ const attachRecipients = async (group) => {
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-pink-200">Campaign Studio</p>
-        <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h2 class="text-xl font-semibold tracking-tight">Campaigns, templates, and subscriber groups</h2>
-                <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
-                    Build reusable rich email templates, maintain subscriber groups, import Excel CSV contact lists, and review campaign engagement.
-                </p>
+        <h2 class="text-sm font-bold italic text-white">Campaigns, templates, and subscriber groups</h2>
+        <p class="text-sm text-stone-300">
+            Build reusable rich email templates, maintain subscriber groups, import Excel CSV contact lists, and review campaign engagement.
+        </p>
+    </section>
+
+    <section class="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div class="flex flex-wrap gap-2">
+                <button v-for="tab in ['campaigns', 'templates', 'groups']" :key="tab" type="button" class="rounded-xl px-4 py-2 text-sm font-semibold capitalize transition" :class="activeTab === tab ? 'bg-pink-300 text-slate-950' : 'border border-white/10 text-white hover:bg-white/5'" @click="openTab(tab)">
+                    {{ tab }}
+                </button>
             </div>
             <a :href="data.routes.create" class="rounded-xl bg-pink-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-pink-200">
                 Create campaign
             </a>
-        </div>
-    </section>
-
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-        <div class="flex flex-wrap gap-2 border-b border-white/10 pb-3">
-            <button v-for="tab in ['campaigns', 'templates', 'groups']" :key="tab" type="button" class="rounded-xl px-4 py-2 text-sm font-semibold capitalize transition" :class="activeTab === tab ? 'bg-pink-300 text-slate-950' : 'border border-white/10 text-white hover:bg-white/5'" @click="openTab(tab)">
-                {{ tab }}
-            </button>
         </div>
 
         <div v-if="activeTab === 'campaigns'" class="pt-4">

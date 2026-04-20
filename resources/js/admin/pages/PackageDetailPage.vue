@@ -158,10 +158,10 @@ const confirmRemovePackage = () => {
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-amber-200">Package Workspace</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">{{ packageRecord.name }}</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">{{ packageRecord.name }}</h2>
+        <p class="text-sm text-stone-300">
             Review package details first, then switch into edit mode only when you want to update the record.
         </p>
     </section>

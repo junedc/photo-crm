@@ -55,10 +55,10 @@ watch([search, selectedStatus], () => fetchLeads(1, false));
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-violet-200">Leads Workspace</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">Track booking prospects and follow-ups</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">Track booking prospects and follow-ups</h2>
+        <p class="text-sm text-stone-300">
             Review autosaved booking prospects, add manual leads, and maintain the sales pipeline for each tenant.
         </p>
     </section>
@@ -97,7 +97,7 @@ watch([search, selectedStatus], () => fetchLeads(1, false));
                 v-for="entry in leads"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_120px_140px] gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
+                class="grid w-full grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_120px_140px] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
             >
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.customer_name }}</p>
@@ -107,7 +107,7 @@ watch([search, selectedStatus], () => fetchLeads(1, false));
                     <p class="truncate text-sm font-medium text-stone-300">{{ entry.customer_email || 'No email' }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.customer_phone || 'No phone' }}</p>
                 </div>
-                <span class="rounded-full bg-violet-400/15 px-2.5 py-1 text-center text-[11px] font-medium capitalize text-violet-200">
+                <span class="inline-flex h-8 items-center justify-center rounded-full bg-violet-400/15 px-3 text-center text-[11px] font-medium leading-none text-violet-200 capitalize">
                     {{ entry.status }}
                 </span>
                 <span class="truncate text-xs text-stone-400">

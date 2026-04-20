@@ -16,7 +16,7 @@ class MemoShotSeeder extends Seeder
     public function run(): void
     {
         $tenant = Tenant::query()->updateOrCreate(
-            ['slug' => 'memoshot'],
+            ['slug' => 'm'],
             [
                 'name' => 'MemoShot',
                 'logo_path' => null,
@@ -27,14 +27,13 @@ class MemoShotSeeder extends Seeder
                 'invoice_deposit_percentage' => null,
                 'travel_free_kilometers' => null,
                 'travel_fee_per_kilometer' => null,
-                'google_maps_api_key' => null,
                 'quote_prefix' => null,
                 'invoice_prefix' => null,
             ]
         );
 
         $user = User::query()->updateOrCreate(
-            ['email' => 'memoshot@email.com'],
+            ['email' => 'junecruzes@gmail.com'],
             [
                 'name' => 'MemoShot',
                 'password' => '$2y$12$m3Tg1T9PX1JFGrfjA103LudkIWlWsGnYFgzJviUzQ6kwKLKyQiCcu',

@@ -28,7 +28,6 @@ class Tenant extends Model
         'invoice_deposit_percentage',
         'travel_free_kilometers',
         'travel_fee_per_kilometer',
-        'google_maps_api_key',
         'packages_api_key',
         'stripe_secret',
         'stripe_webhook_secret',

@@ -24,7 +24,6 @@ const navItems = computed(() => [
     { key: 'equipment', label: 'Equipment', href: props.data.routes.equipment, accent: 'cyan', icon: 'camera' },
     { key: 'addons', label: 'Add-Ons', href: props.data.routes.addons, accent: 'emerald', icon: 'plus' },
     { key: 'discounts', label: 'Discounts', href: props.data.routes.discounts, accent: 'violet', icon: 'tag' },
-    { key: 'settings', label: 'Settings', href: props.data.routes.settings, accent: 'slate', icon: 'settings' },
 ]);
 
 const navIcons = {
@@ -237,19 +236,18 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="flex w-full pt-16">
-            <aside class="hidden w-64 shrink-0 border-r border-white/10 bg-slate-950/90 lg:fixed lg:bottom-0 lg:top-16 lg:block">
-                <div class="flex h-full flex-col px-4 py-5">
-
-                    <nav class="mt-6 space-y-1.5">
+            <aside class="hidden w-64 shrink-0 overflow-hidden border-r border-white/10 bg-slate-950/90 lg:fixed lg:bottom-0 lg:top-16 lg:block">
+                <div class="flex h-full min-h-0 flex-col px-3 py-4">
+                    <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
                         <a
                             v-for="item in navItems"
                             :key="item.key"
                             :href="item.href"
-                            class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition"
+                            class="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition"
                             :class="accentClass(item)"
                         >
-                            <span class="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-stone-200">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-stone-200">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                     <path
                                         v-for="path in navIcons[item.icon]"
                                         :key="path"
@@ -264,6 +262,29 @@ onBeforeUnmount(() => {
                             <span>{{ item.label }}</span>
                         </a>
                     </nav>
+
+                    <div class="mt-3 shrink-0 border-t border-white/10 pt-3">
+                        <a
+                            :href="data.routes.settings"
+                            class="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition"
+                            :class="accentClass({ key: 'settings', accent: 'slate' })"
+                        >
+                            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-stone-200">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path
+                                        v-for="path in navIcons.settings"
+                                        :key="path"
+                                        :d="path"
+                                        stroke="currentColor"
+                                        stroke-width="1.8"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </span>
+                            <span>Settings</span>
+                        </a>
+                    </div>
                 </div>
             </aside>
 

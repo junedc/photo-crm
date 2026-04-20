@@ -39,7 +39,6 @@ const workspaceForm = ref({
     invoice_deposit_percentage: tenantRecord.value.invoice_deposit_percentage ?? '30.00',
     travel_free_kilometers: tenantRecord.value.travel_free_kilometers ?? '0.00',
     travel_fee_per_kilometer: tenantRecord.value.travel_fee_per_kilometer ?? '0.00',
-    google_maps_api_key: tenantRecord.value.google_maps_api_key ?? '',
     packages_api_key: tenantRecord.value.packages_api_key ?? '',
     stripe_secret: tenantRecord.value.stripe_secret ?? '',
     stripe_webhook_secret: tenantRecord.value.stripe_webhook_secret ?? '',
@@ -87,7 +86,6 @@ const saveWorkspace = async () => {
     formData.append('invoice_deposit_percentage', workspaceForm.value.invoice_deposit_percentage ?? '');
     formData.append('travel_free_kilometers', workspaceForm.value.travel_free_kilometers ?? '');
     formData.append('travel_fee_per_kilometer', workspaceForm.value.travel_fee_per_kilometer ?? '');
-    formData.append('google_maps_api_key', workspaceForm.value.google_maps_api_key ?? '');
     formData.append('packages_api_key', workspaceForm.value.packages_api_key ?? '');
     formData.append('stripe_secret', workspaceForm.value.stripe_secret ?? '');
     formData.append('stripe_webhook_secret', workspaceForm.value.stripe_webhook_secret ?? '');
@@ -118,7 +116,6 @@ const saveWorkspace = async () => {
             invoice_deposit_percentage: record.invoice_deposit_percentage ?? '30.00',
             travel_free_kilometers: record.travel_free_kilometers ?? '0.00',
             travel_fee_per_kilometer: record.travel_fee_per_kilometer ?? '0.00',
-            google_maps_api_key: record.google_maps_api_key ?? '',
             packages_api_key: record.packages_api_key ?? '',
             stripe_secret: record.stripe_secret ?? '',
             stripe_webhook_secret: record.stripe_webhook_secret ?? '',
@@ -174,10 +171,10 @@ onMounted(() => {
 </script>
 
 <template>
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-lg shadow-black/10">
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-slate-300">Settings</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight">Workspace and account settings</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">
+        <h2 class="text-sm font-bold italic text-white">Workspace and account settings</h2>
+        <p class="text-sm text-stone-300">
             Update your business logo, contact details, workspace settings, and admin profile from one place.
         </p>
     </section>
@@ -290,7 +287,7 @@ onMounted(() => {
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                     <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace Settings</p>
-                    <p class="mt-2 text-sm text-stone-400">Control booking deposits, travel pricing, and Google address suggestions from one table.</p>
+                    <p class="mt-2 text-sm text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
 
                     <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
                         <table class="min-w-full table-fixed divide-y divide-white/10 text-sm">
@@ -348,15 +345,6 @@ onMounted(() => {
                                             <input v-model="workspaceForm.customer_package_discount_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                                             <span class="text-stone-400">%</span>
                                         </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Google Maps API Key</p>
-                                        <p class="mt-1 text-xs text-stone-500">Used for address suggestions and travel-distance calculations.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.google_maps_api_key" type="text" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                                     </td>
                                 </tr>
                                 <tr>

@@ -710,7 +710,7 @@ class CatalogAdminController extends Controller
             'invoice_deposit_percentage' => number_format((float) ($tenant->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
             'travel_free_kilometers' => number_format((float) ($tenant->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
             'travel_fee_per_kilometer' => number_format((float) ($tenant->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
-            'google_maps_api_key' => $tenant->google_maps_api_key ?? env('VITE_GOOGLE_MAPS_API_KEY', ''),
+            'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
             'quote_prefix' => $tenant->quote_prefix ?? 'QT',
             'invoice_prefix' => $tenant->invoice_prefix ?? 'INV',
             'customer_package_discount_percentage' => number_format((float) ($tenant->customer_package_discount_percentage ?? 0), 2, '.', ''),

@@ -85,7 +85,7 @@ class BookingController extends Controller
             'travelFeePerKilometer' => (float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)),
             'depositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
             'customerPackageDiscountPercentage' => $this->customerPackageDiscountPercentage($tenant),
-            'googleMapsApiKey' => $tenant?->google_maps_api_key ?? env('VITE_GOOGLE_MAPS_API_KEY', ''),
+            'googleMapsApiKey' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
         ]);
     }
 
@@ -444,7 +444,7 @@ class BookingController extends Controller
                     'invoice_deposit_percentage' => number_format((float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
                     'travel_free_kilometers' => number_format((float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
                     'travel_fee_per_kilometer' => number_format((float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
-                    'google_maps_api_key' => $tenant?->google_maps_api_key ?? env('VITE_GOOGLE_MAPS_API_KEY', ''),
+                    'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
                 ],
                 'routes' => [
                     'dashboard' => route('dashboard'),
@@ -551,7 +551,7 @@ class BookingController extends Controller
                     'invoice_deposit_percentage' => number_format((float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
                     'travel_free_kilometers' => number_format((float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
                     'travel_fee_per_kilometer' => number_format((float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
-                    'google_maps_api_key' => $tenant?->google_maps_api_key ?? env('VITE_GOOGLE_MAPS_API_KEY', ''),
+                    'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
                 ],
                 'routes' => [
                     'dashboard' => route('dashboard'),
@@ -594,7 +594,7 @@ class BookingController extends Controller
                     'invoice_deposit_percentage' => number_format((float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
                     'travel_free_kilometers' => number_format((float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
                     'travel_fee_per_kilometer' => number_format((float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
-                    'google_maps_api_key' => $tenant?->google_maps_api_key ?? env('VITE_GOOGLE_MAPS_API_KEY', ''),
+                    'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
                 ],
                 'routes' => [
                     'dashboard' => route('dashboard'),
