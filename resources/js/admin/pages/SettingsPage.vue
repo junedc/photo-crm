@@ -368,6 +368,18 @@ onMounted(() => {
                                 </tr>
                                 <tr>
                                     <td class="px-4 py-3 align-top">
+                                        <p class="font-medium text-white">Tenant Stripe Webhook URL</p>
+                                        <p class="mt-1 text-xs text-stone-500">Use this URL in your Stripe Dashboard webhook endpoint.</p>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+                                            <p class="break-all font-mono text-sm text-cyan-100">{{ props.data.routes.tenantStripeWebhook }}</p>
+                                            <p class="mt-2 text-xs font-medium text-cyan-50">Required event: checkout.session.completed</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 align-top">
                                         <p class="font-medium text-white">Stripe Webhook Secret</p>
                                         <p class="mt-1 text-xs text-stone-500">Tenant-specific webhook signing secret for Stripe payment confirmation. Leave blank to keep the saved secret.</p>
                                         <p v-if="tenantRecord.stripe_webhook_secret_configured" class="mt-1 text-xs text-emerald-300">A Stripe webhook secret is saved for this workspace.</p>

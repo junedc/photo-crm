@@ -24,7 +24,12 @@ class TenantSubscriptionCharge extends Model
         'status',
         'stripe_checkout_session_id',
         'stripe_payment_intent_id',
+        'reminder_sent_at',
+        'failure_notified_at',
+        'next_retry_at',
         'paid_at',
+        'payment_attempts',
+        'last_payment_error',
         'notes',
     ];
 
@@ -34,7 +39,11 @@ class TenantSubscriptionCharge extends Model
             'period_starts_at' => 'date',
             'period_ends_at' => 'date',
             'amount' => 'decimal:2',
+            'reminder_sent_at' => 'datetime',
+            'failure_notified_at' => 'datetime',
+            'next_retry_at' => 'datetime',
             'paid_at' => 'datetime',
+            'payment_attempts' => 'integer',
         ];
     }
 

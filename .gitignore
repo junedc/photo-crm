@@ -34,9 +34,7 @@ auth.json
 .DS_Store
 storage
 *.sqlite
-
 .env.deploy
-
 .env.deploy.example
-
 .env.prod
+.env.backup.*

@@ -333,6 +333,92 @@
                     </table>
                 </div>
             </section>
+
+            <section class="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.04] px-5 py-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-sky-200">SSH Artisan</p>
+                    <p class="text-sm text-slate-400">Copy and run from the Laravel app folder on the server.</p>
+                    @php($sshCommand = 'ssh -p 65002 u838520432@157.173.209.64')
+                    <button
+                        type="button"
+                        data-command="{{ $sshCommand }}"
+                        class="rounded-full bg-sky-300 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-sky-200"
+                        onclick="navigator.clipboard?.writeText(this.dataset.command); this.textContent = 'SSH copied'; setTimeout(() => this.textContent = 'Copy SSH login', 1200);"
+                    >
+                        Copy SSH login
+                    </button>
+                    <a
+                        href="ssh://u838520432@157.173.209.64:65002"
+                        class="rounded-full border border-sky-300/40 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/10"
+                    >
+                        Open SSH
+                    </a>
+                    @php($artisanCommands = [
+                        'Clear cache' => '/opt/alt/php84/usr/bin/php artisan optimize:clear',
+                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate --force',
+                        'Seed MemoShot' => '/opt/alt/php84/usr/bin/php artisan db:seed --class=MemoShotSeeder --force',
+                        'Seed demo data' => '/opt/alt/php84/usr/bin/php artisan db:seed --class=DemoSeeder --force',
+                        'Storage link' => '/opt/alt/php84/usr/bin/php artisan storage:link',
+                        'Cache config' => '/opt/alt/php84/usr/bin/php artisan config:cache',
+                        'Cache routes' => '/opt/alt/php84/usr/bin/php artisan route:cache',
+                        'Cache views' => '/opt/alt/php84/usr/bin/php artisan view:cache',
+                    ])
+                    <div class="flex flex-wrap gap-2">
+                        @foreach ($artisanCommands as $label => $command)
+                            <button
+                                type="button"
+                                data-command="{{ $command }}"
+                                class="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-sky-300/50 hover:bg-sky-300/10 hover:text-sky-100"
+                                onclick="navigator.clipboard?.writeText(this.dataset.command); this.textContent = 'Copied'; setTimeout(() => this.textContent = '{{ $label }}', 1200);"
+                            >
+                                {{ $label }}
+                            </button>
+                        @endforeach
+                    </div>
+                    <div class="flex flex-wrap gap-2 border-l border-white/10 pl-3">
+                        @php($stripeEndpoints = [
+                            'Tenant webhook' => url('/stripe/webhook'),
+                            'Platform webhook' => url('/platform/stripe/webhook'),
+                        ])
+                        @foreach ($stripeEndpoints as $label => $endpoint)
+                            <button
+                                type="button"
+                                data-command="{{ $endpoint }}"
+                                class="rounded-full border border-emerald-300/30 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/10"
+                                onclick="navigator.clipboard?.writeText(this.dataset.command); this.textContent = 'Copied'; setTimeout(() => this.textContent = '{{ $label }}', 1200);"
+                            >
+                                {{ $label }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="mt-6 rounded-[2rem] border border-rose-300/20 bg-rose-300/10 px-5 py-4">
+                <details>
+                    <summary class="cursor-pointer text-sm font-semibold text-rose-100">
+                        Edit .env
+                        <span class="ml-2 text-xs font-normal text-rose-100/70">Super admin only. Saving creates a timestamped backup.</span>
+                    </summary>
+                    <form method="POST" action="{{ route('super-admin.environment.update') }}" class="mt-4 space-y-3">
+                        @csrf
+                        <textarea
+                            name="environment_content"
+                            rows="18"
+                            spellcheck="false"
+                            class="w-full rounded-2xl border border-white/10 bg-slate-950/90 px-4 py-3 font-mono text-xs leading-5 text-slate-100 outline-none transition focus:border-rose-200"
+                        >{{ old('environment_content', $environmentContent) }}</textarea>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-xs text-rose-100/70">
+                                After changing cached values, run: /opt/alt/php84/usr/bin/php artisan optimize:clear
+                            </p>
+                            <button type="submit" class="rounded-xl bg-rose-200 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-rose-100">
+                                Save .env
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </section>
         </main>
     </body>
 </html>

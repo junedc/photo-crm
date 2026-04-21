@@ -5,13 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
 use App\Models\TenantSubscriptionCharge;
+use App\Services\PlatformSubscriptionBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class StripeWebhookController extends Controller
 {
-    public function __invoke(Request $request): Response
+    public function __construct(private readonly PlatformSubscriptionBillingService $platformBillingService)
+    {
+    }
+
+    public function __invoke(Request $request, string $scope = 'tenant'): Response
     {
         $payload = (string) $request->getContent();
         $event = json_decode($payload, true);
@@ -21,14 +26,14 @@ class StripeWebhookController extends Controller
         }
 
         $signature = (string) $request->header('Stripe-Signature', '');
-        $secret = $this->webhookSecretForEvent($event);
+        $secret = $this->webhookSecretForScope($event, $scope);
 
         if (! $this->isValidSignature($payload, $signature, $secret)) {
             return response('Invalid Stripe signature.', SymfonyResponse::HTTP_BAD_REQUEST);
         }
 
         if (($event['type'] ?? null) === 'checkout.session.completed') {
-            $this->handleCheckoutSessionCompleted($event['data']['object'] ?? []);
+            $this->handleCheckoutSessionCompleted($event['data']['object'] ?? [], $scope);
         }
 
         return response('Webhook received.', SymfonyResponse::HTTP_OK);
@@ -37,42 +42,48 @@ class StripeWebhookController extends Controller
     /**
      * @param  array<string, mixed>  $event
      */
-    private function webhookSecretForEvent(array $event): string
+    private function webhookSecretForScope(array $event, string $scope): string
     {
-        $session = $event['data']['object'] ?? [];
-
-        if (! is_array($session)) {
-            return (string) config('services.stripe.webhook_secret');
-        }
-
-        $metadata = is_array($session['metadata'] ?? null) ? $session['metadata'] : [];
-
-        if (isset($metadata['tenant_subscription_charge_id'])) {
+        if ($scope === 'platform') {
             return (string) config('services.platform_stripe.webhook_secret');
         }
 
+        $session = $event['data']['object'] ?? [];
+        if (! is_array($session)) {
+            return '';
+        }
+
+        $metadata = is_array($session['metadata'] ?? null) ? $session['metadata'] : [];
         $invoiceId = isset($metadata['invoice_id']) ? (int) $metadata['invoice_id'] : null;
 
         if (! $invoiceId) {
-            return (string) config('services.stripe.webhook_secret');
+            return '';
         }
 
         $invoice = Invoice::query()->with('tenant')->find($invoiceId);
 
-        return (string) ($invoice?->tenant?->stripe_webhook_secret ?: config('services.stripe.webhook_secret'));
+        return (string) $invoice?->tenant?->stripe_webhook_secret;
     }
 
     /**
      * @param  array<string, mixed>  $session
      */
-    private function handleCheckoutSessionCompleted(array $session): void
+    private function handleCheckoutSessionCompleted(array $session, string $scope): void
     {
         $metadata = is_array($session['metadata'] ?? null) ? $session['metadata'] : [];
         $subscriptionChargeId = isset($metadata['tenant_subscription_charge_id']) ? (int) $metadata['tenant_subscription_charge_id'] : null;
 
-        if ($subscriptionChargeId) {
+        if ($scope === 'platform') {
+            if (! $subscriptionChargeId) {
+                return;
+            }
+
             $this->handleSubscriptionChargeCompleted($session, $subscriptionChargeId);
 
+            return;
+        }
+
+        if ($subscriptionChargeId) {
             return;
         }
 
@@ -131,6 +142,14 @@ class StripeWebhookController extends Controller
     {
         if (($session['payment_status'] ?? null) !== 'paid') {
             return;
+        }
+
+        if (isset($session['id'])) {
+            $syncedCharge = $this->platformBillingService->syncPaidCheckoutSession((string) $session['id']);
+
+            if ($syncedCharge instanceof TenantSubscriptionCharge) {
+                return;
+            }
         }
 
         $charge = TenantSubscriptionCharge::query()->with('tenant')->find($chargeId);

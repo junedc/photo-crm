@@ -21,12 +21,19 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->string('stripe_checkout_session_id')->nullable();
             $table->string('stripe_payment_intent_id')->nullable();
+            $table->timestamp('reminder_sent_at')->nullable();
+            $table->timestamp('failure_notified_at')->nullable();
+            $table->timestamp('next_retry_at')->nullable();
             $table->timestamp('paid_at')->nullable();
+            $table->unsignedInteger('payment_attempts')->default(0);
+            $table->text('last_payment_error')->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'period_starts_at']);
             $table->index(['status', 'billing_period']);
+            $table->index(['status', 'period_starts_at']);
+            $table->index(['status', 'next_retry_at']);
             $table->unique(['tenant_id', 'subscription_id', 'period_starts_at'], 'tenant_subscription_charge_period_unique');
         });
 
