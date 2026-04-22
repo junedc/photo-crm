@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MemoShotSeeder extends Seeder
 {
@@ -215,7 +216,8 @@ class MemoShotSeeder extends Seeder
                     'maintenance_status' => $attributes['maintenance_status'],
                     'last_maintained_at' => $attributes['last_maintained_at'],
                     'maintenance_notes' => $attributes['maintenance_notes'],
-                    'photo_path' => $attributes['photo_path'],
+                    'photo_path' => $attributes['photo_path']
+                        ?? 'catalog/generated/add-on-'.Str::slug($attributes['sku'].'-'.$attributes['name']).'.png',
                 ]
             );
         }
