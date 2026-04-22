@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MemoShotSeeder extends Seeder
 {
@@ -215,10 +216,27 @@ class MemoShotSeeder extends Seeder
                     'maintenance_status' => $attributes['maintenance_status'],
                     'last_maintained_at' => $attributes['last_maintained_at'],
                     'maintenance_notes' => $attributes['maintenance_notes'],
-                    'photo_path' => $attributes['photo_path'],
+                    'photo_path' => $attributes['photo_path']
+                        ?? 'catalog/generated/add-on-'.Str::slug($attributes['sku'].'-'.$attributes['name']).'.png',
                 ]
             );
         }
+
+        $addonCategoryFor = function (array $attributes): string {
+            $name = strtolower($attributes['name']);
+            $sku = $attributes['sku'];
+
+            return match (true) {
+                str_contains($name, 'backdrop'), str_contains($name, 'flower wall') => 'Backdrops',
+                str_contains($name, 'attendant'), str_contains($name, 'celebrant'), str_contains($name, 'dj'), str_contains($name, 'singer'), str_contains($name, 'emcee') => 'Event Staff',
+                str_contains($name, 'print'), str_contains($name, 'photo frame'), str_contains($name, 'magnetic'), str_contains($name, 'scrapbook') => 'Prints and Keepsakes',
+                str_contains($name, 'travel'), str_contains($name, 'delivery') => 'Travel and Logistics',
+                str_contains($name, 'qr'), str_contains($name, 'gallery'), str_contains($name, 'usb') => 'Digital Delivery',
+                str_contains($name, 'sparkular'), str_contains($name, 'clouds'), str_contains($name, 'red carpet'), str_contains($name, 'bollards'), str_contains($name, 'props'), str_contains($name, 'styling') => 'Event Styling',
+                $sku === 'A1' || str_contains($name, 'guest book') || str_contains($name, 'neon') => 'Guest Experience',
+                default => 'Other Add-ons',
+            };
+        };
 
         $inventoryItems = collect([
             ['name' => 'Audio Guestbook White Vintage Style', 'category' => 'add-on', 'sku' => 'A1', 'description' => 'Audio guestbook white vintage style that records guests heartfelt greetings message', 'quantity' => 1, 'unit_price' => 0, 'duration' => null, 'maintenance_status' => 'ready', 'last_maintained_at' => null, 'maintenance_notes' => null, 'photo_path' => 'catalog/o4MEAsk6iBxY343sFYtkM7nbsk1HHya6XimpdlRy.png'],
@@ -268,6 +286,7 @@ class MemoShotSeeder extends Seeder
                 [
                     'name' => $attributes['name'],
                     'category' => $attributes['category'],
+                    'addon_category' => $attributes['addon_category'] ?? $addonCategoryFor($attributes),
                     'description' => $attributes['description'],
                     'quantity' => $attributes['quantity'],
                     'unit_price' => $attributes['unit_price'],

@@ -41,7 +41,7 @@ const filteredPackages = computed(() =>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Created Packages</p>
                 <div class="mt-2 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                        <h3 class="text-lg font-semibold">Package list</h3>
+                        <h3 class="text-sm font-semibold italic">Package list</h3>
                         <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ filteredPackages.length }}</span>
                     </div>
                     <a :href="data.routes.create" class="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200">
@@ -57,7 +57,8 @@ const filteredPackages = computed(() =>
                     <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="packageStatusFilter === 'inactive' ? 'border-stone-300/30 bg-white/5 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="packageStatusFilter = 'inactive'">Inactive</button>
                 </div>
             </div>
-            <div class="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+            <div class="mt-3 grid grid-cols-[72px_minmax(0,1fr)_auto] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-[82px_minmax(0,1fr)_auto]">
+                <span>Image</span>
                 <span>Name</span>
                 <span>Status</span>
             </div>
@@ -68,8 +69,14 @@ const filteredPackages = computed(() =>
                 v-for="entry in filteredPackages"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03]"
+                class="grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03] sm:grid-cols-[82px_minmax(0,1fr)_auto]"
             >
+                <div class="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
+                    <img v-if="entry.photo_url" :src="entry.photo_url" :alt="entry.name" class="h-full w-full object-cover">
+                    <div v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-stone-500">
+                        {{ entry.name?.charAt(0) || 'P' }}
+                    </div>
+                </div>
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.name }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">${{ entry.base_price }}</p>

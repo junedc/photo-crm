@@ -10,6 +10,13 @@
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
+        <style>
+            input:checked + article .selection-indicator {
+                border-color: rgb(167 243 208);
+                background: rgb(167 243 208);
+                color: rgb(12 10 9);
+            }
+        </style>
     </head>
     <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
         <script>
@@ -34,10 +41,7 @@
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Travel Fee</p>
                         <p id="booking-summary-travel" class="mt-1 text-sm font-medium text-stone-200">$0.00</p>
                     </div>
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Discount</p>
-                        <p id="booking-summary-discount" class="mt-1 text-sm font-medium text-emerald-200">-$0.00</p>
-                    </div>
+                    <p id="booking-summary-discount" class="hidden">-$0.00</p>
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Deposit</p>
                         <p id="booking-summary-deposit" class="mt-1 text-sm font-medium text-amber-200">$0.00</p>
@@ -46,34 +50,40 @@
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Total Price</p>
                         <p id="booking-summary-total" class="mt-1 text-xl font-semibold text-cyan-200">$0.00</p>
                     </div>
+                    <button
+                        type="button"
+                        id="booking-cart-toggle"
+                        class="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 text-cyan-100 transition hover:bg-cyan-300/20"
+                        aria-expanded="false"
+                        aria-controls="booking-cart-panel"
+                        title="View selected package and add-ons"
+                    >
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M5 6h16l-2 8H8L5 3H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span id="booking-cart-count" class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-bold text-stone-950">0</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <main class="mx-auto max-w-6xl px-4 pb-10 pt-32 sm:px-6 lg:px-8">
-            <section class="rounded-[2rem] border border-white/10 bg-gradient-to-r from-amber-300/15 via-stone-900 to-rose-300/10 px-5 py-4 shadow-2xl shadow-black/20 sm:px-6">
-                <div class="mb-3 flex items-center gap-4">
-                    @if ($tenant->logo_path)
-                        <img src="{{ Storage::disk('public')->url($tenant->logo_path) }}" alt="{{ $tenant->name }} logo" class="h-14 w-14 rounded-2xl object-cover shadow-lg shadow-black/20">
-                    @else
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-stone-300">
-                            {{ \Illuminate\Support\Str::of($tenant->name)->substr(0, 1) }}
-                        </div>
-                    @endif
-                    <div>
-                        <p class="text-sm font-semibold text-white">{{ $tenant->name }}</p>
-                        <p class="text-xs uppercase tracking-[0.3em] text-stone-400">Workspace Booking</p>
-                    </div>
+        <div id="booking-cart-panel" class="fixed right-4 top-24 z-[75] hidden w-[min(24rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-stone-950/95 p-4 text-sm text-stone-200 shadow-2xl shadow-black/40 backdrop-blur-xl sm:right-6">
+            <div class="mb-3 flex items-center justify-between gap-3">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.28em] text-cyan-200">Booking Cart</p>
+                    <p class="mt-1 text-xs text-stone-400">Selected package and add-ons</p>
                 </div>
-                <p class="text-sm text-stone-200">
-                    <span class="text-xs uppercase tracking-[0.35em] text-amber-200">Customer Booking</span>
-                    <span class="mx-2 text-stone-500">•</span>
-                    <span class="text-xl font-semibold tracking-tight text-white">{{ $tenant->name }}</span>
-                    <span class="mx-2 text-stone-500">•</span>
-                    <span class="text-sm text-stone-300">Submit a new booking request and choose the photobooth package you want for your event.</span>
-                </p>
-            </section>
+                <button type="button" id="booking-cart-close" class="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-stone-300 transition hover:bg-white/5">
+                    Close
+                </button>
+            </div>
+            <div id="booking-cart-content" class="space-y-3">
+                <p class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-stone-400">No package selected yet.</p>
+            </div>
+        </div>
 
+        <main class="mx-auto max-w-6xl px-4 pb-10 pt-28 sm:px-6 lg:px-8">
             @if (session('status'))
                 <div class="mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
                     {{ session('status') }}
@@ -99,11 +109,12 @@
                 <input type="hidden" name="travel_fee" id="travel-fee" value="{{ old('travel_fee', '0.00') }}">
                 <input type="hidden" name="total_hours" id="total-hours" value="{{ old('total_hours', '0.00') }}">
 
-                <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-                    <div class="mb-5 flex items-start justify-between gap-4">
-                        <div>
-                            <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Customer Details</p>
-                            <h2 class="mt-2 text-2xl font-semibold">Booking request</h2>
+                <section class="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <p class="text-xs uppercase tracking-[0.3em] text-cyan-200">Customer Details</p>
+                            <span class="hidden text-stone-600 sm:inline">•</span>
+                            <h2 class="text-lg font-semibold">Booking request</h2>
                         </div>
                         <p id="lead-autosave-status" class="text-right text-xs text-stone-400">
                             Customer details are saved automatically.
@@ -214,6 +225,7 @@
                                         data-package-discount-percentage="{{ number_format($customerPackageDiscountPercentage, 2, '.', '') }}"
                                         data-package-hourly-prices='@json($packageHourlyPrices)'
                                         data-package-addon-ids='@json($package->addOns->pluck('id')->values()->all())'
+                                        data-package-photo-url="{{ $package->photo_path ? Storage::disk('public')->url($package->photo_path) : '' }}"
                                         @checked((int) old('package_id') === $package->id)
                                         required
                                     >
@@ -240,15 +252,22 @@
                                             <div>
                                                 <h3 class="text-lg font-semibold text-white">{{ $package->name }}</h3>
                                             </div>
-                                            <button
-                                                type="button"
-                                                class="mt-3 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-300/20"
-                                                data-details-modal="package-details-{{ $package->id }}"
-                                                data-details-name="{{ $package->name }}"
-                                                data-details-label="Package Details"
-                                            >
-                                                View details
-                                            </button>
+                                            <div class="mt-3 flex items-center justify-between gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-300/20"
+                                                    data-details-modal="package-details-{{ $package->id }}"
+                                                    data-details-name="{{ $package->name }}"
+                                                    data-details-label="Package Details"
+                                                >
+                                                    View details
+                                                </button>
+                                                <span class="selection-indicator flex h-8 w-8 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
+                                                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                                        <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                                                    </svg>
+                                                </span>
+                                            </div>
                                         </div>
                                     </article>
                                 </label>
@@ -370,9 +389,22 @@
                             </h2>
                         </div>
 
-                        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        @if (($addOnCategories ?? collect())->isNotEmpty())
+                            <div class="mb-5 flex flex-wrap gap-2" data-addon-category-filters>
+                                <button type="button" class="rounded-full border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-200/70" data-addon-category-filter="all">
+                                    All
+                                </button>
+                                @foreach ($addOnCategories as $category)
+                                    <button type="button" class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-300 transition hover:border-emerald-300/40 hover:text-emerald-100" data-addon-category-filter="{{ $category }}">
+                                        {{ $category }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" id="addon-grid">
                             @forelse ($addOns as $addOn)
-                                <label class="block cursor-pointer">
+                                <label class="block cursor-pointer" data-addon-card data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}">
                                     <input
                                         type="checkbox"
                                         name="add_on_ids[]"
@@ -381,6 +413,9 @@
                                         data-addon-name="{{ $addOn->name }}"
                                         data-addon-price="{{ number_format((float) $addOn->unit_price, 2, '.', '') }}"
                                         data-addon-id="{{ $addOn->id }}"
+                                        data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}"
+                                        data-addon-description="{{ Str::limit($addOn->description ?: 'No add-on description provided yet.', 120) }}"
+                                        data-addon-photo-url="{{ $addOn->photo_path ? Storage::disk('public')->url($addOn->photo_path) : '' }}"
                                         @checked(collect(old('add_on_ids', []))->map(fn ($id) => (int) $id)->contains($addOn->id))
                                     >
                                     <article class="h-full overflow-hidden rounded-3xl border border-white/10 bg-stone-950/50 transition peer-checked:border-emerald-300/60 peer-checked:bg-emerald-300/10 hover:border-white/20">
@@ -400,6 +435,9 @@
                                                 <div class="min-w-0">
                                                     <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ $addOn->sku }}</p>
                                                     <h3 class="mt-1 text-lg font-semibold">{{ $addOn->name }}</h3>
+                                                    @if ($addOn->addon_category)
+                                                        <p class="mt-1 text-xs text-emerald-100/80">{{ $addOn->addon_category }}</p>
+                                                    @endif
                                                 </div>
                                                 @if ($addOn->duration)
                                                     <span class="rounded-full bg-white/5 px-3 py-1 text-xs text-stone-300">
@@ -408,15 +446,22 @@
                                                 @endif
                                             </div>
 
-                                            <button
-                                                type="button"
-                                                class="mt-3 inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100 transition hover:border-emerald-200/60 hover:bg-emerald-300/20"
-                                                data-details-modal="addon-details-{{ $addOn->id }}"
-                                                data-details-name="{{ $addOn->name }}"
-                                                data-details-label="Add-On Details"
-                                            >
-                                                View details
-                                            </button>
+                                            <div class="mt-3 flex items-center justify-between gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100 transition hover:border-emerald-200/60 hover:bg-emerald-300/20"
+                                                    data-details-modal="addon-details-{{ $addOn->id }}"
+                                                    data-details-name="{{ $addOn->name }}"
+                                                    data-details-label="Add-On Details"
+                                                >
+                                                    View details
+                                                </button>
+                                                <span class="selection-indicator flex h-8 w-8 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
+                                                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                                        <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                                                    </svg>
+                                                </span>
+                                            </div>
                                         </div>
                                     </article>
                                 </label>
@@ -455,82 +500,55 @@
                                 </div>
                             @endforelse
                         </div>
-                    </section>
-
-                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-                        <div class="mb-5">
-                            <h2 class="text-lg font-semibold text-white">
-                                <span class="text-violet-200">Book Now Discount</span>
-                                <span class="mx-2 text-stone-500">•</span>
-                                <span>Limited-time offers</span>
-                            </h2>
-                            <p class="mt-2 text-sm leading-6 text-stone-300">
-                                These offers are applied only when the customer confirms with <strong>Book Now</strong>. Quote requests stay at standard pricing.
-                            </p>
-                        </div>
-
-                        <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-                            <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="discount-id">Discount offer</label>
-                                <select id="discount-id" name="discount_id" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-violet-300/50">
-                                    <option value="">No discount</option>
-                                    @foreach ($discounts as $discount)
-                                        <option
-                                            value="{{ $discount->id }}"
-                                            data-discount-type="{{ $discount->discount_type }}"
-                                            data-discount-value="{{ number_format((float) $discount->discount_value, 2, '.', '') }}"
-                                            data-starts-at="{{ $discount->starts_at?->format('Y-m-d') }}"
-                                            data-ends-at="{{ $discount->ends_at?->format('Y-m-d') }}"
-                                            data-package-ids='@json($discount->packages->pluck('id')->values()->all())'
-                                            @selected((int) old('discount_id') === $discount->id)
-                                        >
-                                            {{ $discount->code }} - {{ $discount->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Discount Savings</p>
-                                <p id="discount-amount-label" class="mt-2 text-2xl font-semibold text-emerald-200">-$0.00</p>
-                                <p id="discount-note" class="mt-2 text-sm text-stone-400">Choose a package to see valid discount options.</p>
-                            </div>
+                        <div id="addon-filter-empty" class="mt-4 hidden rounded-3xl border border-dashed border-white/15 bg-stone-950/40 p-6 text-sm text-stone-400">
+                            No add-ons match this category.
                         </div>
                     </section>
 
-                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-                        <div class="mb-5">
-                            <h2 class="text-lg font-semibold text-white">
-                                <span class="text-cyan-200">Travel Fee</span>
-                                <span class="mx-2 text-stone-500">•</span>
-                                <span>Distance pricing</span>
-                            </h2>
-                            <p class="mt-2 text-sm leading-6 text-stone-300">
-                                Travel is calculated as a round trip from {{ $workspaceAddress ?: 'your workspace address' }}. The first {{ number_format((float) $travelFreeKilometers, 2) }} km each way is free, then chargeable kilometers are billed at ${{ number_format((float) $travelFeePerKilometer, 2) }} per kilometer.
-                            </p>
-                        </div>
+                    <select id="discount-id" name="discount_id" class="hidden" aria-hidden="true" tabindex="-1">
+                        <option value="">No discount</option>
+                        @foreach ($discounts as $discount)
+                            <option
+                                value="{{ $discount->id }}"
+                                data-discount-code="{{ $discount->code }}"
+                                data-discount-name="{{ $discount->name }}"
+                                data-discount-type="{{ $discount->discount_type }}"
+                                data-discount-value="{{ number_format((float) $discount->discount_value, 2, '.', '') }}"
+                                data-starts-at="{{ $discount->starts_at?->format('Y-m-d') }}"
+                                data-ends-at="{{ $discount->ends_at?->format('Y-m-d') }}"
+                                data-package-ids='@json($discount->packages->pluck('id')->values()->all())'
+                                @selected((int) old('discount_id') === $discount->id)
+                            >
+                                {{ $discount->code }} - {{ $discount->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p id="discount-amount-label" class="hidden">-$0.00</p>
+                    <p id="discount-note" class="hidden">No discount selected.</p>
 
-                        <div class="grid gap-4 md:grid-cols-4">
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace</p>
-                                <p class="mt-2 text-sm font-medium text-white">{{ $workspaceAddress ?: 'Set your workspace address in Settings to enable travel pricing.' }}</p>
+                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <h2 class="text-sm font-semibold text-white">
+                                    <span class="text-cyan-200">Travel Fee</span>
+                                    <span class="mx-2 text-stone-500">•</span>
+                                    <span>Auto distance pricing</span>
+                                </h2>
+                                <p id="travel-fee-note" class="mt-1 text-xs text-stone-400">
+                                    {{ $workspaceAddress ? 'Round trip from '.$workspaceAddress.'. '.number_format((float) $travelFreeKilometers, 2).' km free each way, then $'.number_format((float) $travelFeePerKilometer, 2).' per km.' : 'Set your workspace address and travel rate in Settings to enable travel pricing.' }}
+                                </p>
                             </div>
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Free Allowance</p>
-                                <p class="mt-2 text-2xl font-semibold text-cyan-200">{{ number_format((float) $travelFreeKilometers, 2) }} km</p>
-                                <p class="mt-1 text-xs text-stone-500">Each way</p>
-                            </div>
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Chargeable Distance</p>
-                                <p id="travel-distance-label" class="mt-2 text-2xl font-semibold text-cyan-200">{{ old('travel_distance_km', '0.00') }} km</p>
-                            </div>
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Travel Fee</p>
-                                <p id="travel-fee-label" class="mt-2 text-2xl font-semibold text-cyan-200">${{ number_format((float) old('travel_fee', 0), 2) }}</p>
+                            <div class="flex flex-wrap items-center gap-3 text-right">
+                                <div class="rounded-2xl border border-white/10 bg-stone-950/50 px-4 py-3">
+                                    <p class="text-[10px] uppercase tracking-[0.24em] text-stone-500">Chargeable</p>
+                                    <p id="travel-distance-label" class="mt-1 text-sm font-semibold text-cyan-200">{{ old('travel_distance_km', '0.00') }} km</p>
+                                </div>
+                                <div class="rounded-2xl border border-white/10 bg-stone-950/50 px-4 py-3">
+                                    <p class="text-[10px] uppercase tracking-[0.24em] text-stone-500">Travel Fee</p>
+                                    <p id="travel-fee-label" class="mt-1 text-sm font-semibold text-cyan-200">${{ number_format((float) old('travel_fee', 0), 2) }}</p>
+                                </div>
                             </div>
                         </div>
-                        <p id="travel-fee-note" class="mt-4 text-sm text-stone-400">
-                            Enter an event location to calculate travel pricing automatically.
-                        </p>
                     </section>
 
                     <div class="grid gap-3 md:grid-cols-2">
@@ -585,9 +603,12 @@
                     <section class="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
                         <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Package</p>
                         <div class="mt-3 flex items-start justify-between gap-4">
-                            <div>
-                                <h3 id="book-now-package-name" class="text-2xl font-semibold text-white">No package selected</h3>
-                                <p class="mt-2 text-sm text-stone-300">This will be used to create your booking, invoice, and deposit payment.</p>
+                            <div class="flex min-w-0 items-center gap-4">
+                                <div id="book-now-package-thumbnail" class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-stone-900 text-3xl font-semibold text-stone-600">P</div>
+                                <div class="min-w-0">
+                                    <h3 id="book-now-package-name" class="text-2xl font-semibold text-white">No package selected</h3>
+                                    <p class="mt-2 text-sm text-stone-300">This will be used to create your booking, invoice, and deposit payment.</p>
+                                </div>
                             </div>
                             <p id="book-now-package-price" class="text-xl font-semibold text-cyan-100">$0.00</p>
                         </div>
@@ -606,14 +627,28 @@
                         </div>
                     </section>
 
+                    <p id="book-now-discount-name" class="hidden">No discount selected.</p>
+                    <p id="book-now-discount-amount" class="hidden">-$0.00</p>
+
                     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <p class="text-sm uppercase tracking-[0.3em] text-violet-200">Selected Discount</p>
-                                <p id="book-now-discount-name" class="mt-2 text-sm text-stone-300">No discount selected.</p>
-                            </div>
-                            <p id="book-now-discount-amount" class="text-lg font-semibold text-emerald-100">-$0.00</p>
+                        <label class="text-sm uppercase tracking-[0.3em] text-violet-200" for="book-now-discount-code">
+                            Discount Code
+                        </label>
+                        <div class="mt-3 flex flex-col gap-3 sm:flex-row">
+                            <input
+                                id="book-now-discount-code"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="Enter code"
+                                class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-violet-300/50"
+                            >
+                            <button type="button" id="book-now-discount-apply" class="rounded-2xl border border-violet-300/30 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-300/10">
+                                Apply
+                            </button>
                         </div>
+                        <p id="book-now-discount-feedback" class="mt-3 text-sm text-stone-400">
+                            Enter a discount code if you have one.
+                        </p>
                     </section>
 
                     <section class="grid gap-4 md:grid-cols-2">
@@ -690,10 +725,18 @@
                 const summaryTravel = document.getElementById('booking-summary-travel');
                 const summaryDiscount = document.getElementById('booking-summary-discount');
                 const summaryDeposit = document.getElementById('booking-summary-deposit');
+                const bookingCartToggle = document.getElementById('booking-cart-toggle');
+                const bookingCartClose = document.getElementById('booking-cart-close');
+                const bookingCartPanel = document.getElementById('booking-cart-panel');
+                const bookingCartCount = document.getElementById('booking-cart-count');
+                const bookingCartContent = document.getElementById('booking-cart-content');
                 const toast = document.getElementById('booking-toast');
                 const toastMessage = document.getElementById('booking-toast-message');
                 const packageInputs = document.querySelectorAll('input[name="package_id"]');
                 const addOnInputs = document.querySelectorAll('input[name="add_on_ids[]"]');
+                const addOnCategoryButtons = document.querySelectorAll('[data-addon-category-filter]');
+                const addOnCards = document.querySelectorAll('[data-addon-card]');
+                const addOnFilterEmpty = document.getElementById('addon-filter-empty');
                 const form = document.querySelector('form[action="{{ route('bookings.store') }}"]');
                 const leadTokenInput = document.getElementById('lead-token');
                 const packageHourlyPriceIdInput = document.getElementById('package-hourly-price-id');
@@ -728,12 +771,16 @@
                 const confirmBookNowButton = document.getElementById('book-now-confirm');
                 const termsAcceptedCheckbox = document.getElementById('terms-accepted');
                 const termsError = document.getElementById('book-now-terms-error');
+                const bookNowPackageThumbnail = document.getElementById('book-now-package-thumbnail');
                 const bookNowPackageName = document.getElementById('book-now-package-name');
                 const bookNowPackagePrice = document.getElementById('book-now-package-price');
                 const bookNowAddonList = document.getElementById('book-now-addon-list');
                 const bookNowAddonTotal = document.getElementById('book-now-addon-total');
                 const bookNowDiscountName = document.getElementById('book-now-discount-name');
                 const bookNowDiscountAmount = document.getElementById('book-now-discount-amount');
+                const bookNowDiscountCode = document.getElementById('book-now-discount-code');
+                const bookNowDiscountApply = document.getElementById('book-now-discount-apply');
+                const bookNowDiscountFeedback = document.getElementById('book-now-discount-feedback');
                 const bookNowDepositAmount = document.getElementById('book-now-deposit-amount');
                 const bookNowTotalAmount = document.getElementById('book-now-total-amount');
                 const autosaveFields = [
@@ -745,7 +792,7 @@
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDepositAmount || !bookNowTotalAmount) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount) {
                     return;
                 }
 
@@ -764,6 +811,90 @@
                     toastTimeout = window.setTimeout(() => {
                         toast.classList.add('hidden');
                     }, 2800);
+                };
+
+                const escapeHtml = (value) => {
+                    const element = document.createElement('div');
+                    element.textContent = value || '';
+
+                    return element.innerHTML;
+                };
+
+                const renderBookNowPackageThumbnail = (packageInput) => {
+                    const photoUrl = packageInput?.dataset.packagePhotoUrl || '';
+                    const packageName = packageInput?.dataset.packageName || 'Selected package';
+
+                    bookNowPackageThumbnail.innerHTML = photoUrl
+                        ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(packageName)}" class="h-full w-full object-cover">`
+                        : 'P';
+                };
+
+                const cartImageMarkup = (photoUrl, name, fallback) => photoUrl
+                    ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-12 w-12 rounded-2xl object-cover">`
+                    : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">${fallback}</div>`;
+
+                const cartRemoveButton = (type, value, label) =>
+                    `<button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-300/30 bg-rose-300/10 text-sm font-bold leading-none text-rose-100 transition hover:bg-rose-300/20" data-cart-remove-type="${type}" data-cart-remove-value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}">×</button>`;
+
+                const renderBookingCart = () => {
+                    const totals = quoteTotals();
+                    const count = (totals.selectedPackage ? 1 : 0) + totals.selectedAddOns.length;
+                    bookingCartCount.textContent = String(count);
+
+                    if (!totals.selectedPackage && !totals.selectedAddOns.length) {
+                        bookingCartContent.innerHTML = '<p class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-stone-400">No package selected yet.</p>';
+                        return;
+                    }
+
+                    const packageMarkup = totals.selectedPackage
+                        ? `<div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-3"><div class="flex items-center justify-between gap-3"><div class="flex min-w-0 items-center gap-3">${cartImageMarkup(totals.selectedPackage.dataset.packagePhotoUrl || '', totals.packageName, 'P')}<div class="min-w-0"><p class="truncate font-semibold text-white">${escapeHtml(totals.packageName)}</p><p class="mt-1 text-xs uppercase tracking-[0.18em] text-cyan-200">Package</p></div></div><div class="flex shrink-0 items-center gap-2"><span class="font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</span>${cartRemoveButton('package', totals.selectedPackage.value, 'Remove selected package')}</div></div></div>`
+                        : '<p class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-stone-400">No package selected.</p>';
+
+                    const addOnMarkup = totals.selectedAddOns.length
+                        ? totals.selectedAddOns.map((input) => {
+                            const name = input.dataset.addonName || 'Add-On';
+                            const category = input.dataset.addonCategory || 'Add-on';
+                            const photoUrl = input.dataset.addonPhotoUrl || '';
+                            const price = formatCurrency(parseAmount(input.dataset.addonPrice));
+
+                            return `<div class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div class="flex min-w-0 items-center gap-3">${cartImageMarkup(photoUrl, name, 'A')}<div class="min-w-0"><p class="truncate font-medium text-white">${escapeHtml(name)}</p><p class="mt-1 text-xs uppercase tracking-[0.18em] text-emerald-200">${escapeHtml(category)}</p></div></div><div class="flex shrink-0 items-center gap-2"><span class="font-medium text-emerald-100">${price}</span>${cartRemoveButton('addon', input.value, `Remove ${name}`)}</div></div>`;
+                        }).join('')
+                        : '<p class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-stone-400">No add-ons selected.</p>';
+
+                    bookingCartContent.innerHTML = `${packageMarkup}<div class="space-y-2">${addOnMarkup}</div><div class="flex items-center justify-between border-t border-white/10 pt-3"><span class="text-xs uppercase tracking-[0.2em] text-stone-500">Total</span><span class="text-lg font-semibold text-cyan-200">${formatCurrency(totals.total)}</span></div>`;
+                };
+
+                const setBookingCartOpen = (open) => {
+                    bookingCartPanel.classList.toggle('hidden', !open);
+                    bookingCartToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+                    if (open) {
+                        renderBookingCart();
+                    }
+                };
+
+                const updateBookNowAmounts = () => {
+                    const totals = bookNowTotals();
+
+                    bookNowPackagePrice.textContent = formatCurrency(totals.packageTotal);
+                    bookNowAddonTotal.textContent = formatCurrency(totals.addOnTotal);
+                    bookNowDiscountName.textContent = totals.selectedDiscount ? totals.selectedDiscount.textContent.trim() : 'No discount selected.';
+                    bookNowDiscountAmount.textContent = `-${formatCurrency(totals.discountAmount)}`;
+                    bookNowTotalAmount.textContent = formatCurrency(totals.total);
+                    bookNowDepositAmount.textContent = formatCurrency(totals.depositAmount);
+
+                    return totals;
+                };
+
+                const setDiscountFeedback = (message, tone = 'neutral') => {
+                    const toneClasses = {
+                        neutral: 'text-stone-400',
+                        success: 'text-emerald-200',
+                        error: 'text-rose-200',
+                    };
+
+                    bookNowDiscountFeedback.textContent = message;
+                    bookNowDiscountFeedback.className = `mt-3 text-sm ${toneClasses[tone] || toneClasses.neutral}`;
                 };
 
                 const selectedPackageIncludedAddOnIds = () => {
@@ -796,6 +927,34 @@
                     }
 
                     showToast(`${duplicatedNames.join(', ')} ${duplicatedNames.length > 1 ? 'are' : 'is'} already included in the selected package.`);
+                };
+
+                const normalizeCategory = (value) => String(value || '').trim().toLowerCase();
+
+                const applyAddOnCategoryFilter = (category) => {
+                    const selectedCategory = normalizeCategory(category);
+                    let visibleCount = 0;
+
+                    addOnCards.forEach((card) => {
+                        const matches = selectedCategory === 'all' || normalizeCategory(card.dataset.addonCategory) === selectedCategory;
+                        card.classList.toggle('hidden', !matches);
+
+                        if (matches) {
+                            visibleCount += 1;
+                        }
+                    });
+
+                    addOnCategoryButtons.forEach((button) => {
+                        const isActive = normalizeCategory(button.dataset.addonCategoryFilter) === selectedCategory;
+                        button.classList.toggle('border-emerald-300/40', isActive);
+                        button.classList.toggle('bg-emerald-300/15', isActive);
+                        button.classList.toggle('text-emerald-100', isActive);
+                        button.classList.toggle('border-white/10', !isActive);
+                        button.classList.toggle('bg-white/5', !isActive);
+                        button.classList.toggle('text-stone-300', !isActive);
+                    });
+
+                    addOnFilterEmpty?.classList.toggle('hidden', visibleCount > 0);
                 };
 
                 const closeModal = () => {
@@ -1125,6 +1284,51 @@
                     }
                 };
 
+                const applyDiscountCode = () => {
+                    const code = bookNowDiscountCode.value.trim();
+
+                    if (!code) {
+                        discountSelect.value = '';
+                        updateSummary();
+                        updateBookNowAmounts();
+                        setDiscountFeedback('Enter a discount code if you have one.');
+                        return;
+                    }
+
+                    refreshDiscountOptions();
+
+                    const option = Array.from(discountSelect.options).find((entry) =>
+                        entry.value && String(entry.dataset.discountCode || '').toLowerCase() === code.toLowerCase(),
+                    );
+
+                    if (!option) {
+                        discountSelect.value = '';
+                        updateSummary();
+                        updateBookNowAmounts();
+                        setDiscountFeedback('We could not find that discount code.', 'error');
+                        return;
+                    }
+
+                    if (option.disabled) {
+                        discountSelect.value = '';
+                        updateSummary();
+                        updateBookNowAmounts();
+                        setDiscountFeedback('That code is valid, but it does not apply to this package today.', 'error');
+                        return;
+                    }
+
+                    discountSelect.value = option.value;
+                    updateSummary();
+                    const totals = updateBookNowAmounts();
+                    const label = option.dataset.discountName || option.textContent.trim();
+
+                    if (totals.discountAmount > 0) {
+                        setDiscountFeedback(`${label} applied. You save ${formatCurrency(totals.discountAmount)} on this booking.`, 'success');
+                    } else {
+                        setDiscountFeedback(`${label} was found, but it does not change this booking total.`, 'neutral');
+                    }
+                };
+
                 const renderPackageTimingOptions = () => {
                     const selectedPackage = document.querySelector('input[name="package_id"]:checked');
 
@@ -1289,6 +1493,8 @@
                     } else if (discountSelect.value) {
                         discountNote.textContent = 'This offer does not apply to the current package selection.';
                     }
+
+                    renderBookingCart();
                 };
 
                 let travelFeeTimeout;
@@ -1307,9 +1513,11 @@
                 };
 
                 const updateTravelLabels = (distanceKm, travelFee, note) => {
-                    travelDistanceInput.value = distanceKm.toFixed(2);
+                    const chargeableKm = Math.ceil(Math.max(0, distanceKm));
+
+                    travelDistanceInput.value = String(chargeableKm);
                     travelFeeInput.value = travelFee.toFixed(2);
-                    travelDistanceLabel.textContent = `${distanceKm.toFixed(2)} km`;
+                    travelDistanceLabel.textContent = `${chargeableKm} km`;
                     travelFeeLabel.textContent = formatCurrency(travelFee);
                     travelFeeNote.textContent = note;
                     updateSummary();
@@ -1340,7 +1548,7 @@
 
                         const roundTripDistanceKm = distanceKm * 2;
                         const freeRoundTripKilometers = travelFreeKilometers * 2;
-                        const chargeableDistanceKm = Math.max(0, roundTripDistanceKm - freeRoundTripKilometers);
+                        const chargeableDistanceKm = Math.ceil(Math.max(0, roundTripDistanceKm - freeRoundTripKilometers));
                         const travelFee = chargeableDistanceKm * travelFeePerKilometer;
                         updateTravelLabels(
                             chargeableDistanceKm,
@@ -1411,25 +1619,33 @@
                         return;
                     }
 
+                    renderBookNowPackageThumbnail(totals.selectedPackage);
                     bookNowPackageName.textContent = totals.packageName;
-                    bookNowPackagePrice.textContent = formatCurrency(totals.packageTotal);
-                    bookNowAddonTotal.textContent = formatCurrency(totals.addOnTotal);
-                    bookNowDiscountName.textContent = totals.selectedDiscount ? totals.selectedDiscount.textContent.trim() : 'No discount selected.';
-                    bookNowDiscountAmount.textContent = `-${formatCurrency(totals.discountAmount)}`;
-                    bookNowTotalAmount.textContent = formatCurrency(totals.total);
-                    bookNowDepositAmount.textContent = formatCurrency(totals.depositAmount);
+                    updateBookNowAmounts();
 
                     if (totals.selectedAddOns.length) {
                         bookNowAddonList.innerHTML = totals.selectedAddOns
                             .map((input) => {
                                 const name = input.dataset.addonName || 'Add-On';
                                 const price = formatCurrency(parseAmount(input.dataset.addonPrice));
+                                const category = input.dataset.addonCategory || 'Uncategorized';
+                                const description = input.dataset.addonDescription || 'No add-on description provided yet.';
+                                const photoUrl = input.dataset.addonPhotoUrl || '';
+                                const imageMarkup = photoUrl
+                                    ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-16 w-16 rounded-2xl object-cover">`
+                                    : `<div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-2xl font-semibold text-stone-600">A</div>`;
 
-                                return `<div class="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-stone-950/60 px-4 py-3"><span>${name}</span><span class="font-medium text-emerald-100">${price}</span></div>`;
+                                return `<div class="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-stone-950/60 p-3"><div class="flex min-w-0 items-center gap-3">${imageMarkup}<div class="min-w-0"><p class="truncate font-medium text-white">${escapeHtml(name)}</p><p class="mt-1 text-xs uppercase tracking-[0.18em] text-emerald-200">${escapeHtml(category)}</p><p class="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">${escapeHtml(description)}</p></div></div><span class="shrink-0 font-medium text-emerald-100">${price}</span></div>`;
                             })
                             .join('');
                     } else {
                         bookNowAddonList.innerHTML = '<p class="text-stone-400">No add-ons selected.</p>';
+                    }
+
+                    if (bookNowDiscountCode.value.trim()) {
+                        applyDiscountCode();
+                    } else {
+                        setDiscountFeedback('Enter a discount code if you have one.');
                     }
 
                     termsAcceptedCheckbox.checked = false;
@@ -1469,9 +1685,78 @@
                     });
                 });
 
+                addOnCategoryButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        applyAddOnCategoryFilter(button.dataset.addonCategoryFilter || 'all');
+                    });
+                });
+
+                bookingCartToggle.addEventListener('click', () => {
+                    setBookingCartOpen(bookingCartPanel.classList.contains('hidden'));
+                });
+                bookingCartClose.addEventListener('click', () => {
+                    setBookingCartOpen(false);
+                });
+                bookingCartContent.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('[data-cart-remove-type]');
+
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    if (removeButton.dataset.cartRemoveType === 'package') {
+                        const input = document.querySelector(`input[name="package_id"][value="${removeButton.dataset.cartRemoveValue}"]`);
+                        if (input) {
+                            input.checked = false;
+                            packageHourlyPriceIdInput.value = '';
+                        }
+                    }
+
+                    if (removeButton.dataset.cartRemoveType === 'addon') {
+                        const input = document.querySelector(`input[name="add_on_ids[]"][value="${removeButton.dataset.cartRemoveValue}"]`);
+                        if (input) {
+                            input.checked = false;
+                        }
+                    }
+
+                    renderPackageTimingOptions();
+                    refreshDiscountOptions();
+                    updateSummary();
+
+                    if (!document.querySelector('input[name="package_id"]:checked') && !document.querySelector('input[name="add_on_ids[]"]:checked')) {
+                        setBookingCartOpen(false);
+                    }
+                });
+                document.addEventListener('click', (event) => {
+                    if (bookingCartPanel.classList.contains('hidden')) {
+                        return;
+                    }
+
+                    if (bookingCartPanel.contains(event.target) || bookingCartToggle.contains(event.target)) {
+                        return;
+                    }
+
+                    setBookingCartOpen(false);
+                });
+
                 discountSelect.addEventListener('change', () => {
                     updateSummary();
+                    updateBookNowAmounts();
                 });
+
+                let discountCodeTimeout;
+                bookNowDiscountCode.addEventListener('input', () => {
+                    window.clearTimeout(discountCodeTimeout);
+                    discountCodeTimeout = window.setTimeout(applyDiscountCode, 250);
+                });
+                bookNowDiscountApply.addEventListener('click', () => {
+                    window.clearTimeout(discountCodeTimeout);
+                    applyDiscountCode();
+                });
+                applyAddOnCategoryFilter('all');
                 applyRequestedPackageSelection();
                 renderPackageTimingOptions();
                 refreshDiscountOptions();

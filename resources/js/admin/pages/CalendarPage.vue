@@ -197,7 +197,7 @@ const openBooking = (booking) => {
         <div class="flex flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Visible Month</p>
-                <h3 class="mt-2 text-2xl font-semibold text-white">{{ monthLabel }}</h3>
+                <h3 class="mt-1 text-sm font-semibold italic text-white">{{ monthLabel }}</h3>
                 <p class="mt-1 text-sm text-stone-400">{{ bookingCountForMonth }} bookings in this month</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">

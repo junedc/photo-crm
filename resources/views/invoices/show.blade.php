@@ -159,7 +159,8 @@
             <script>
                 (() => {
                     const toast = document.getElementById('invoice-payment-toast');
-                    const statusUrl = @json(route('invoices.status', $invoice));
+                    const statusUrl = new URL(@json(route('invoices.status', $invoice)), window.location.origin);
+                    const sessionId = new URL(window.location.href).searchParams.get('session_id');
                     const installmentId = Number(@json(request('installment')));
                     const invoiceStatusBadge = document.getElementById('invoice-status-badge');
                     const amountPaid = document.getElementById('invoice-amount-paid');
@@ -167,6 +168,11 @@
 
                     if (!statusUrl || !installmentId || !invoiceStatusBadge || !amountPaid || !balanceDue) {
                         return;
+                    }
+
+                    if (sessionId) {
+                        statusUrl.searchParams.set('session_id', sessionId);
+                        statusUrl.searchParams.set('installment', String(installmentId));
                     }
 
                     const badgeClass = (status) => {
@@ -195,7 +201,7 @@
                         attempts += 1;
 
                         try {
-                            const response = await fetch(statusUrl, {
+                            const response = await fetch(statusUrl.toString(), {
                                 headers: {
                                     Accept: 'application/json',
                                     'X-Requested-With': 'XMLHttpRequest',
@@ -225,6 +231,7 @@
                                 const nextUrl = new URL(window.location.href);
                                 nextUrl.searchParams.delete('payment');
                                 nextUrl.searchParams.delete('installment');
+                                nextUrl.searchParams.delete('session_id');
                                 const cleanUrl = nextUrl.toString();
                                 window.history.replaceState({}, '', cleanUrl);
 

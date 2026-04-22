@@ -7,9 +7,10 @@ use App\Models\SuperAdminLoginCode;
 use App\Models\Tenant;
 use App\Models\TenantSubscriptionCharge;
 use App\Services\Auth\SuperAdminLoginVerificationService;
-use App\Support\PlatformSubscriptionCheckoutLinkGenerator;
+use App\Services\PlatformSubscriptionBillingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -176,7 +177,24 @@ class SuperAdminController extends Controller
             'validityUnits' => Subscription::validityUnits(),
             'platformCurrency' => strtoupper((string) config('services.platform_stripe.currency', 'USD')),
             'baseDomain' => config('app.tenant_base_domain'),
+            'environmentContent' => $this->environmentFileContent(),
         ]);
+    }
+
+    public function updateEnvironment(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'environment_content' => ['required', 'string', 'max:200000'],
+        ]);
+
+        $path = base_path('.env');
+        abort_unless(File::exists($path) && File::isWritable($path), 500, '.env is not writable.');
+
+        $backupPath = base_path('.env.backup.'.now()->format('YmdHis'));
+        File::copy($path, $backupPath);
+        File::put($path, rtrim($validated['environment_content']).PHP_EOL, true);
+
+        return back()->with('status', '.env updated. Backup created: '.basename($backupPath).'. Run optimize:clear if cached config is active.');
     }
 
     public function storeSubscription(Request $request): RedirectResponse
@@ -218,7 +236,7 @@ class SuperAdminController extends Controller
     public function updateTenantSubscription(
         Request $request,
         Tenant $tenant,
-        PlatformSubscriptionCheckoutLinkGenerator $checkoutLinkGenerator,
+        PlatformSubscriptionBillingService $billingService,
     ): RedirectResponse {
         $validated = $request->validate([
             'subscription_id' => ['nullable', Rule::exists('subscriptions', 'id')->where('is_active', true)],
@@ -233,7 +251,7 @@ class SuperAdminController extends Controller
         ])->save();
 
         if ($subscription?->billing_period === Subscription::BILLING_FREE_FOR_LIFE) {
-            $charge = $checkoutLinkGenerator->chargeForCurrentPeriod($tenant, $subscription);
+            $charge = $billingService->chargeForPeriod($tenant, $subscription, now());
             $charge->update([
                 'status' => TenantSubscriptionCharge::STATUS_WAIVED,
                 'paid_at' => now(),
@@ -285,5 +303,16 @@ class SuperAdminController extends Controller
         }
 
         return $data;
+    }
+
+    private function environmentFileContent(): string
+    {
+        $path = base_path('.env');
+
+        if (! File::exists($path) || ! File::isReadable($path)) {
+            return '';
+        }
+
+        return File::get($path);
     }
 }

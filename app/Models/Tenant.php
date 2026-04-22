@@ -22,6 +22,8 @@ class Tenant extends Model
         'subscription_id',
         'subscription_enabled',
         'subscription_disabled_at',
+        'platform_stripe_customer_id',
+        'platform_stripe_payment_method_id',
         'contact_email',
         'contact_phone',
         'address',

@@ -35,12 +35,6 @@ return [
         ],
     ],
 
-    'stripe' => [
-        'secret' => env('STRIPE_SECRET'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-        'currency' => env('STRIPE_CURRENCY', 'aud'),
-    ],
-
     'platform_stripe' => [
         'secret' => env('PLATFORM_STRIPE_SECRET'),
         'webhook_secret' => env('PLATFORM_STRIPE_WEBHOOK_SECRET'),

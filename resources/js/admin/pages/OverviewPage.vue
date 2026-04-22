@@ -30,10 +30,7 @@ const statusLabel = (status) => (status ?? '').replaceAll('_', ' ').replace(/\b\
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.35em] text-amber-200">Overview</p>
-                <h2 class="mt-2 text-2xl font-semibold tracking-tight">Workspace snapshot</h2>
-                <p class="mt-2 text-sm text-stone-300">
-                    Quick totals and the next 3 upcoming events.
-                </p>
+                <h2 class="mt-1 text-sm font-semibold italic tracking-tight">Workspace snapshot <span class="font-normal text-stone-300">/ Quick totals and the next 3 upcoming events.</span></h2>
             </div>
 
             <div class="grid gap-3 sm:grid-cols-4">
@@ -62,7 +59,7 @@ const statusLabel = (status) => (status ?? '').replaceAll('_', ' ').replace(/\b\
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-rose-200">Upcoming Events</p>
-                    <h3 class="mt-2 text-lg font-semibold">Next 3 bookings</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">Next 3 bookings</h3>
                 </div>
                 <a :href="data.routes.bookings" class="text-sm font-medium text-rose-200 transition hover:text-rose-100">
                     View all
@@ -96,20 +93,17 @@ const statusLabel = (status) => (status ?? '').replaceAll('_', ' ').replace(/\b\
         <div class="grid gap-4">
             <a :href="data.routes.bookings" class="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-rose-300/40 hover:bg-white/10">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-rose-200">Bookings</p>
-                <h3 class="mt-2 text-lg font-semibold">Manage bookings</h3>
-                <p class="mt-2 text-sm text-stone-300">Review requests, update status, and send invoices.</p>
+                <h3 class="mt-1 text-sm font-semibold italic">Manage bookings <span class="font-normal text-stone-300">/ Review requests, update status, and send invoices.</span></h3>
             </a>
 
             <a :href="data.routes.leads" class="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-violet-300/40 hover:bg-white/10">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-violet-200">Leads</p>
-                <h3 class="mt-2 text-lg font-semibold">Follow up prospects</h3>
-                <p class="mt-2 text-sm text-stone-300">Track enquiries, statuses, and booked conversions.</p>
+                <h3 class="mt-1 text-sm font-semibold italic">Follow up prospects <span class="font-normal text-stone-300">/ Track enquiries, statuses, and booked conversions.</span></h3>
             </a>
 
             <a :href="data.routes.packages" class="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-amber-300/40 hover:bg-white/10">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Catalog</p>
-                <h3 class="mt-2 text-lg font-semibold">Packages and inventory</h3>
-                <p class="mt-2 text-sm text-stone-300">Maintain packages, equipment, and add-ons from one place.</p>
+                <h3 class="mt-1 text-sm font-semibold italic">Packages and inventory <span class="font-normal text-stone-300">/ Maintain packages, equipment, and add-ons from one place.</span></h3>
             </a>
         </div>
     </section>

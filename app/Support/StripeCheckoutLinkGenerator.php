@@ -13,18 +13,18 @@ class StripeCheckoutLinkGenerator
     {
         $invoice->loadMissing(['booking.package', 'tenant']);
 
-        $secretKey = (string) ($invoice->tenant?->stripe_secret ?: config('services.stripe.secret'));
+        $secretKey = (string) $invoice->tenant?->stripe_secret;
 
         if ($secretKey === '') {
             throw ValidationException::withMessages([
-                'stripe' => 'Stripe is not configured yet. Please add Stripe keys in Workspace Settings.',
+                'stripe' => 'Tenant Stripe is not configured yet. Please add this workspace Stripe secret in Workspace Settings.',
             ]);
         }
 
         $booking = $invoice->booking;
-        $currency = strtolower((string) ($invoice->tenant?->stripe_currency ?: config('services.stripe.currency', 'aud')));
+        $currency = strtolower((string) ($invoice->tenant?->stripe_currency ?: 'aud'));
         $invoiceUrl = route('invoices.show', $invoice);
-        $successUrl = $invoiceUrl.'?payment=success&installment='.$installment->id;
+        $successUrl = $invoiceUrl.'?payment=success&installment='.$installment->id.'&session_id={CHECKOUT_SESSION_ID}';
         $cancelUrl = $invoiceUrl.'?payment=cancel&installment='.$installment->id;
 
         $response = Http::asForm()

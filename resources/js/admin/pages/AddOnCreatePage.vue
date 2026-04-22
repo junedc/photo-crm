@@ -13,14 +13,34 @@ const props = defineProps({
 const photoInput = ref(null);
 const { saving, fieldErrors, submitForm } = useWorkspaceCrud();
 const clientErrors = ref({});
+const categoryFocused = ref(false);
 const form = ref({
     sku: '',
     name: '',
+    addon_category: '',
     description: '',
     unit_price: '',
     duration: '',
 });
 const validationErrors = computed(() => mergeFieldErrors(clientErrors.value, fieldErrors.value));
+const addOnCategories = computed(() => props.data.addOnCategories ?? []);
+const categorySuggestions = computed(() => {
+    const search = String(form.value.addon_category ?? '').trim().toLowerCase();
+
+    if (search.length < 2) {
+        return [];
+    }
+
+    return addOnCategories.value
+        .filter((category) => category.toLowerCase().includes(search))
+        .slice(0, 6);
+});
+const showCategorySuggestions = computed(() => categoryFocused.value && categorySuggestions.value.length > 0);
+
+const useCategorySuggestion = (category) => {
+    form.value.addon_category = category;
+    categoryFocused.value = false;
+};
 
 const validateAddOnForm = () => {
     const errors = {};
@@ -31,6 +51,10 @@ const validateAddOnForm = () => {
 
     if (isBlank(form.value.name)) {
         errors.name = requiredMessage('Name');
+    }
+
+    if (String(form.value.addon_category ?? '').length > 255) {
+        errors.addon_category = 'Add-on category must be 255 characters or less.';
     }
 
     if (isBlank(form.value.unit_price)) {
@@ -51,7 +75,7 @@ const createAddOn = async () => {
 
     const formData = new FormData();
 
-    ['sku', 'name', 'description', 'unit_price', 'duration'].forEach((key) => {
+    ['sku', 'name', 'addon_category', 'description', 'unit_price', 'duration'].forEach((key) => {
         formData.append(key, form.value[key] ?? '');
     });
 
@@ -86,7 +110,7 @@ const createAddOn = async () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-emerald-200">New Add-On</p>
-                <h3 class="mt-2 text-lg font-semibold">Create record</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">Create record</h3>
             </div>
             <a :href="data.routes.addons" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">
                 Back to list
@@ -105,6 +129,32 @@ const createAddOn = async () => {
                     <input v-model="form.name" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50" :class="firstError(validationErrors, 'name') ? 'border-rose-300/60' : ''">
                     <p v-if="firstError(validationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'name') }}</p>
                 </div>
+                <div class="relative">
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Add-on Category</label>
+                    <input
+                        v-model="form.addon_category"
+                        type="text"
+                        autocomplete="off"
+                        class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50"
+                        :class="firstError(validationErrors, 'addon_category') ? 'border-rose-300/60' : ''"
+                        placeholder="e.g. Backdrop, Staffing, Prints"
+                        @focus="categoryFocused = true"
+                        @blur="categoryFocused = false"
+                    >
+                    <div v-if="showCategorySuggestions" class="absolute left-0 right-0 top-[4.9rem] z-20 overflow-hidden rounded-xl border border-emerald-300/20 bg-slate-950 shadow-2xl shadow-black/40">
+                        <button
+                            v-for="category in categorySuggestions"
+                            :key="category"
+                            type="button"
+                            class="block w-full px-3 py-2 text-left text-sm text-stone-100 transition hover:bg-emerald-300/10 hover:text-emerald-100"
+                            @mousedown.prevent="useCategorySuggestion(category)"
+                        >
+                            {{ category }}
+                        </button>
+                    </div>
+                    <p v-if="firstError(validationErrors, 'addon_category')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'addon_category') }}</p>
+                    <p v-else class="mt-1 text-xs text-stone-500">Used only for add-on content and customer-facing grouping.</p>
+                </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Price</label>
                     <input v-model="form.unit_price" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50" :class="firstError(validationErrors, 'unit_price') ? 'border-rose-300/60' : ''">
@@ -120,7 +170,8 @@ const createAddOn = async () => {
                 </div>
                 <div class="sm:col-span-2">
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Image</label>
-                    <input ref="photoInput" type="file" accept="image/*" class="block w-full rounded-xl border border-dashed border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-300 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-stone-950">
+                    <input ref="photoInput" type="file" accept="image/*" class="block w-full rounded-xl border border-dashed border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-300 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-stone-950" :class="firstError(validationErrors, 'photo') ? 'border-rose-300/60' : ''">
+                    <p v-if="firstError(validationErrors, 'photo')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'photo') }}</p>
                 </div>
             </div>
             <div class="flex justify-end">

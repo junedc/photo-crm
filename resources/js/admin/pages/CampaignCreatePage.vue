@@ -135,7 +135,7 @@ const submitCampaign = async () => {
             <div class="mb-4 flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Audience</p>
-                    <h3 class="mt-2 text-lg font-semibold">{{ selectedAudienceCount }} possible recipients</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">{{ selectedAudienceCount }} possible recipients</h3>
                 </div>
                 <a :href="data.routes.campaigns" class="rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/5">Back</a>
             </div>

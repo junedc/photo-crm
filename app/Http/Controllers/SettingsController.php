@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Models\Subscription;
 use App\Models\TenantSubscriptionCharge;
+use App\Services\PlatformSubscriptionBillingService;
 use App\Support\PlatformSubscriptionCheckoutLinkGenerator;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
@@ -18,10 +19,18 @@ use Illuminate\View\View;
 
 class SettingsController extends Controller
 {
-    public function index(CurrentTenant $currentTenant, Request $request): View
+    public function index(
+        CurrentTenant $currentTenant,
+        Request $request,
+        PlatformSubscriptionBillingService $billingService,
+    ): View
     {
         $tenant = $currentTenant->get();
         $user = $request->user();
+
+        if ($tenant instanceof Tenant && $request->query('subscription_payment') === 'success') {
+            $billingService->syncPaidCheckoutSession((string) $request->query('session_id', ''), $tenant);
+        }
 
         return view('admin.app', [
             'page' => 'settings',
@@ -56,6 +65,7 @@ class SettingsController extends Controller
                     'workspaceUpdate' => route('settings.workspace.update'),
                     'subscriptionPay' => route('settings.subscription.pay'),
                     'accountUpdate' => route('settings.account.update'),
+                    'tenantStripeWebhook' => route('stripe.webhook'),
                     'logout' => route('logout'),
                 ],
             ],
@@ -247,7 +257,7 @@ class SettingsController extends Controller
             'stripe_webhook_secret' => '',
             'stripe_secret_configured' => filled($tenant->stripe_secret),
             'stripe_webhook_secret_configured' => filled($tenant->stripe_webhook_secret),
-            'stripe_currency' => strtolower($tenant->stripe_currency ?: config('services.stripe.currency', 'aud')),
+            'stripe_currency' => strtolower($tenant->stripe_currency ?: 'aud'),
             'quote_prefix' => $tenant->quote_prefix ?? 'QT',
             'invoice_prefix' => $tenant->invoice_prefix ?? 'INV',
             'customer_package_discount_percentage' => number_format((float) ($tenant->customer_package_discount_percentage ?? 0), 2, '.', ''),

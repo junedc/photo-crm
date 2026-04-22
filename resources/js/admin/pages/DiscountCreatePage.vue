@@ -86,7 +86,7 @@ const submitDiscount = async () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-violet-200">New Discount</p>
-                <h3 class="mt-2 text-lg font-semibold">Create record</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">Create record</h3>
             </div>
             <a :href="data.routes.discounts" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">
                 Back to list
@@ -134,7 +134,7 @@ const submitDiscount = async () => {
                 <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div class="mb-3">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Packages</p>
-                        <h4 class="mt-2 text-base font-semibold">Apply to packages</h4>
+                        <h4 class="mt-1 text-sm font-semibold italic">Apply to packages</h4>
                     </div>
                     <div class="max-h-64 space-y-2 overflow-y-auto">
                         <label v-for="item in data.packageOptions" :key="item.id" class="flex items-start gap-3 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-stone-200 transition hover:bg-white/[0.03]">

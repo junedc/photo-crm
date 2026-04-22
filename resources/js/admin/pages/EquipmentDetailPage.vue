@@ -127,7 +127,7 @@ const confirmRemoveEquipment = () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Equipment Details</p>
-                <h3 class="mt-2 text-lg font-semibold">{{ equipmentRecord.name }}</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">{{ equipmentRecord.name }}</h3>
             </div>
             <div class="flex items-center gap-3">
                 <span class="rounded-full px-3 py-1 text-xs font-medium" :class="equipmentRecord.maintenance_status === 'ready' ? 'bg-emerald-400/15 text-emerald-200' : equipmentRecord.maintenance_status === 'maintenance' ? 'bg-amber-300/15 text-amber-200' : 'bg-rose-400/15 text-rose-200'">

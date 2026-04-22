@@ -48,7 +48,7 @@ class BookingAddonsPdfGenerator
             'addons' => $addons->map(fn ($addon) => [
                 'product_code' => $addon->sku,
                 'name' => $addon->name,
-                'category' => $addon->category,
+                'category' => $addon->addon_category,
                 'description' => $addon->description,
                 'price' => $addon->unit_price,
                 'duration' => $addon->duration,

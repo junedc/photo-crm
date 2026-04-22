@@ -115,7 +115,7 @@ const confirmDeleteCustomer = async () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Customer Details</p>
-                <h3 class="mt-2 text-lg font-semibold">{{ customerRecord.full_name }}</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">{{ customerRecord.full_name }}</h3>
             </div>
             <div class="flex items-center gap-2">
                 <a :href="data.routes.customers" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">

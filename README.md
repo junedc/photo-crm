@@ -76,10 +76,6 @@ MAIL_MAILER=smtp
 MAIL_HOST=mailhog
 MAIL_PORT=1025
 
-STRIPE_SECRET=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_CURRENCY=aud
-
 INVOICE_DEPOSIT_PERCENTAGE=30
 TRAVEL_FREE_KILOMETERS=0
 TRAVEL_FEE_PER_KILOMETER=0
@@ -226,21 +222,47 @@ Examples:
 
 ## Stripe Setup
 
-Stripe is used for customer installment payments.
+Stripe is used for customer installment payments and platform subscription payments.
 
-Set these values in [`.env`](D:/Memoshot%20Web/memoshot/.env):
+Set platform subscription Stripe values in [`.env`](D:/Memoshot%20Web/memoshot/.env):
 
 ```env
-STRIPE_SECRET=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_CURRENCY=aud
+PLATFORM_STRIPE_SECRET=sk_test_...
+PLATFORM_STRIPE_WEBHOOK_SECRET=whsec_...
+PLATFORM_STRIPE_CURRENCY=usd
+PLATFORM_SUBSCRIPTION_AUTO_CHARGE=true
+PLATFORM_SUBSCRIPTION_REMINDER_DAYS=5
+PLATFORM_SUBSCRIPTION_RETRY_DAYS=5
+PLATFORM_SUBSCRIPTION_SCHEDULE_TIME=09:00
+PLATFORM_SUBSCRIPTION_ADMIN_EMAIL=admin@example.com
 ```
 
 What each setting does:
 
-- `STRIPE_SECRET`: creates Stripe Checkout Sessions
-- `STRIPE_WEBHOOK_SECRET`: verifies Stripe webhook signatures
-- `STRIPE_CURRENCY`: currency used when generating Checkout sessions
+- `PLATFORM_STRIPE_SECRET`: creates platform subscription Checkout Sessions
+- `PLATFORM_STRIPE_WEBHOOK_SECRET`: verifies platform subscription webhook signatures
+- `PLATFORM_STRIPE_CURRENCY`: default platform subscription currency
+- `PLATFORM_SUBSCRIPTION_AUTO_CHARGE`: enables automatic platform subscription deductions
+- `PLATFORM_SUBSCRIPTION_REMINDER_DAYS`: sends the upcoming charge email this many days before the due date
+- `PLATFORM_SUBSCRIPTION_RETRY_DAYS`: retry delay after a failed platform subscription payment
+- `PLATFORM_SUBSCRIPTION_SCHEDULE_TIME`: daily Laravel scheduler time for platform subscription processing
+- `PLATFORM_SUBSCRIPTION_ADMIN_EMAIL`: fallback/admin email for platform subscription billing notices
+
+Platform subscription automation uses the saved payment method from the tenant's first successful platform Checkout payment. The daily billing command sends reminders, charges due monthly/quarterly/yearly subscriptions, sends thank-you emails after successful payments, and sends failure emails before retrying after the configured retry window.
+
+Run it manually:
+
+```bash
+/opt/alt/php84/usr/bin/php artisan platform-subscriptions:process
+```
+
+Hostinger cron should call Laravel's scheduler once per minute:
+
+```bash
+cd /home/u838520432/domains/memoshot.com/laravel_app && /opt/alt/php84/usr/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+Tenant/customer invoice payments do not use shared `.env` Stripe secrets. Each tenant must configure its own Stripe secret, webhook secret, and currency in Workspace Settings so customer payments go directly to the tenant owner's Stripe account.
 
 Stripe config is loaded from [config/services.php](D:/Memoshot%20Web/memoshot/config/services.php).
 
@@ -253,14 +275,20 @@ There are two customer payment entry points:
 
 Both now create a Stripe Checkout Session.
 
-The app does not trust the browser redirect alone as proof of payment. Payment is considered successful only after Stripe calls the webhook.
+The app does not trust the browser redirect by itself as proof of payment. Webhooks are the primary confirmation path, and successful return URLs also verify the Checkout Session directly with Stripe before marking any payment as paid.
 
 ## Stripe Webhook
 
-Webhook route:
+Tenant/customer invoice webhook route:
 
 ```txt
 POST /stripe/webhook
+```
+
+Platform subscription webhook route:
+
+```txt
+POST /platform/stripe/webhook
 ```
 
 Relevant files:
@@ -268,14 +296,18 @@ Relevant files:
 - [web.php](D:/Memoshot%20Web/memoshot/routes/web.php)
 - [StripeWebhookController.php](D:/Memoshot%20Web/memoshot/app/Http/Controllers/StripeWebhookController.php)
 
-Current webhook event handled:
+Current webhook event handled by both endpoints:
 
 - `checkout.session.completed`
 
-Stripe session metadata is expected to include:
+Tenant invoice Stripe session metadata is expected to include:
 
 - `invoice_id`
 - `installment_id`
+
+Platform subscription Stripe session metadata is expected to include:
+
+- `tenant_subscription_charge_id`
 
 Without a working webhook, Stripe can still collect payment, but MemoShot will not automatically mark the installment as paid.
 
@@ -283,10 +315,16 @@ Without a working webhook, Stripe can still collect payment, but MemoShot will n
 
 Create a webhook endpoint in Stripe that points to your app.
 
-Production example:
+Tenant invoice production example:
 
 ```txt
 https://your-domain/stripe/webhook
+```
+
+Platform subscription production example:
+
+```txt
+https://your-domain/platform/stripe/webhook
 ```
 
 For local development, use a tunnel or Stripe CLI.
@@ -297,11 +335,19 @@ Stripe CLI example:
 stripe listen --forward-to http://memoshot.test/stripe/webhook
 ```
 
+Platform Stripe CLI example:
+
+```bash
+stripe listen --forward-to http://memoshot.test/platform/stripe/webhook
+```
+
 After starting Stripe CLI, copy the webhook signing secret it prints and place it into:
 
 ```env
-STRIPE_WEBHOOK_SECRET=whsec_...
+PLATFORM_STRIPE_WEBHOOK_SECRET=whsec_...
 ```
+
+For tenant invoice payments, save the tenant-specific webhook secret in that tenant's Workspace Settings instead of `.env`.
 
 Recommended Stripe event subscription:
 

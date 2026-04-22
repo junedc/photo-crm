@@ -43,6 +43,7 @@ return new class extends Migration
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->string('category')->nullable();
+            $table->string('addon_category')->nullable();
             $table->string('sku')->nullable();
             $table->text('description')->nullable();
             $table->unsignedInteger('quantity')->default(0);

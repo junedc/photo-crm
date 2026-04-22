@@ -184,7 +184,7 @@ onMounted(() => {
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Workspace</p>
-                    <h3 class="mt-2 text-lg font-semibold">Workspace settings</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">Workspace settings</h3>
                 </div>
             </div>
 
@@ -287,7 +287,7 @@ onMounted(() => {
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                     <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace Settings</p>
-                    <p class="mt-2 text-sm text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
+                    <p class="mt-1 text-xs text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
 
                     <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
                         <table class="min-w-full table-fixed divide-y divide-white/10 text-sm">
@@ -368,6 +368,18 @@ onMounted(() => {
                                 </tr>
                                 <tr>
                                     <td class="px-4 py-3 align-top">
+                                        <p class="font-medium text-white">Tenant Stripe Webhook URL</p>
+                                        <p class="mt-1 text-xs text-stone-500">Use this URL in your Stripe Dashboard webhook endpoint.</p>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+                                            <p class="break-all font-mono text-sm text-cyan-100">{{ props.data.routes.tenantStripeWebhook }}</p>
+                                            <p class="mt-2 text-xs font-medium text-cyan-50">Required event: checkout.session.completed</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 align-top">
                                         <p class="font-medium text-white">Stripe Webhook Secret</p>
                                         <p class="mt-1 text-xs text-stone-500">Tenant-specific webhook signing secret for Stripe payment confirmation. Leave blank to keep the saved secret.</p>
                                         <p v-if="tenantRecord.stripe_webhook_secret_configured" class="mt-1 text-xs text-emerald-300">A Stripe webhook secret is saved for this workspace.</p>
@@ -420,7 +432,7 @@ onMounted(() => {
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Account</p>
-                    <h3 class="mt-2 text-lg font-semibold">Login and profile</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">Login and profile</h3>
                 </div>
             </div>
 
@@ -438,7 +450,7 @@ onMounted(() => {
                     </div>
                     <div class="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Passwordless Login</p>
-                        <p class="mt-2 text-sm text-stone-400">Admins sign in with a one-time code sent to this email address.</p>
+                        <p class="mt-1 text-xs text-stone-400">Admins sign in with a one-time code sent to this email address.</p>
                     </div>
                 </div>
                 <div class="flex justify-end">

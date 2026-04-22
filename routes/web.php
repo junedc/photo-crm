@@ -23,8 +23,13 @@ Route::post('/workspaces', [TenantOnboardingController::class, 'store'])
     ->middleware('guest')
     ->name('workspaces.store');
 Route::post('/stripe/webhook', StripeWebhookController::class)
+    ->defaults('scope', 'tenant')
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('stripe.webhook');
+Route::post('/platform/stripe/webhook', StripeWebhookController::class)
+    ->defaults('scope', 'platform')
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('platform.stripe.webhook');
 
 Route::prefix('admin')->name('super-admin.')->group(function () {
     Route::get('/login', [SuperAdminController::class, 'login'])->name('login');
@@ -40,6 +45,7 @@ Route::prefix('admin')->name('super-admin.')->group(function () {
         Route::put('/subscriptions/{subscription}', [SuperAdminController::class, 'updateSubscription'])->name('subscriptions.update');
         Route::put('/tenants/{tenant}/subscription', [SuperAdminController::class, 'updateTenantSubscription'])->name('tenants.subscription.update');
         Route::put('/tenants/{tenant}/access', [SuperAdminController::class, 'updateTenantAccess'])->name('tenants.access.update');
+        Route::post('/environment', [SuperAdminController::class, 'updateEnvironment'])->name('environment.update');
     });
 });
 

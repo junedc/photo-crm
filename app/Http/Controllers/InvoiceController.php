@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -131,8 +132,16 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function show(CurrentTenant $currentTenant, Invoice $invoice): View
+    public function show(CurrentTenant $currentTenant, Request $request, Invoice $invoice): View
     {
+        if ($request->query('payment') === 'success') {
+            $this->syncTenantCheckoutSession(
+                $invoice,
+                (string) $request->query('session_id', ''),
+                (int) $request->query('installment', 0),
+            );
+        }
+
         $invoice->loadMissing(['booking.package', 'booking.addOns', 'booking.discount', 'installments']);
 
         return view('invoices.show', [
@@ -141,8 +150,14 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function status(CurrentTenant $currentTenant, Invoice $invoice): JsonResponse
+    public function status(CurrentTenant $currentTenant, Request $request, Invoice $invoice): JsonResponse
     {
+        $this->syncTenantCheckoutSession(
+            $invoice,
+            (string) $request->query('session_id', ''),
+            (int) $request->query('installment', 0),
+        );
+
         $invoice = Invoice::query()
             ->with(['booking', 'installments'])
             ->whereKey($invoice->getKey())
@@ -213,6 +228,63 @@ class InvoiceController extends Controller
             'message' => 'Invoice email sent successfully.',
             'record' => $this->serializeInvoice($invoice),
         ]);
+    }
+
+    private function syncTenantCheckoutSession(Invoice $invoice, string $sessionId, int $installmentId): void
+    {
+        if ($sessionId === '' || $installmentId <= 0) {
+            return;
+        }
+
+        $invoice->loadMissing(['tenant', 'installments', 'booking']);
+        $secretKey = (string) $invoice->tenant?->stripe_secret;
+
+        if ($secretKey === '') {
+            return;
+        }
+
+        $response = Http::withBasicAuth($secretKey, '')
+            ->get("https://api.stripe.com/v1/checkout/sessions/{$sessionId}");
+
+        if ($response->failed() || $response->json('payment_status') !== 'paid') {
+            return;
+        }
+
+        $metadata = $response->json('metadata') ?? [];
+        $sessionInvoiceId = isset($metadata['invoice_id']) ? (int) $metadata['invoice_id'] : null;
+        $sessionInstallmentId = isset($metadata['installment_id']) ? (int) $metadata['installment_id'] : null;
+
+        if ($sessionInvoiceId !== (int) $invoice->id || $sessionInstallmentId !== $installmentId) {
+            return;
+        }
+
+        $installment = $invoice->installments->firstWhere('id', $installmentId);
+
+        if (! $installment instanceof InvoiceInstallment) {
+            return;
+        }
+
+        if ($installment->status !== 'paid') {
+            $installment->update([
+                'status' => 'paid',
+                'paid_at' => now(),
+            ]);
+        }
+
+        $invoice->load('installments');
+        $amountPaid = (float) $invoice->installments->where('status', 'paid')->sum('amount');
+        $invoice->update([
+            'amount_paid' => number_format($amountPaid, 2, '.', ''),
+            'status' => $amountPaid >= (float) $invoice->total_amount ? 'paid' : 'partially_paid',
+        ]);
+
+        $booking = $invoice->booking;
+
+        if ($booking !== null && in_array($booking->status, ['pending', 'confirmed'], true)) {
+            $booking->update([
+                'status' => $amountPaid >= (float) $invoice->total_amount ? 'completed' : 'confirmed',
+            ]);
+        }
     }
 
     private function serializeInvoice(Invoice $invoice): array

@@ -20,6 +20,8 @@ return new class extends Migration
             $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->nullOnDelete();
             $table->boolean('subscription_enabled')->default(true);
             $table->timestamp('subscription_disabled_at')->nullable();
+            $table->string('platform_stripe_customer_id')->nullable();
+            $table->string('platform_stripe_payment_method_id')->nullable();
             $table->string('contact_email')->nullable();
             $table->string('contact_phone')->nullable();
             $table->string('address')->nullable();
