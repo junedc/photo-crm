@@ -10,8 +10,8 @@
         p { margin: 0 0 8px; }
         .muted { color: #666; }
         .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 18px; page-break-inside: avoid; }
-        .image { margin-bottom: 12px; }
-        .image img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; }
+        .image { margin-bottom: 12px; text-align: center; }
+        .image img { display: block; width: auto; height: auto; max-width: 100%; max-height: 260px; margin: 0 auto; border-radius: 8px; }
         .meta { font-size: 11px; color: #555; margin-bottom: 10px; }
     </style>
 </head>

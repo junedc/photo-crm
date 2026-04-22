@@ -267,7 +267,7 @@ const confirmRemovePackage = () => {
                     </div>
                     <div class="p-3">
                         <p class="text-base font-medium text-white">{{ addOn.name }}</p>
-                        <p class="mt-1 text-xs text-stone-400">{{ addOn.product_code || 'Add-On' }}<span v-if="addOn.duration"> Â· {{ addOn.duration }}</span></p>
+                        <p class="mt-1 text-xs text-stone-400">{{ addOn.product_code || 'Add-On' }}<span v-if="addOn.addon_category"> · {{ addOn.addon_category }}</span><span v-if="addOn.duration"> · {{ addOn.duration }}</span></p>
                         <p class="mt-2 text-xs text-stone-300">${{ addOn.price }}</p>
                         <p class="mt-3 text-sm leading-6 text-stone-300">{{ addOn.description || 'No description added yet.' }}</p>
                     </div>
@@ -359,7 +359,7 @@ const confirmRemovePackage = () => {
                         <div class="grid gap-2 sm:grid-cols-2">
                             <label v-for="addOn in data.addOnOptions" :key="addOn.id" class="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-200">
                                 <input v-model="form.add_on_ids" :value="addOn.id" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-stone-900 text-amber-300">
-                                <span>{{ addOn.name }}<span class="text-stone-500"> {{ addOn.product_code ? `Â· ${addOn.product_code}` : '' }}{{ addOn.duration ? ` Â· ${addOn.duration}` : '' }}</span></span>
+                                <span>{{ addOn.name }}<span class="text-stone-500"> {{ addOn.product_code ? `· ${addOn.product_code}` : '' }}{{ addOn.addon_category ? ` · ${addOn.addon_category}` : '' }}{{ addOn.duration ? ` · ${addOn.duration}` : '' }}</span></span>
                             </label>
                         </div>
                         <p v-if="!data.addOnOptions?.length" class="text-sm text-stone-500">Add add-on records first to assign them here.</p>

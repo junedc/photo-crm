@@ -66,6 +66,10 @@ class BookingController extends Controller
     public function create(CurrentTenant $currentTenant): View
     {
         $tenant = $currentTenant->get();
+        $addOns = InventoryItem::query()
+            ->where('category', 'add-on')
+            ->latest()
+            ->get();
 
         return view('bookings.create', [
             'tenant' => $tenant,
@@ -74,9 +78,13 @@ class BookingController extends Controller
                 ->with(['equipment', 'addOns', 'hourlyPrices'])
                 ->latest()
                 ->get(),
-            'addOns' => InventoryItem::query()
-                ->latest()
-                ->get(),
+            'addOns' => $addOns,
+            'addOnCategories' => $addOns
+                ->pluck('addon_category')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
             'discounts' => $this->availableDiscounts(),
             'leadToken' => null,
             'termsUrl' => route('bookings.terms'),
@@ -490,6 +498,7 @@ class BookingController extends Controller
                     'id' => $item->id,
                     'name' => $item->name,
                     'product_code' => $item->sku,
+                    'addon_category' => $item->addon_category,
                     'duration' => $item->duration,
                     'price' => number_format((float) $item->unit_price, 2, '.', ''),
                 ])->values()->all(),
@@ -683,6 +692,7 @@ class BookingController extends Controller
                 'id' => $item->id,
                 'product_code' => $item->sku,
                 'name' => $item->name,
+                'addon_category' => $item->addon_category,
                 'description' => $item->description,
                 'price' => number_format((float) $item->unit_price, 2, '.', ''),
                 'duration' => $item->duration,

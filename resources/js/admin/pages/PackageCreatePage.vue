@@ -197,7 +197,7 @@ const createPackage = async () => {
                     <div class="grid gap-2 sm:grid-cols-2">
                         <label v-for="addOn in data.addOnOptions" :key="addOn.id" class="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-200">
                             <input v-model="form.add_on_ids" :value="addOn.id" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-stone-900 text-amber-300">
-                            <span>{{ addOn.name }}<span class="text-stone-500"> {{ addOn.product_code ? `· ${addOn.product_code}` : '' }}{{ addOn.duration ? ` · ${addOn.duration}` : '' }}</span></span>
+                            <span>{{ addOn.name }}<span class="text-stone-500"> {{ addOn.product_code ? `· ${addOn.product_code}` : '' }}{{ addOn.addon_category ? ` · ${addOn.addon_category}` : '' }}{{ addOn.duration ? ` · ${addOn.duration}` : '' }}</span></span>
                         </label>
                     </div>
                     <p v-if="!data.addOnOptions?.length" class="text-sm text-stone-500">Add add-on records first to assign them here.</p>

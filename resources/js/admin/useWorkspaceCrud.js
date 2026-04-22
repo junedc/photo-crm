@@ -23,6 +23,16 @@ export function useWorkspaceCrud() {
         fieldErrors.value = {};
     };
 
+    const errorMessagesFromResponse = (error, fallback) => {
+        if (error.response?.status === 413) {
+            return ['The uploaded file is too large. Please choose a smaller file.'];
+        }
+
+        const responseMessage = error.response?.data?.message;
+
+        return [responseMessage || fallback];
+    };
+
     const submitForm = async ({ url, data, method = 'post' }) => {
         saving.value = true;
         clearFeedback();
@@ -49,7 +59,7 @@ export function useWorkspaceCrud() {
                 fieldErrors.value = error.response.data.errors ?? {};
                 errors.value = Object.values(fieldErrors.value).flat();
             } else {
-                errors.value = ['Something went wrong while saving.'];
+                errors.value = errorMessagesFromResponse(error, 'Something went wrong while saving.');
             }
 
             emitAdminToast({

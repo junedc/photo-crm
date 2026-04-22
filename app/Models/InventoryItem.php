@@ -14,6 +14,7 @@ class InventoryItem extends Model
         'tenant_id',
         'name',
         'category',
+        'addon_category',
         'sku',
         'description',
         'quantity',

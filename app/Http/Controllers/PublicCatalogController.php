@@ -74,6 +74,7 @@ class PublicCatalogController extends Controller
             'add_ons' => $package->addOns->map(fn ($item) => [
                 'id' => $item->id,
                 'name' => $item->name,
+                'addon_category' => $item->addon_category,
                 'description' => $item->description,
                 'price' => number_format((float) $item->unit_price, 2, '.', ''),
             ])->values()->all(),

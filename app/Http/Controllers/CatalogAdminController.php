@@ -161,6 +161,7 @@ class CatalogAdminController extends Controller
                 'create' => route('addons.create'),
                 'addons' => route('addons.index'),
             ],
+            'addOnCategories' => $this->addOnCategories(),
         ]);
     }
 
@@ -177,6 +178,7 @@ class CatalogAdminController extends Controller
                 'addons' => route('addons.index'),
             ],
             'addon' => $this->serializeAddOn($addon),
+            'addOnCategories' => $this->addOnCategories(),
         ]);
     }
 
@@ -492,6 +494,7 @@ class CatalogAdminController extends Controller
         return $request->validate([
             'sku' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
+            'addon_category' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'duration' => ['nullable', 'string', 'max:255'],
@@ -601,7 +604,21 @@ class CatalogAdminController extends Controller
                 'addons' => route('addons.index'),
             ],
             'addons' => $this->serializeCollection($addons, fn (InventoryItem $addon) => $this->serializeAddOn($addon)),
+            'addOnCategories' => $this->addOnCategories(),
         ]);
+    }
+
+    private function addOnCategories(): array
+    {
+        return InventoryItem::query()
+            ->where('category', 'add-on')
+            ->whereNotNull('addon_category')
+            ->where('addon_category', '<>', '')
+            ->distinct()
+            ->orderBy('addon_category')
+            ->pluck('addon_category')
+            ->values()
+            ->all();
     }
 
     private function renderLeadsPage(CurrentTenant $currentTenant, Request $request): View|JsonResponse
@@ -749,6 +766,7 @@ class CatalogAdminController extends Controller
                 ? $package->addOns->map(fn (InventoryItem $addon) => [
                     'id' => $addon->id,
                     'name' => $addon->name,
+                    'addon_category' => $addon->addon_category,
                     'product_code' => $addon->sku,
                     'description' => $addon->description,
                     'duration' => $addon->duration,
@@ -796,6 +814,7 @@ class CatalogAdminController extends Controller
             'id' => $addon->id,
             'product_code' => $addon->sku,
             'name' => $addon->name,
+            'addon_category' => $addon->addon_category,
             'description' => $addon->description,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
             'duration' => $addon->duration,
@@ -847,6 +866,7 @@ class CatalogAdminController extends Controller
             'id' => $addon->id,
             'name' => $addon->name,
             'product_code' => $addon->sku,
+            'addon_category' => $addon->addon_category,
             'duration' => $addon->duration,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
         ];
