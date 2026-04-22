@@ -252,7 +252,7 @@ const confirmRemoveCampaign = () => {
         <aside class="space-y-4">
             <section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Audience</p>
-                <h3 class="mt-2 text-lg font-semibold">{{ selectedAudienceCount }} possible recipients</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">{{ selectedAudienceCount }} possible recipients</h3>
                 <div class="mt-3 max-h-60 space-y-2 overflow-y-auto pr-1">
                     <label v-for="group in groups" :key="group.id" class="flex items-start gap-3 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-stone-200 transition hover:bg-white/[0.03]">
                         <input v-model="form.group_ids" :value="group.id" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-pink-300">

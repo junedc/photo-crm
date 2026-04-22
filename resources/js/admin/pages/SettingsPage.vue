@@ -184,7 +184,7 @@ onMounted(() => {
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Workspace</p>
-                    <h3 class="mt-2 text-lg font-semibold">Workspace settings</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">Workspace settings</h3>
                 </div>
             </div>
 
@@ -287,7 +287,7 @@ onMounted(() => {
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                     <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace Settings</p>
-                    <p class="mt-2 text-sm text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
+                    <p class="mt-1 text-xs text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
 
                     <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
                         <table class="min-w-full table-fixed divide-y divide-white/10 text-sm">
@@ -432,7 +432,7 @@ onMounted(() => {
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Account</p>
-                    <h3 class="mt-2 text-lg font-semibold">Login and profile</h3>
+                    <h3 class="mt-1 text-sm font-semibold italic">Login and profile</h3>
                 </div>
             </div>
 
@@ -450,7 +450,7 @@ onMounted(() => {
                     </div>
                     <div class="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Passwordless Login</p>
-                        <p class="mt-2 text-sm text-stone-400">Admins sign in with a one-time code sent to this email address.</p>
+                        <p class="mt-1 text-xs text-stone-400">Admins sign in with a one-time code sent to this email address.</p>
                     </div>
                 </div>
                 <div class="flex justify-end">

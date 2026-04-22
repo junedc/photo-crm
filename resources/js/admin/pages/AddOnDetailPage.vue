@@ -116,7 +116,7 @@ const confirmRemoveAddOn = () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-emerald-200">Add-On Details</p>
-                <h3 class="mt-2 text-lg font-semibold">{{ addonRecord.name }}</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">{{ addonRecord.name }}</h3>
             </div>
             <div class="flex items-center gap-3">
                 <button

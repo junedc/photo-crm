@@ -170,7 +170,7 @@ const confirmRemovePackage = () => {
         <div class="mb-5 flex items-center justify-between gap-3">
             <div>
                 <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Package Details</p>
-                <h3 class="mt-2 text-lg font-semibold">{{ packageRecord.name }}</h3>
+                <h3 class="mt-1 text-sm font-semibold italic">{{ packageRecord.name }}</h3>
             </div>
             <div class="flex items-center gap-3">
                 <span class="rounded-full px-3 py-1 text-xs font-medium" :class="packageRecord.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-stone-700/60 text-stone-300'">
@@ -280,7 +280,7 @@ const confirmRemovePackage = () => {
             <div class="mb-5 flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Edit Package</p>
-                    <h4 class="mt-2 text-lg font-semibold">Update details</h4>
+                    <h4 class="mt-1 text-sm font-semibold italic">Update details</h4>
                 </div>
                 <button
                     type="button"

@@ -34,7 +34,7 @@
                             required
                             autofocus
                             class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/60"
-                            placeholder="jtpayoran@yahoo.com"
+                            placeholder="admin@email.com"
                         >
                     </div>
                     <button type="submit" class="w-full rounded-2xl bg-sky-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-200">

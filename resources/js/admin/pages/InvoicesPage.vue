@@ -71,7 +71,7 @@ watch([search, statusFilter], () => fetchInvoices(1, false));
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Invoice Records</p>
                 <div class="mt-2 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                        <h3 class="text-lg font-semibold">Invoice list</h3>
+                        <h3 class="text-sm font-semibold italic">Invoice list</h3>
                         <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ pagination.total ?? invoices.length }}</span>
                     </div>
                     <a :href="data.routes.bookings" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">

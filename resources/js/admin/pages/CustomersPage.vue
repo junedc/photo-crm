@@ -67,7 +67,7 @@ watch(search, () => fetchCustomers(1, false));
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Customer Records</p>
                 <div class="mt-2 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                        <h3 class="text-lg font-semibold">Customer list</h3>
+                        <h3 class="text-sm font-semibold italic">Customer list</h3>
                         <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ pagination.total ?? customers.length }}</span>
                     </div>
                     <a :href="data.routes.create" class="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200">

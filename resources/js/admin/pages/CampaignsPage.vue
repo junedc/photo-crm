@@ -393,7 +393,7 @@ const attachRecipients = async (group) => {
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-pink-200">Template Builder</p>
-                        <h3 class="mt-2 text-lg font-semibold">Create reusable rich email template</h3>
+                        <h3 class="mt-1 text-sm font-semibold italic">Create reusable rich email template</h3>
                     </div>
                     <button type="submit" class="rounded-xl bg-pink-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-pink-200 disabled:opacity-60" :disabled="savingTemplate">
                         {{ savingTemplate ? 'Saving...' : 'Save template' }}
@@ -451,7 +451,7 @@ const attachRecipients = async (group) => {
                 <div class="mb-3 flex items-center justify-between gap-3">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Saved Templates</p>
-                        <h3 class="mt-2 text-lg font-semibold">{{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}</h3>
+                        <h3 class="mt-1 text-sm font-semibold italic">{{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}</h3>
                     </div>
                 </div>
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -501,7 +501,7 @@ const attachRecipients = async (group) => {
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-pink-200">Group Details</p>
-                        <h3 class="mt-2 text-lg font-semibold text-white">{{ selectedGroup.name }}</h3>
+                        <h3 class="mt-1 text-sm font-semibold italic text-white">{{ selectedGroup.name }}</h3>
                         <p class="mt-1 text-sm leading-6 text-stone-400">{{ selectedGroup.description || 'No description' }}</p>
                     </div>
                     <span class="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-stone-300">{{ selectedGroup.customers_count }} users</span>
@@ -617,7 +617,7 @@ const attachRecipients = async (group) => {
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-pink-200">New Subscriber Group</p>
-                        <h3 class="mt-2 text-xl font-semibold text-white">Create group</h3>
+                        <h3 class="mt-1 text-sm font-semibold italic text-white">Create group</h3>
                         <p class="mt-1 text-sm leading-6 text-stone-400">Give this group a clear name so it is easy to find in the left-side group list.</p>
                     </div>
                     <button type="button" class="rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60" :disabled="savingGroup" @click="closeGroupModal">

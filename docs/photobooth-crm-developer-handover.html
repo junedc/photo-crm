@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Photobooth CRM Developer Handover</title>
+        <style>
+            @page {
+                margin: 34px 42px;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                color: #1f2937;
+                font-family: DejaVu Sans, Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.55;
+            }
+
+            h1,
+            h2,
+            h3 {
+                color: #0f172a;
+                margin: 0;
+            }
+
+            h1 {
+                font-size: 28px;
+                line-height: 1.15;
+                margin-bottom: 10px;
+            }
+
+            h2 {
+                border-bottom: 1px solid #cbd5e1;
+                font-size: 18px;
+                margin-top: 28px;
+                padding-bottom: 6px;
+            }
+
+            h3 {
+                font-size: 14px;
+                margin-top: 18px;
+            }
+
+            p {
+                margin: 8px 0;
+            }
+
+            ul,
+            ol {
+                margin: 8px 0 8px 18px;
+                padding: 0;
+            }
+
+            li {
+                margin: 4px 0;
+            }
+
+            code {
+                background: #f1f5f9;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                color: #0f172a;
+                font-family: DejaVu Sans Mono, Consolas, monospace;
+                font-size: 11px;
+                padding: 1px 4px;
+            }
+
+            pre {
+                background: #0f172a;
+                border-radius: 8px;
+                color: #e2e8f0;
+                font-family: DejaVu Sans Mono, Consolas, monospace;
+                font-size: 10.5px;
+                line-height: 1.45;
+                margin: 10px 0;
+                padding: 12px;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            table {
+                border-collapse: collapse;
+                margin: 10px 0 14px;
+                width: 100%;
+            }
+
+            th,
+            td {
+                border: 1px solid #cbd5e1;
+                padding: 7px 8px;
+                text-align: left;
+                vertical-align: top;
+            }
+
+            th {
+                background: #e2e8f0;
+                color: #0f172a;
+                font-weight: 700;
+            }
+
+            .cover {
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                border-radius: 14px;
+                margin-bottom: 22px;
+                padding: 20px;
+            }
+
+            .subtitle {
+                color: #475569;
+                font-size: 13px;
+            }
+
+            .note {
+                background: #fff7ed;
+                border: 1px solid #fed7aa;
+                border-radius: 8px;
+                color: #7c2d12;
+                margin: 10px 0;
+                padding: 10px;
+            }
+
+            .ok {
+                background: #ecfdf5;
+                border: 1px solid #a7f3d0;
+                border-radius: 8px;
+                color: #064e3b;
+                margin: 10px 0;
+                padding: 10px;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        </style>
+    </head>
+    <body>
+        <section class="cover">
+            <h1>Photobooth CRM Developer Handover</h1>
+            <p class="subtitle">Setup, deployment, environment configuration, Stripe integration, and payment workflow documentation.</p>
+            <p><strong>Project:</strong> Photobooth CRM / MemoShot multi-tenant Laravel application</p>
+            <p><strong>Prepared:</strong> 21 April 2026</p>
+        </section>
+
+        <h2>1. Application Overview</h2>
+        <p>
+            This application is a Laravel and Vue multi-tenant CRM for photobooth businesses. Each tenant is represented by a workspace subdomain,
+            for example <code>acme.memoshot.com</code>. Tenants manage bookings, invoices, packages, equipment, add-ons, discounts, leads,
+            customers, campaigns, templates, subscriber groups, workspace settings, and tenant-owned Stripe payment settings.
+        </p>
+        <p>
+            The central domain also contains a super admin area at <code>/admin</code>. The super admin manages tenants, subscription plans,
+            tenant access, platform subscription history, unpaid subscription charges, server utility commands, and the production <code>.env</code>
+            editor.
+        </p>
+
+        <h3>Important Separation</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Area</th>
+                    <th>Purpose</th>
+                    <th>Stripe Account Used</th>
+                    <th>Money Goes To</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Tenant invoice payments</td>
+                    <td>Customer pays an invoice/installment for a booking.</td>
+                    <td>Tenant Stripe secret from Workspace Settings.</td>
+                    <td>Tenant/business owner.</td>
+                </tr>
+                <tr>
+                    <td>Platform subscription payments</td>
+                    <td>Tenant pays MemoShot/platform for CRM subscription.</td>
+                    <td>Platform Stripe secret from <code>.env</code>.</td>
+                    <td>Platform owner.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>2. Technology Stack</h2>
+        <ul>
+            <li>PHP/Laravel 13.x application.</li>
+            <li>Vue admin frontend compiled by Vite.</li>
+            <li>MySQL or SQLite depending on environment.</li>
+            <li>Mailpit/Mailhog for local mail testing; SMTP/log mailer for other environments.</li>
+            <li>Stripe Checkout and Payment Intents for payments.</li>
+            <li>Dompdf is installed for PDF generation inside the app.</li>
+        </ul>
+
+        <h2>3. Local Setup</h2>
+        <p>The repository is expected at:</p>
+        <pre>/Users/junedelacruz/Desktop/aaa-project/photobooth-crm</pre>
+
+        <h3>Install Dependencies</h3>
+        <pre>composer install
+npm install</pre>
+
+        <h3>Create Local Environment</h3>
+        <pre>cp .env.example .env
+php artisan key:generate</pre>
+
+        <p>For local SQLite development, use:</p>
+        <pre>DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite</pre>
+
+        <p>Create the SQLite file if it does not exist:</p>
+        <pre>mkdir -p database
+touch database/database.sqlite</pre>
+
+        <h3>Run Migrations and Seeders</h3>
+        <pre>php artisan migrate --force
+php artisan db:seed --class=MemoShotSeeder --force
+php artisan db:seed --class=DemoSeeder --force</pre>
+
+        <h3>Storage Symlink</h3>
+        <pre>php artisan storage:link</pre>
+
+        <h3>Build Frontend Assets</h3>
+        <pre>npm run build</pre>
+
+        <h3>Docker Local Stack</h3>
+        <p>The project is also configured for the shared local Docker stack at:</p>
+        <pre>/Users/junedelacruz/Desktop/aaa-project/docker/compose.yaml</pre>
+        <p>Common Makefile commands:</p>
+        <pre>make shell
+make artisan migrate --force
+make deploy-build</pre>
+
+        <h2>4. Important URLs</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>https://memoshot.com</code></td>
+                    <td>Central production domain.</td>
+                </tr>
+                <tr>
+                    <td><code>https://acme.memoshot.com</code></td>
+                    <td>Example tenant workspace domain.</td>
+                </tr>
+                <tr>
+                    <td><code>https://memoshot.com/admin</code></td>
+                    <td>Super admin area.</td>
+                </tr>
+                <tr>
+                    <td><code>https://memoshot.com/stripe/webhook</code></td>
+                    <td>Tenant/customer invoice payment webhook endpoint.</td>
+                </tr>
+                <tr>
+                    <td><code>https://memoshot.com/platform/stripe/webhook</code></td>
+                    <td>Platform subscription payment webhook endpoint.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>5. Environment Variables</h2>
+        <p>Never commit a real production <code>.env</code>. Use <code>.env.example</code> as the baseline and fill production values on the server.</p>
+
+        <h3>Core App</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Purpose</th>
+                    <th>Production Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>APP_NAME</code></td>
+                    <td>Displayed application name.</td>
+                    <td><code>MemoShot</code></td>
+                </tr>
+                <tr>
+                    <td><code>APP_ENV</code></td>
+                    <td>Laravel environment.</td>
+                    <td><code>production</code></td>
+                </tr>
+                <tr>
+                    <td><code>APP_DEBUG</code></td>
+                    <td>Disable detailed errors in production.</td>
+                    <td><code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>APP_URL</code></td>
+                    <td>Base central app URL.</td>
+                    <td><code>https://memoshot.com</code></td>
+                </tr>
+                <tr>
+                    <td><code>TENANT_BASE_DOMAIN</code></td>
+                    <td>Base domain used to resolve tenant subdomains.</td>
+                    <td><code>memoshot.com</code></td>
+                </tr>
+                <tr>
+                    <td><code>SUPER_ADMIN</code></td>
+                    <td>Email allowed to access super admin login.</td>
+                    <td><code>jtpayoran@yahoo.com</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Database</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>DB_CONNECTION</code></td>
+                    <td><code>sqlite</code> locally or <code>mysql</code> on shared hosting/production.</td>
+                </tr>
+                <tr>
+                    <td><code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code></td>
+                    <td>Required for MySQL production deployments.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Mail</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>MAIL_MAILER</code>, <code>MAIL_HOST</code>, <code>MAIL_PORT</code></td>
+                    <td>Mailer driver and host. Local Docker uses Mailpit/Mailhog. Production should use a real SMTP provider.</td>
+                </tr>
+                <tr>
+                    <td><code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code></td>
+                    <td>SMTP credentials where required.</td>
+                </tr>
+                <tr>
+                    <td><code>MAIL_FROM_ADDRESS</code>, <code>MAIL_FROM_NAME</code></td>
+                    <td>Default sender for login codes, invoices, campaigns, and platform billing emails.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Google Maps</h3>
+        <p>Google Maps is app-level, not tenant-level.</p>
+        <pre>VITE_GOOGLE_MAPS_API_KEY=your_google_maps_javascript_api_key</pre>
+        <p>Enable the needed Google Maps services in Google Cloud, especially Maps JavaScript API, Places API, and Geocoding API when address suggestions or distance calculations are required.</p>
+
+        <h3>Platform Stripe Environment</h3>
+        <pre>PLATFORM_STRIPE_SECRET=sk_live_or_test_key
+PLATFORM_STRIPE_WEBHOOK_SECRET=whsec_platform_webhook_secret
+PLATFORM_STRIPE_CURRENCY=usd
+PLATFORM_SUBSCRIPTION_AUTO_CHARGE=true
+PLATFORM_SUBSCRIPTION_REMINDER_DAYS=5
+PLATFORM_SUBSCRIPTION_RETRY_DAYS=5
+PLATFORM_SUBSCRIPTION_SCHEDULE_TIME=09:00
+PLATFORM_SUBSCRIPTION_ADMIN_EMAIL=admin@example.com</pre>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>PLATFORM_STRIPE_SECRET</code></td>
+                    <td>Creates platform subscription Checkout sessions and off-session charges.</td>
+                </tr>
+                <tr>
+                    <td><code>PLATFORM_STRIPE_WEBHOOK_SECRET</code></td>
+                    <td>Verifies Stripe webhook signatures for <code>/platform/stripe/webhook</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>PLATFORM_SUBSCRIPTION_AUTO_CHARGE</code></td>
+                    <td>Turns automatic platform subscription deduction on or off.</td>
+                </tr>
+                <tr>
+                    <td><code>PLATFORM_SUBSCRIPTION_REMINDER_DAYS</code></td>
+                    <td>Number of days before due date to email the tenant about the upcoming charge.</td>
+                </tr>
+                <tr>
+                    <td><code>PLATFORM_SUBSCRIPTION_RETRY_DAYS</code></td>
+                    <td>Number of days before retrying a failed platform subscription payment.</td>
+                </tr>
+                <tr>
+                    <td><code>PLATFORM_SUBSCRIPTION_SCHEDULE_TIME</code></td>
+                    <td>Daily scheduler time for subscription processing.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            Do not use tenant Stripe keys for platform subscription payment, and do not use platform Stripe keys for tenant invoice payments.
+        </div>
+
+        <h2 class="page-break">6. Tenant Stripe Settings</h2>
+        <p>
+            Each tenant configures its own Stripe values under <strong>Settings &gt; Workspace Settings</strong>. These tenant values are used only for customer invoice/installment payments.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Workspace Setting</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Stripe Secret Key</td>
+                    <td>Tenant-owned Stripe secret key. Used to create Checkout sessions for customer invoice payments.</td>
+                </tr>
+                <tr>
+                    <td>Tenant Stripe Webhook URL</td>
+                    <td>Read-only helper showing <code>https://memoshot.com/stripe/webhook</code>.</td>
+                </tr>
+                <tr>
+                    <td>Stripe Webhook Secret</td>
+                    <td>Tenant-owned webhook signing secret from that tenant's Stripe Dashboard webhook endpoint.</td>
+                </tr>
+                <tr>
+                    <td>Stripe Currency</td>
+                    <td>Three-letter currency for tenant checkout sessions, for example <code>aud</code>.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>7. Stripe Setup</h2>
+        <h3>Tenant Customer Invoice Payments</h3>
+        <ol>
+            <li>Tenant logs in to their own Stripe Dashboard.</li>
+            <li>Create a webhook endpoint with URL <code>https://memoshot.com/stripe/webhook</code>.</li>
+            <li>Select event <code>checkout.session.completed</code>.</li>
+            <li>Copy the generated <code>whsec_...</code> signing secret.</li>
+            <li>Paste it into Workspace Settings as the tenant Stripe Webhook Secret.</li>
+            <li>Paste the tenant Stripe Secret Key into Workspace Settings.</li>
+            <li>Set the tenant Stripe Currency.</li>
+        </ol>
+        <p>
+            Tenant invoice payments include <code>invoice_id</code> and <code>installment_id</code> metadata. The webhook verifies the tenant-specific webhook secret before marking the installment as paid.
+        </p>
+
+        <h3>Platform Subscription Payments</h3>
+        <ol>
+            <li>Platform owner logs in to the platform Stripe account.</li>
+            <li>Create a webhook endpoint with URL <code>https://memoshot.com/platform/stripe/webhook</code>.</li>
+            <li>Select event <code>checkout.session.completed</code>.</li>
+            <li>Copy the generated <code>whsec_...</code> signing secret.</li>
+            <li>Set it in production <code>.env</code> as <code>PLATFORM_STRIPE_WEBHOOK_SECRET</code>.</li>
+            <li>Set <code>PLATFORM_STRIPE_SECRET</code> to the platform Stripe secret key.</li>
+        </ol>
+        <p>
+            Platform subscription payments include <code>tenant_subscription_charge_id</code> metadata. They also save Stripe customer/payment method IDs for future off-session subscription billing.
+        </p>
+
+        <h3>Webhook Endpoints</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Endpoint</th>
+                    <th>Stripe Source</th>
+                    <th>Event</th>
+                    <th>Secret Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>/stripe/webhook</code></td>
+                    <td>Tenant Stripe account</td>
+                    <td><code>checkout.session.completed</code></td>
+                    <td>Workspace Settings</td>
+                </tr>
+                <tr>
+                    <td><code>/platform/stripe/webhook</code></td>
+                    <td>Platform Stripe account</td>
+                    <td><code>checkout.session.completed</code></td>
+                    <td>Production <code>.env</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>8. Payment Workflows</h2>
+        <h3>Customer Invoice Payment Flow</h3>
+        <ol>
+            <li>Admin creates or sends an invoice for a booking.</li>
+            <li>Customer opens the invoice payment link or pays from the public invoice page.</li>
+            <li>Application creates a Stripe Checkout session using the tenant's Stripe secret.</li>
+            <li>Customer pays in Stripe Checkout.</li>
+            <li>Stripe sends <code>checkout.session.completed</code> to <code>/stripe/webhook</code>.</li>
+            <li>App verifies the tenant webhook secret, marks the installment paid, recalculates invoice amount paid/status, and updates booking status.</li>
+            <li>As a fallback, the success return URL includes <code>session_id</code>, and the app verifies the Checkout session directly with the tenant's Stripe secret before marking paid.</li>
+        </ol>
+
+        <h3>Platform Subscription Payment Flow</h3>
+        <ol>
+            <li>Super admin creates subscription plans.</li>
+            <li>Tenant selects a monthly, quarterly, yearly, or weekly plan in Workspace Settings.</li>
+            <li>Tenant clicks pay subscription.</li>
+            <li>Application creates a platform Stripe Checkout session using <code>PLATFORM_STRIPE_SECRET</code>.</li>
+            <li>Customer/payment method is saved in Stripe for future off-session billing. The app saves only Stripe IDs such as <code>cus_...</code> and <code>pm_...</code>.</li>
+            <li>Webhook or verified return URL marks the tenant subscription charge as paid.</li>
+            <li>Scheduled billing creates future charges, sends reminders, charges due subscriptions, sends thank-you emails, and retries failures.</li>
+        </ol>
+
+        <div class="ok">
+            The application does not store card numbers, expiry dates, or CVC values. Those remain in Stripe.
+        </div>
+
+        <h3>Platform Subscription Emails</h3>
+        <ul>
+            <li>Reminder email: sent before the due date based on <code>PLATFORM_SUBSCRIPTION_REMINDER_DAYS</code>.</li>
+            <li>Paid email: sent after successful platform subscription payment.</li>
+            <li>Failed email: sent after a failed automatic deduction, with retry timing based on <code>PLATFORM_SUBSCRIPTION_RETRY_DAYS</code>.</li>
+        </ul>
+
+        <h2>9. Scheduled Billing</h2>
+        <p>The scheduler runs the platform subscription billing command daily at the configured time:</p>
+        <pre>php artisan platform-subscriptions:process</pre>
+        <p>Manual production command:</p>
+        <pre>/opt/alt/php84/usr/bin/php artisan platform-subscriptions:process</pre>
+        <p>Hostinger cron should run Laravel scheduler once per minute:</p>
+        <pre>cd /home/u838520432/domains/memoshot.com/laravel_app && /opt/alt/php84/usr/bin/php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</pre>
+
+        <h2 class="page-break">10. Deployment on Hostinger Shared Hosting</h2>
+        <p>The app uses a sibling folder layout:</p>
+        <pre>/home/u838520432/domains/memoshot.com/laravel_app
+/home/u838520432/domains/memoshot.com/public_html</pre>
+        <p>The Laravel app should live outside <code>public_html</code>. The generated <code>public_html/index.php</code> points to the Laravel app path.</p>
+
+        <h3>SSH</h3>
+        <pre>ssh -p 65002 u838520432@157.173.209.64</pre>
+
+        <h3>Deployment Make Commands</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Command</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>make deploy-build</code></td>
+                    <td>Install production PHP dependencies, install Node dependencies, build frontend, clear optimize cache.</td>
+                </tr>
+                <tr>
+                    <td><code>make deploy-ssh</code></td>
+                    <td>Rsync Laravel app files to remote app folder without deleting removed remote files.</td>
+                </tr>
+                <tr>
+                    <td><code>make deploy-ssh-public</code></td>
+                    <td>Generate and upload public web root files to <code>public_html</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>make deploy-ssh-all</code></td>
+                    <td>Run app and public rsync upload.</td>
+                </tr>
+                <tr>
+                    <td><code>make deploy-ssh-delete</code></td>
+                    <td>Rsync app with <code>--delete</code>. Use carefully.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Deployment Environment File</h3>
+        <p><code>.env.deploy</code> is not committed. It should contain SSH deployment settings similar to:</p>
+        <pre>SSH_HOST=157.173.209.64
+SSH_PORT=65002
+SSH_USER=u838520432
+SSH_REMOTE_APP_DIR=/home/u838520432/domains/memoshot.com/laravel_app
+SSH_REMOTE_PUBLIC_DIR=/home/u838520432/domains/memoshot.com/public_html
+DEPLOY_SERVER_APP_PATH=/home/u838520432/domains/memoshot.com/laravel_app</pre>
+
+        <h3>Post-Deploy Server Commands</h3>
+        <pre>cd /home/u838520432/domains/memoshot.com/laravel_app
+/opt/alt/php84/usr/bin/php artisan migrate --force
+/opt/alt/php84/usr/bin/php artisan optimize:clear
+/opt/alt/php84/usr/bin/php artisan config:cache
+/opt/alt/php84/usr/bin/php artisan route:cache
+/opt/alt/php84/usr/bin/php artisan view:cache</pre>
+
+        <h3>Storage Symlink on Hostinger</h3>
+        <pre>cd /home/u838520432/domains/memoshot.com
+ln -sfn laravel_app/storage/app/public public_html/storage</pre>
+
+        <h2>11. Tenant Domains and Wildcard DNS</h2>
+        <p>
+            Tenants are resolved by subdomain. For dynamic tenants such as <code>acme.memoshot.com</code>, configure Hostinger/DNS to support wildcard subdomains.
+        </p>
+        <ul>
+            <li>Create wildcard DNS record: <code>*.memoshot.com</code> pointing to the hosting IP.</li>
+            <li>Ensure the web server routes wildcard subdomains to the same Laravel app.</li>
+            <li>Ensure SSL covers wildcard subdomains or individual tenant subdomains as required by the hosting provider.</li>
+        </ul>
+
+        <h2>12. Super Admin</h2>
+        <p>Super admin login uses email code verification. Configure:</p>
+        <pre>SUPER_ADMIN=jtpayoran@yahoo.com</pre>
+        <p>Super admin capabilities include:</p>
+        <ul>
+            <li>Maintain subscription plans and validity.</li>
+            <li>Assign free-for-life plans that tenants cannot select themselves.</li>
+            <li>View tenant-selected subscriptions and payment history.</li>
+            <li>Manually enable or disable tenant access.</li>
+            <li>View unpaid tenant subscription charges.</li>
+            <li>Copy server Artisan commands and Stripe endpoint URLs.</li>
+            <li>Edit production <code>.env</code> with timestamped backup.</li>
+        </ul>
+
+        <h2>13. Common Artisan Commands</h2>
+        <pre>/opt/alt/php84/usr/bin/php artisan migrate --force
+/opt/alt/php84/usr/bin/php artisan db:seed --class=MemoShotSeeder --force
+/opt/alt/php84/usr/bin/php artisan db:seed --class=DemoSeeder --force
+/opt/alt/php84/usr/bin/php artisan optimize:clear
+/opt/alt/php84/usr/bin/php artisan storage:link
+/opt/alt/php84/usr/bin/php artisan config:cache
+/opt/alt/php84/usr/bin/php artisan route:cache
+/opt/alt/php84/usr/bin/php artisan view:cache
+/opt/alt/php84/usr/bin/php artisan platform-subscriptions:process</pre>
+
+        <h2>14. Key Files for New Developers</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>routes/web.php</code></td>
+                    <td>Main web routes, admin routes, Stripe webhook routes.</td>
+                </tr>
+                <tr>
+                    <td><code>routes/console.php</code></td>
+                    <td>Platform subscription billing command and schedule.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Http/Controllers/StripeWebhookController.php</code></td>
+                    <td>Handles tenant and platform Stripe webhooks.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Support/StripeCheckoutLinkGenerator.php</code></td>
+                    <td>Creates tenant/customer invoice Checkout links.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Support/PlatformSubscriptionCheckoutLinkGenerator.php</code></td>
+                    <td>Creates platform subscription Checkout links.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Services/PlatformSubscriptionBillingService.php</code></td>
+                    <td>Creates platform charges, reminders, off-session payments, and retry workflow.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Http/Controllers/SettingsController.php</code></td>
+                    <td>Tenant workspace settings and tenant subscription payment entry point.</td>
+                </tr>
+                <tr>
+                    <td><code>app/Http/Controllers/SuperAdminController.php</code></td>
+                    <td>Super admin dashboard, plans, tenant access, and .env editor.</td>
+                </tr>
+                <tr>
+                    <td><code>resources/js/admin/pages/SettingsPage.vue</code></td>
+                    <td>Tenant workspace settings UI including tenant Stripe values.</td>
+                </tr>
+                <tr>
+                    <td><code>resources/views/super-admin/index.blade.php</code></td>
+                    <td>Super admin UI.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>15. Troubleshooting</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Problem</th>
+                    <th>Likely Fix</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Payment succeeds in Stripe but remains pending.</td>
+                    <td>Verify correct webhook endpoint, webhook secret, selected event, and run <code>php artisan optimize:clear</code> after changing <code>.env</code>.</td>
+                </tr>
+                <tr>
+                    <td>Tenant invoice payment goes to wrong account.</td>
+                    <td>Confirm tenant Workspace Settings has its own Stripe secret. There should be no global tenant Stripe fallback.</td>
+                </tr>
+                <tr>
+                    <td>Platform subscription auto-charge does not run.</td>
+                    <td>Confirm Hostinger cron calls <code>schedule:run</code> every minute and <code>PLATFORM_SUBSCRIPTION_AUTO_CHARGE=true</code>.</td>
+                </tr>
+                <tr>
+                    <td>Automatic charge fails because no payment method exists.</td>
+                    <td>Tenant must complete one platform Checkout payment first so Stripe customer/payment method IDs are saved.</td>
+                </tr>
+                <tr>
+                    <td>CSS/JS loads from localhost or Vite in production.</td>
+                    <td>Run <code>npm run build</code>, deploy <code>public/build</code>, and remove any stale <code>public/hot</code>.</td>
+                </tr>
+                <tr>
+                    <td>Please provide a valid cache path.</td>
+                    <td>Ensure <code>storage/framework/cache</code>, <code>storage/framework/views</code>, and related storage directories exist and are writable.</td>
+                </tr>
+            </tbody>
+        </table>
+    </body>
+</html>
