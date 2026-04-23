@@ -31,6 +31,25 @@ const navItems = computed(() => [
     { key: 'referrals', label: 'Referrals', href: props.data.routes.referrals ?? '/referrals', accent: 'emerald', icon: 'referral' },
 ].filter((item) => item.href && (!Array.isArray(props.data.allowedScreens) || props.data.allowedScreens.includes(item.key))));
 
+const sectionDefinitions = [
+    { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices'] },
+    { key: 'contacts', label: 'Contacts', items: ['leads', 'customers'] },
+    { key: 'marketing', label: 'Marketing', items: ['campaigns'] },
+    { key: 'catalog', label: 'Catalog', items: ['packages', 'equipment', 'addons', 'discounts'] },
+    { key: 'admin', label: 'Admin', items: ['users', 'roles', 'access', 'support', 'referrals'] },
+];
+
+const navSections = computed(() => {
+    const itemsByKey = new Map(navItems.value.map((item) => [item.key, item]));
+
+    return sectionDefinitions
+        .map((section) => ({
+            ...section,
+            items: section.items.map((key) => itemsByKey.get(key)).filter(Boolean),
+        }))
+        .filter((section) => section.items.length > 0);
+});
+
 const navIcons = {
     dashboard: ['M4 13h6V4H4v9Z', 'M14 20h6V4h-6v16Z', 'M4 20h6v-3H4v3Z'],
     calendar: ['M7 3v4M17 3v4', 'M4 9h16', 'M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z'],
@@ -125,6 +144,23 @@ const activeSection = computed(() => {
 
     return props.page;
 });
+
+const activeGroup = computed(() => navSections.value.find((section) => section.items.some((item) => item.key === activeSection.value))?.key ?? 'daily');
+const collapsedGroups = ref(new Set());
+
+const isGroupCollapsed = (groupKey) => collapsedGroups.value.has(groupKey) && activeGroup.value !== groupKey;
+
+const toggleGroup = (groupKey) => {
+    const next = new Set(collapsedGroups.value);
+
+    if (next.has(groupKey)) {
+        next.delete(groupKey);
+    } else {
+        next.add(groupKey);
+    }
+
+    collapsedGroups.value = next;
+};
 
 const accentClass = (item) => {
     if (activeSection.value !== item.key) {
@@ -267,29 +303,44 @@ onBeforeUnmount(() => {
         <div class="flex w-full pt-16">
             <aside class="hidden w-64 shrink-0 overflow-hidden border-r border-white/10 bg-slate-950/90 lg:fixed lg:bottom-0 lg:top-16 lg:block">
                 <div class="flex h-full min-h-0 flex-col px-3 py-4">
-                    <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-                        <a
-                            v-for="item in navItems"
-                            :key="item.key"
-                            :href="item.href"
-                            class="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition"
-                            :class="accentClass(item)"
-                        >
-                            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-stone-200">
-                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path
-                                        v-for="path in navIcons[item.icon]"
-                                        :key="path"
-                                        :d="path"
-                                        stroke="currentColor"
-                                        stroke-width="1.8"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
+                    <nav class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                        <section v-for="section in navSections" :key="section.key" class="rounded-2xl border border-white/5 bg-white/[0.02] p-1.5">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.24em] text-stone-500 transition hover:text-stone-300"
+                                @click="toggleGroup(section.key)"
+                            >
+                                <span>{{ section.label }}</span>
+                                <svg class="h-3.5 w-3.5 transition" :class="isGroupCollapsed(section.key) ? '-rotate-90' : 'rotate-0'" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                    <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
-                            </span>
-                            <span>{{ item.label }}</span>
-                        </a>
+                            </button>
+
+                            <div v-show="!isGroupCollapsed(section.key)" class="mt-1 space-y-1">
+                                <a
+                                    v-for="item in section.items"
+                                    :key="item.key"
+                                    :href="item.href"
+                                    class="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition"
+                                    :class="accentClass(item)"
+                                >
+                                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-stone-200">
+                                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                            <path
+                                                v-for="path in navIcons[item.icon]"
+                                                :key="path"
+                                                :d="path"
+                                                stroke="currentColor"
+                                                stroke-width="1.8"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            />
+                                        </svg>
+                                    </span>
+                                    <span>{{ item.label }}</span>
+                                </a>
+                            </div>
+                        </section>
                     </nav>
 
                     <div v-if="!Array.isArray(data.allowedScreens) || data.allowedScreens.includes('settings')" class="mt-3 shrink-0 border-t border-white/10 pt-3">
