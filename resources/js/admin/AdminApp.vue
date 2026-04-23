@@ -32,6 +32,8 @@ import RolesPage from './pages/RolesPage.vue';
 import AccessControlPage from './pages/AccessControlPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 import SupportPage from './pages/SupportPage.vue';
+import SupportDetailPage from './pages/SupportDetailPage.vue';
+import ReferralsPage from './pages/ReferralsPage.vue';
 
 const props = defineProps({
     page: {
@@ -75,6 +77,8 @@ const pages = {
     roles: RolesPage,
     access: AccessControlPage,
     support: SupportPage,
+    'support-detail': SupportDetailPage,
+    referrals: ReferralsPage,
     settings: SettingsPage,
 };
 

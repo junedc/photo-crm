@@ -101,7 +101,7 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('bookings.store') }}" class="mt-8 space-y-6">
+            <form method="POST" action="{{ route('bookings.store') }}" class="mt-8 space-y-6" novalidate>
                 @csrf
                 <input type="hidden" name="lead_token" id="lead-token" value="{{ old('lead_token', $leadToken) }}">
                 <input type="hidden" name="package_hourly_price_id" id="package-hourly-price-id" value="{{ old('package_hourly_price_id') }}">
@@ -149,22 +149,25 @@
                     <div class="space-y-4">
                         <div class="grid gap-4 lg:grid-cols-12">
                             <div class="lg:col-span-5">
-                                <label class="mb-2 block text-sm text-stone-300" for="customer-name">Full name</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="customer-name">Full name <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="customer-name" name="customer_name" type="text" value="{{ old('customer_name') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_name') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="customer_name"></p>
                                 @error('customer_name')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div class="lg:col-span-3">
-                                <label class="mb-2 block text-sm text-stone-300" for="customer-phone">Phone number</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="customer-phone">Phone number <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="customer-phone" name="customer_phone" type="text" value="{{ old('customer_phone') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_phone') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="customer_phone"></p>
                                 @error('customer_phone')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div class="lg:col-span-4">
-                                <label class="mb-2 block text-sm text-stone-300" for="customer-email">Email address</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="customer-email">Email address <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_email') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="customer_email"></p>
                                 @error('customer_email')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
@@ -172,27 +175,30 @@
                         </div>
                         <div class="grid gap-4 lg:grid-cols-2">
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_date') ? 'border-rose-300/70' : 'border-white/10' }}" onkeydown="return false" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_date"></p>
                                 @error('event_date')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="event-type">Event type</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-type">Event type <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <select id="event-type" name="event_type" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_type') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('event_type'))>Select event type</option>
                                     @foreach (['Wedding', 'Birthday', 'Anniversary', 'Others'] as $eventType)
                                         <option value="{{ $eventType }}" @selected(old('event_type') === $eventType)>{{ $eventType }}</option>
                                     @endforeach
                                 </select>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_type"></p>
                                 @error('event_type')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div class="lg:col-span-2">
-                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_location') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_location"></p>
                                 @error('event_location')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
@@ -200,7 +206,7 @@
                         </div>
                         <div class="grid gap-4 sm:grid-cols-3">
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="start-time">Start hour</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="start-time">Start hour <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <select id="start-time" name="start_time" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('start_time') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('start_time'))>Select start time</option>
                                     @for ($hour = 8; $hour < 24; $hour++)
@@ -213,21 +219,24 @@
                                         @endforeach
                                     @endfor
                                 </select>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="start_time"></p>
                                 @error('start_time')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="end-time-display">End hour</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="end-time-display">End hour <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="end-time-display" type="text" value="{{ old('end_time') ? \Illuminate\Support\Carbon::createFromFormat('H:i', old('end_time'))->format('g:i A') : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
                                 <input id="end-time" name="end_time" type="hidden" value="{{ old('end_time') }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="end_time"></p>
                                 @error('end_time')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration</label>
+                                <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="total-hours-display" type="number" min="0.50" step="0.50" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="total_hours"></p>
                                 @error('total_hours')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
@@ -619,8 +628,9 @@
 
                         <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                             <div class="min-w-0">
-                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location</label>
-                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-location-travel">Event location <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                <input id="event-location-travel" type="text" value="{{ old('event_location') }}" data-google-address="true" data-location-mirror autocomplete="street-address" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_location_travel"></p>
                                 <h2 class="sr-only">
                                     <span class="text-cyan-200">Travel Fee</span>
                                     <span class="mx-2 text-stone-500">•</span>
@@ -916,6 +926,7 @@
                 const totalHoursInput = document.getElementById('total-hours');
                 const totalHoursDisplay = document.getElementById('total-hours-display');
                 const eventLocationInput = document.getElementById('event-location');
+                const eventLocationMirrorInput = document.getElementById('event-location-travel');
                 const startTimeInput = document.getElementById('start-time');
                 const endTimeInput = document.getElementById('end-time');
                 const endTimeDisplay = document.getElementById('end-time-display');
@@ -973,10 +984,11 @@
                     document.getElementById('customer-phone'),
                     document.getElementById('event-date'),
                     document.getElementById('event-location'),
+                    document.getElementById('event-location-travel'),
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !eventLocationMirrorInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit) {
                     return;
                 }
 
@@ -1024,14 +1036,132 @@
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
 
+                const fieldLabels = {
+                    customer_name: 'Full name',
+                    customer_phone: 'Phone number',
+                    customer_email: 'Email address',
+                    event_date: 'Event date',
+                    event_type: 'Event type',
+                    event_location: 'Event location',
+                    event_location_travel: 'Event location',
+                    start_time: 'Start hour',
+                    end_time: 'End hour',
+                    total_hours: 'Duration',
+                };
+
+                const fieldKey = (field) => {
+                    if (field.id === 'total-hours-display') {
+                        return 'total_hours';
+                    }
+
+                    if (field.id === 'event-location-travel') {
+                        return 'event_location_travel';
+                    }
+
+                    return field.name || field.id;
+                };
+
+                const visibleFieldFor = (field) => {
+                    if (field.id === 'end-time') {
+                        return endTimeDisplay;
+                    }
+
+                    return field;
+                };
+
+                const fieldValue = (field) => {
+                    if (field.id === 'total-hours-display') {
+                        return field.value || totalHoursInput.value;
+                    }
+
+                    if (field.id === 'event-location-travel') {
+                        return field.value || eventLocationInput.value;
+                    }
+
+                    return field.value;
+                };
+
+                const clearFieldError = (field) => {
+                    const key = fieldKey(field);
+                    const message = form.querySelector(`[data-validation-for="${key}"]`);
+                    const visibleField = visibleFieldFor(field);
+
+                    visibleField.classList.remove('border-rose-300/70');
+                    visibleField.classList.add('border-white/10');
+
+                    if (message) {
+                        message.textContent = '';
+                        message.classList.add('hidden');
+                    }
+                };
+
+                const setFieldError = (field, messageText) => {
+                    const key = fieldKey(field);
+                    const message = form.querySelector(`[data-validation-for="${key}"]`);
+                    const visibleField = visibleFieldFor(field);
+
+                    visibleField.classList.add('border-rose-300/70');
+                    visibleField.classList.remove('border-white/10');
+
+                    if (message) {
+                        message.textContent = messageText;
+                        message.classList.remove('hidden');
+                    }
+                };
+
+                const focusInvalidField = (field) => {
+                    const visibleField = visibleFieldFor(field);
+                    visibleField.focus({ preventScroll: true });
+                    visibleField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                };
+
+                const validationMessageFor = (field) => {
+                    const key = fieldKey(field);
+                    const value = (fieldValue(field) || '').trim();
+                    const label = fieldLabels[key] || 'This field';
+
+                    if (field.required && !value) {
+                        return `${label} is required.`;
+                    }
+
+                    if (key === 'customer_email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                        return 'Enter a valid email address.';
+                    }
+
+                    if (key === 'event_date' && value) {
+                        const localDate = new Date();
+                        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+                        const today = localDate.toISOString().slice(0, 10);
+
+                        if (value < today) {
+                            return 'Event date must be today or later.';
+                        }
+                    }
+
+                    if ((key === 'start_time' || key === 'end_time') && value && !/^\d{2}:(00|30)$/.test(value)) {
+                        return `${label} must be in 30 minute intervals.`;
+                    }
+
+                    if (key === 'end_time' && value && startTimeInput.value && value <= startTimeInput.value) {
+                        return 'End hour must be later than the start hour.';
+                    }
+
+                    if (key === 'total_hours' && parseAmount(value) < 0.5) {
+                        return 'Duration must be at least 0.5 hours.';
+                    }
+
+                    return '';
+                };
+
                 const validateField = (field) => {
-                    if (!field.checkValidity()) {
-                        field.reportValidity();
-                        field.focus({ preventScroll: true });
-                        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const message = validationMessageFor(field);
+
+                    if (message) {
+                        setFieldError(field, message);
                         return false;
                     }
 
+                    clearFieldError(field);
                     return true;
                 };
 
@@ -1042,14 +1172,22 @@
                         return true;
                     }
 
-                    for (const field of Array.from(section.querySelectorAll('input, select, textarea'))) {
+                    let firstInvalidField = null;
+                    const fields = Array.from(section.querySelectorAll('input, select, textarea'));
+
+                    for (const field of fields) {
                         if (step === 2 && field.matches('input[name="package_id"]')) {
                             continue;
                         }
 
                         if (!validateField(field)) {
-                            return false;
+                            firstInvalidField ??= field;
                         }
+                    }
+
+                    if (firstInvalidField) {
+                        focusInvalidField(firstInvalidField);
+                        return false;
                     }
 
                     if (step === 2) {
@@ -1074,6 +1212,19 @@
                         }
                     }
 
+                    return true;
+                };
+
+                const validateBookingDetails = () => {
+                    for (let step = 1; step <= 4; step += 1) {
+                        showWizardStep(step);
+
+                        if (!validateWizardStep(step)) {
+                            return false;
+                        }
+                    }
+
+                    showWizardStep(5);
                     return true;
                 };
 
@@ -1921,6 +2072,12 @@
                 };
 
                 const openBookNowModal = () => {
+                    updatePackageDrivenTiming();
+
+                    if (!validateBookingDetails()) {
+                        return;
+                    }
+
                     const totals = bookNowTotals();
 
                     if (!totals.selectedPackage) {
@@ -2215,6 +2372,27 @@
                     field.addEventListener('change', queueAutosave);
                     field.addEventListener('blur', queueAutosave);
                 });
+                Array.from(form.querySelectorAll('input, select, textarea')).forEach((field) => {
+                    field.addEventListener('input', () => clearFieldError(field));
+                    field.addEventListener('change', () => clearFieldError(field));
+                });
+                eventLocationInput.addEventListener('input', () => {
+                    eventLocationMirrorInput.value = eventLocationInput.value;
+                });
+                eventLocationMirrorInput.addEventListener('input', () => {
+                    eventLocationInput.value = eventLocationMirrorInput.value;
+                    clearFieldError(eventLocationInput);
+                    clearFieldError(eventLocationMirrorInput);
+                    queueAutosave();
+                    queueTravelCalculation();
+                });
+                eventLocationMirrorInput.addEventListener('change', () => {
+                    eventLocationInput.value = eventLocationMirrorInput.value;
+                    clearFieldError(eventLocationInput);
+                    clearFieldError(eventLocationMirrorInput);
+                    queueAutosave();
+                    queueTravelCalculation();
+                });
                 startTimeInput.addEventListener('input', updateTotalHours);
                 startTimeInput.addEventListener('change', () => {
                     snapTimeInput(startTimeInput);
@@ -2243,6 +2421,7 @@
                 eventLocationInput.addEventListener('input', queueTravelCalculation);
                 eventLocationInput.addEventListener('change', queueTravelCalculation);
                 eventLocationInput.addEventListener('blur', queueTravelCalculation);
+                eventLocationMirrorInput.addEventListener('blur', queueTravelCalculation);
                 form.addEventListener('submit', (event) => {
                     updatePackageDrivenTiming();
 
@@ -2256,16 +2435,9 @@
                         return;
                     }
 
-                    for (let step = 1; step <= 4; step += 1) {
-                        showWizardStep(step);
-
-                        if (!validateWizardStep(step)) {
-                            event.preventDefault();
-                            return;
-                        }
+                    if (!validateBookingDetails()) {
+                        event.preventDefault();
                     }
-
-                    showWizardStep(5);
                 });
                 snapTimeInput(startTimeInput);
                 snapTimeInput(endTimeInput);
@@ -2277,6 +2449,13 @@
                 openPackageTierModalButton.addEventListener('click', openPackageTierModal);
                 closePackageTierModalButton.addEventListener('click', closePackageTierModal);
                 confirmBookNowButton.addEventListener('click', () => {
+                    updatePackageDrivenTiming();
+
+                    if (!validateBookingDetails()) {
+                        closeBookNowModal();
+                        return;
+                    }
+
                     if (!termsAcceptedCheckbox.checked) {
                         termsError.classList.remove('hidden');
                         return;

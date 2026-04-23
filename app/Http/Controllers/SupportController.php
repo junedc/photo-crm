@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SupportTicket;
+use App\Models\SupportTicketReply;
 use App\Models\Tenant;
 use App\Models\TenantReferral;
 use App\Tenancy\CurrentTenant;
@@ -19,12 +20,50 @@ class SupportController extends Controller
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant, 404);
 
-        $this->ensureReferralCode($tenant);
-
         $tickets = SupportTicket::query()
             ->with('user')
+            ->withCount('replies')
             ->latest()
             ->get();
+
+        return view('admin.app', [
+            'page' => 'support',
+            'props' => [
+                'tenant' => $this->serializeTenant($tenant),
+                'routes' => $this->baseRoutes(),
+                'tickets' => $tickets->map(fn (SupportTicket $ticket): array => $this->serializeTicket($ticket))->values()->all(),
+                'ticketTypes' => SupportTicket::types(),
+                'ticketPriorities' => SupportTicket::priorities(),
+                'ticketStatuses' => SupportTicket::statuses(),
+                'tenantTicketStatuses' => SupportTicket::tenantStatuses(),
+            ],
+        ]);
+    }
+
+    public function show(CurrentTenant $currentTenant, SupportTicket $ticket): View
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $ticket->load(['user', 'replies.user']);
+
+        return view('admin.app', [
+            'page' => 'support-detail',
+            'props' => [
+                'tenant' => $this->serializeTenant($tenant),
+                'routes' => $this->baseRoutes(),
+                'ticket' => $this->serializeTicket($ticket, includeReplies: true),
+                'tenantTicketStatuses' => SupportTicket::tenantStatuses(),
+            ],
+        ]);
+    }
+
+    public function referrals(CurrentTenant $currentTenant): View
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $this->ensureReferralCode($tenant);
 
         $referrals = TenantReferral::query()
             ->with('referredTenant')
@@ -33,14 +72,10 @@ class SupportController extends Controller
             ->get();
 
         return view('admin.app', [
-            'page' => 'support',
+            'page' => 'referrals',
             'props' => [
                 'tenant' => $this->serializeTenant($tenant->fresh()),
                 'routes' => $this->baseRoutes(),
-                'tickets' => $tickets->map(fn (SupportTicket $ticket): array => $this->serializeTicket($ticket))->values()->all(),
-                'ticketTypes' => SupportTicket::types(),
-                'ticketPriorities' => SupportTicket::priorities(),
-                'ticketStatuses' => SupportTicket::statuses(),
                 'referral' => [
                     'code' => $tenant->referral_code,
                     'url' => rtrim((string) config('app.url'), '/').'/?ref='.$tenant->referral_code,
@@ -76,6 +111,46 @@ class SupportController extends Controller
         return redirect()->route('support.index')->with('status', 'Support ticket submitted.');
     }
 
+    public function updateStatus(SupportTicket $ticket, Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_keys(SupportTicket::tenantStatuses()))],
+        ]);
+
+        $ticket->forceFill([
+            'status' => $validated['status'],
+            'resolved_at' => $validated['status'] === SupportTicket::STATUS_RESOLVED ? now() : null,
+        ])->save();
+
+        return back()->with('status', 'Support ticket status updated.');
+    }
+
+    public function storeReply(CurrentTenant $currentTenant, SupportTicket $ticket, Request $request): RedirectResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:5000'],
+        ]);
+
+        SupportTicketReply::query()->create([
+            'tenant_id' => $tenant->id,
+            'support_ticket_id' => $ticket->id,
+            'user_id' => $request->user()?->id,
+            'message' => $validated['message'],
+        ]);
+
+        if ($ticket->status === SupportTicket::STATUS_RESOLVED) {
+            $ticket->forceFill([
+                'status' => SupportTicket::STATUS_IN_PROGRESS,
+                'resolved_at' => null,
+            ])->save();
+        }
+
+        return redirect()->route('support.show', $ticket)->with('status', 'Reply added.');
+    }
+
     private function ensureReferralCode(Tenant $tenant): void
     {
         if (filled($tenant->referral_code)) {
@@ -98,9 +173,9 @@ class SupportController extends Controller
         return $number;
     }
 
-    private function serializeTicket(SupportTicket $ticket): array
+    private function serializeTicket(SupportTicket $ticket, bool $includeReplies = false): array
     {
-        return [
+        $data = [
             'id' => $ticket->id,
             'ticket_number' => $ticket->ticket_number,
             'type' => $ticket->type,
@@ -113,6 +188,32 @@ class SupportController extends Controller
             'status_label' => SupportTicket::statuses()[$ticket->status] ?? Str::headline($ticket->status),
             'created_by' => $ticket->user?->name,
             'created_at' => $ticket->created_at?->format('d M Y g:i A'),
+            'updated_at' => $ticket->updated_at?->format('d M Y g:i A'),
+            'resolved_at' => $ticket->resolved_at?->format('d M Y g:i A'),
+            'replies_count' => $ticket->replies_count ?? $ticket->replies->count(),
+            'show_url' => route('support.show', $ticket),
+            'status_update_url' => route('support.status.update', $ticket),
+            'reply_store_url' => route('support.replies.store', $ticket),
+        ];
+
+        if ($includeReplies) {
+            $data['replies'] = $ticket->replies
+                ->sortBy('created_at')
+                ->map(fn (SupportTicketReply $reply): array => $this->serializeReply($reply))
+                ->values()
+                ->all();
+        }
+
+        return $data;
+    }
+
+    private function serializeReply(SupportTicketReply $reply): array
+    {
+        return [
+            'id' => $reply->id,
+            'message' => $reply->message,
+            'created_by' => $reply->user?->name ?? 'Workspace user',
+            'created_at' => $reply->created_at?->format('d M Y g:i A'),
         ];
     }
 
@@ -155,7 +256,11 @@ class SupportController extends Controller
             'leads' => route('leads.index'),
             'customers' => route('customers.index'),
             'campaigns' => route('campaigns.index'),
+            'users' => route('users.index'),
+            'roles' => route('roles.index'),
+            'access' => route('access.index'),
             'support' => route('support.index'),
+            'referrals' => route('referrals.index'),
             'supportTicketsStore' => route('support.tickets.store'),
             'settings' => route('settings.index'),
             'logout' => route('logout'),

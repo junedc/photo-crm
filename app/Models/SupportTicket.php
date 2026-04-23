@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SupportTicket extends Model
 {
@@ -59,14 +60,27 @@ class SupportTicket extends Model
     {
         return [
             self::STATUS_OPEN => 'Open',
-            self::STATUS_IN_PROGRESS => 'In progress',
+            self::STATUS_IN_PROGRESS => 'Ongoing',
             self::STATUS_RESOLVED => 'Resolved',
             self::STATUS_CLOSED => 'Closed',
+        ];
+    }
+
+    public static function tenantStatuses(): array
+    {
+        return [
+            self::STATUS_IN_PROGRESS => 'Ongoing',
+            self::STATUS_RESOLVED => 'Resolved',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function replies(): HasMany
+    {
+        return $this->hasMany(SupportTicketReply::class);
     }
 }

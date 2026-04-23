@@ -105,6 +105,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/admin/calendar', [BookingController::class, 'calendar'])->name('admin.calendar.index');
         Route::get('/admin/bookings/{booking}', [BookingController::class, 'show'])->name('admin.bookings.show');
         Route::get('/support', [SupportController::class, 'index'])->name('support.index');
+        Route::get('/support/{ticket}', [SupportController::class, 'show'])->name('support.show');
+        Route::get('/referrals', [SupportController::class, 'referrals'])->name('referrals.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::get('/users', [UserRoleController::class, 'users'])->name('users.index');
         Route::get('/roles', [UserRoleController::class, 'roles'])->name('roles.index');
@@ -139,6 +141,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::put('/discounts/{discount}', [DiscountController::class, 'update'])->name('discounts.update');
         Route::delete('/discounts/{discount}', [DiscountController::class, 'destroy'])->name('discounts.destroy');
         Route::post('/support/tickets', [SupportController::class, 'storeTicket'])->name('support.tickets.store');
+        Route::put('/support/{ticket}/status', [SupportController::class, 'updateStatus'])->name('support.status.update');
+        Route::post('/support/{ticket}/replies', [SupportController::class, 'storeReply'])->name('support.replies.store');
         Route::post('/settings/workspace', [SettingsController::class, 'updateWorkspace'])->name('settings.workspace.update');
         Route::post('/settings/subscription/pay', [SettingsController::class, 'paySubscription'])->name('settings.subscription.pay');
         Route::post('/settings/account', [SettingsController::class, 'updateAccount'])->name('settings.account.update');

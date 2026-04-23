@@ -24,6 +24,8 @@ class AdminAccess
             ['key' => 'users', 'label' => 'Users'],
             ['key' => 'roles', 'label' => 'Roles'],
             ['key' => 'access', 'label' => 'Access Control'],
+            ['key' => 'support', 'label' => 'Support'],
+            ['key' => 'referrals', 'label' => 'Referrals'],
             ['key' => 'settings', 'label' => 'Settings'],
         ];
     }
@@ -53,6 +55,8 @@ class AdminAccess
             str_starts_with($routeName, 'users.') => 'users',
             str_starts_with($routeName, 'roles.') => 'roles',
             str_starts_with($routeName, 'access.') => 'access',
+            str_starts_with($routeName, 'support.') => 'support',
+            str_starts_with($routeName, 'referrals.') => 'referrals',
             str_starts_with($routeName, 'settings.') => 'settings',
             default => null,
         };
