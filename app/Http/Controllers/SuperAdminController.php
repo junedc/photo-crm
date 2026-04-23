@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Subscription;
 use App\Models\SuperAdminLoginCode;
+use App\Models\SupportTicket;
 use App\Models\Tenant;
+use App\Models\TenantReferral;
 use App\Models\TenantSubscriptionCharge;
 use App\Services\Auth\SuperAdminLoginVerificationService;
 use App\Services\PlatformSubscriptionBillingService;
@@ -172,6 +174,17 @@ class SuperAdminController extends Controller
                 ->where('is_active', true)
                 ->orderBy('price')
                 ->orderBy('name')
+                ->get(),
+            'supportTickets' => SupportTicket::query()
+                ->withoutGlobalScopes()
+                ->with(['tenant', 'user'])
+                ->latest()
+                ->limit(30)
+                ->get(),
+            'tenantReferrals' => TenantReferral::query()
+                ->with(['referrerTenant', 'referredTenant'])
+                ->latest()
+                ->limit(30)
                 ->get(),
             'billingPeriods' => Subscription::billingPeriods(),
             'validityUnits' => Subscription::validityUnits(),

@@ -28,6 +28,8 @@ const navItems = computed(() => [
     { key: 'roles', label: 'Roles', href: props.data.routes.roles, accent: 'violet', icon: 'shield' },
     { key: 'access', label: 'Access', href: props.data.routes.access, accent: 'amber', icon: 'key' },
 ].filter((item) => item.href && (!Array.isArray(props.data.allowedScreens) || props.data.allowedScreens.includes(item.key))));
+    { key: 'support', label: 'Support', href: props.data.routes.support ?? '/support', accent: 'sky', icon: 'support' },
+]);
 
 const navIcons = {
     dashboard: ['M4 13h6V4H4v9Z', 'M14 20h6V4h-6v16Z', 'M4 20h6v-3H4v3Z'],
@@ -43,6 +45,7 @@ const navIcons = {
     tag: ['M4 12V5h7l9 9-7 7-9-9Z', 'M8 8h.01'],
     shield: ['M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z', 'M9 12l2 2 4-4'],
     key: ['M15 7a4 4 0 1 0-2.8 6.8L10 16H7v3H4v3', 'M16.5 7.5h.01'],
+    support: ['M5 19v-5a7 7 0 1 1 14 0v5', 'M5 19h4v-6H5v6ZM15 19h4v-6h-4v6Z', 'M9 20h3a3 3 0 0 0 3-3'],
     settings: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04-1.8 3.12-.05-.02a1.8 1.8 0 0 0-2 .36l-.3.24a1.8 1.8 0 0 0-.66 1.5V22h-6v-.08a1.8 1.8 0 0 0-.66-1.5l-.3-.24a1.8 1.8 0 0 0-2-.36l-.05.02-1.8-3.12.04-.04A1.8 1.8 0 0 0 4.6 15l-.06-.38A1.8 1.8 0 0 0 3.2 13.2L3 13.14V9.86l.2-.06a1.8 1.8 0 0 0 1.34-1.42L4.6 8a1.8 1.8 0 0 0-.36-1.98l-.04-.04 1.8-3.12.05.02a1.8 1.8 0 0 0 2-.36l.3-.24A1.8 1.8 0 0 0 9 1.08V1h6v.08a1.8 1.8 0 0 0 .66 1.5l.3.24a1.8 1.8 0 0 0 2 .36l.05-.02 1.8 3.12-.04.04A1.8 1.8 0 0 0 19.4 8l.06.38A1.8 1.8 0 0 0 20.8 9.8l.2.06v3.28l-.2.06a1.8 1.8 0 0 0-1.34 1.42l-.06.38Z'],
 };
 
@@ -93,6 +96,10 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('invoices')) {
         return 'invoices';
+    }
+
+    if (props.page.startsWith('support')) {
+        return 'support';
     }
 
     if (props.page.startsWith('settings')) {

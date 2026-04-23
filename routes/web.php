@@ -12,6 +12,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\PublicCatalogController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\SupportController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TenantOnboardingController;
 use App\Http\Controllers\UserRoleController;
@@ -103,6 +104,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/admin/invoices', [InvoiceController::class, 'index'])->name('admin.invoices.index');
         Route::get('/admin/calendar', [BookingController::class, 'calendar'])->name('admin.calendar.index');
         Route::get('/admin/bookings/{booking}', [BookingController::class, 'show'])->name('admin.bookings.show');
+        Route::get('/support', [SupportController::class, 'index'])->name('support.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::get('/users', [UserRoleController::class, 'users'])->name('users.index');
         Route::get('/roles', [UserRoleController::class, 'roles'])->name('roles.index');
@@ -136,6 +138,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/discounts', [DiscountController::class, 'store'])->name('discounts.store');
         Route::put('/discounts/{discount}', [DiscountController::class, 'update'])->name('discounts.update');
         Route::delete('/discounts/{discount}', [DiscountController::class, 'destroy'])->name('discounts.destroy');
+        Route::post('/support/tickets', [SupportController::class, 'storeTicket'])->name('support.tickets.store');
         Route::post('/settings/workspace', [SettingsController::class, 'updateWorkspace'])->name('settings.workspace.update');
         Route::post('/settings/subscription/pay', [SettingsController::class, 'paySubscription'])->name('settings.subscription.pay');
         Route::post('/settings/account', [SettingsController::class, 'updateAccount'])->name('settings.account.update');

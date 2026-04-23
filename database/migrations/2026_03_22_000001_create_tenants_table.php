@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('slug')->unique();
+            $table->string('referral_code', 32)->nullable()->unique();
             $table->string('logo_path')->nullable();
             $table->string('theme', 20)->default('dark');
             $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->nullOnDelete();

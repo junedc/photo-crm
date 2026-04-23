@@ -31,6 +31,7 @@ import UsersPage from './pages/UsersPage.vue';
 import RolesPage from './pages/RolesPage.vue';
 import AccessControlPage from './pages/AccessControlPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
+import SupportPage from './pages/SupportPage.vue';
 
 const props = defineProps({
     page: {
@@ -73,6 +74,7 @@ const pages = {
     users: UsersPage,
     roles: RolesPage,
     access: AccessControlPage,
+    support: SupportPage,
     settings: SettingsPage,
 };
 

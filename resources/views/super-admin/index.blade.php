@@ -40,6 +40,8 @@
                     <nav class="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.04] text-sm shadow-xl shadow-black/20">
                         <a href="#plans" class="block border-b border-white/10 px-4 py-3 font-semibold text-sky-100 transition hover:bg-sky-300/10">Subscription plans</a>
                         <a href="#tenants" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">Tenant access</a>
+                        <a href="#support" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">Support tickets</a>
+                        <a href="#referrals" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">Referrals</a>
                         <a href="#unpaid" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">Unpaid tenants</a>
                         <a href="#history" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">Payment history</a>
                         <a href="#tools" class="block border-b border-white/10 px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white">SSH tools</a>
@@ -236,6 +238,96 @@
                         </tbody>
                     </table>
                 </div>
+                </div>
+            </section>
+
+            <section id="support" class="scroll-mt-6 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.04]">
+                <div class="border-b border-white/10 p-5">
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-sky-200">Support Tickets</p>
+                    <h2 class="mt-1 text-sm font-semibold italic text-white">Latest tenant bug reports <span class="font-normal text-slate-400">/ submitted from tenant admin.</span></h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-white/10">
+                        <thead class="bg-white/[0.03] text-left text-[11px] uppercase tracking-[0.25em] text-slate-400">
+                            <tr>
+                                <th class="px-5 py-4">Ticket</th>
+                                <th class="px-5 py-4">Tenant</th>
+                                <th class="px-5 py-4">Issue</th>
+                                <th class="px-5 py-4">Priority</th>
+                                <th class="px-5 py-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse ($supportTickets as $ticket)
+                                <tr>
+                                    <td class="px-5 py-4">
+                                        <p class="font-semibold text-sky-100">{{ $ticket->ticket_number }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">{{ $ticket->created_at->format('d M Y g:i A') }}</p>
+                                    </td>
+                                    <td class="px-5 py-4 text-sm text-slate-300">
+                                        {{ $ticket->tenant?->name ?? 'Unknown tenant' }}
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <p class="font-semibold text-white">{{ $ticket->subject }}</p>
+                                        <p class="mt-1 max-w-xl truncate text-xs text-slate-500">{{ $ticket->description }}</p>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $ticket->priority === 'urgent' ? 'bg-rose-400/15 text-rose-200' : ($ticket->priority === 'high' ? 'bg-amber-300/15 text-amber-100' : 'bg-sky-300/15 text-sky-100') }}">
+                                            {{ ucfirst($ticket->priority) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <span class="rounded-full bg-emerald-300/15 px-2.5 py-1 text-xs font-semibold text-emerald-200">
+                                            {{ str($ticket->status)->replace('_', ' ')->title() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="px-5 py-10 text-center text-sm text-slate-400">No support tickets yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="referrals" class="scroll-mt-6 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.04]">
+                <div class="border-b border-white/10 p-5">
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-emerald-200">Tenant Referrals</p>
+                    <h2 class="mt-1 text-sm font-semibold italic text-white">Platform referral activity <span class="font-normal text-slate-400">/ signups tracked from referral links.</span></h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-white/10">
+                        <thead class="bg-white/[0.03] text-left text-[11px] uppercase tracking-[0.25em] text-slate-400">
+                            <tr>
+                                <th class="px-5 py-4">Referrer</th>
+                                <th class="px-5 py-4">Referred tenant</th>
+                                <th class="px-5 py-4">Owner email</th>
+                                <th class="px-5 py-4">Code</th>
+                                <th class="px-5 py-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse ($tenantReferrals as $referral)
+                                <tr>
+                                    <td class="px-5 py-4 text-sm font-semibold text-white">{{ $referral->referrerTenant?->name ?? 'Unknown tenant' }}</td>
+                                    <td class="px-5 py-4 text-sm text-slate-300">{{ $referral->referredTenant?->name ?? $referral->referred_workspace_name }}</td>
+                                    <td class="px-5 py-4 text-sm text-slate-400">{{ $referral->referred_owner_email ?: 'Not recorded' }}</td>
+                                    <td class="px-5 py-4 text-sm text-emerald-100">{{ $referral->referral_code }}</td>
+                                    <td class="px-5 py-4">
+                                        <span class="rounded-full bg-emerald-300/15 px-2.5 py-1 text-xs font-semibold text-emerald-200">
+                                            {{ str($referral->status)->replace('_', ' ')->title() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="px-5 py-10 text-center text-sm text-slate-400">No tenant referrals yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
             </section>
 

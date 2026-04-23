@@ -96,13 +96,8 @@
             @endif
 
             @if ($errors->any())
-                <div class="mt-6 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">
-                    <p class="font-semibold">Please fix the booking details below.</p>
-                    <ul class="mt-2 list-disc pl-5">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
+                <div class="mt-6 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-5 py-4 text-sm font-medium text-rose-100">
+                    Please review the highlighted fields below.
                 </div>
             @endif
 
@@ -155,36 +150,58 @@
                         <div class="grid gap-4 lg:grid-cols-12">
                             <div class="lg:col-span-5">
                                 <label class="mb-2 block text-sm text-stone-300" for="customer-name">Full name</label>
-                                <input id="customer-name" name="customer_name" type="text" value="{{ old('customer_name') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <input id="customer-name" name="customer_name" type="text" value="{{ old('customer_name') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_name') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                @error('customer_name')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div class="lg:col-span-3">
                                 <label class="mb-2 block text-sm text-stone-300" for="customer-phone">Phone number</label>
-                                <input id="customer-phone" name="customer_phone" type="text" value="{{ old('customer_phone') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <input id="customer-phone" name="customer_phone" type="text" value="{{ old('customer_phone') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_phone') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                @error('customer_phone')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div class="lg:col-span-4">
                                 <label class="mb-2 block text-sm text-stone-300" for="customer-email">Email address</label>
-                                <input id="customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <input id="customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_email') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                @error('customer_email')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                         <div class="grid gap-4 lg:grid-cols-2">
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date</label>
-                                <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" onkeydown="return false" required>
+                                <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_date') ? 'border-rose-300/70' : 'border-white/10' }}" onkeydown="return false" required>
+                                @error('event_date')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="event-type">Event type</label>
-                                <select id="event-type" name="event_type" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <select id="event-type" name="event_type" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_type') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('event_type'))>Select event type</option>
                                     @foreach (['Wedding', 'Birthday', 'Anniversary', 'Others'] as $eventType)
                                         <option value="{{ $eventType }}" @selected(old('event_type') === $eventType)>{{ $eventType }}</option>
                                     @endforeach
                                 </select>
+                                @error('event_type')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div class="lg:col-span-2">
+                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location</label>
+                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_location') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                @error('event_location')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                         <div class="grid gap-4 sm:grid-cols-3">
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="start-time">Start hour</label>
-                                <select id="start-time" name="start_time" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <select id="start-time" name="start_time" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('start_time') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('start_time'))>Select start time</option>
                                     @for ($hour = 8; $hour < 24; $hour++)
                                         @foreach (['00', '30'] as $minute)
@@ -196,15 +213,24 @@
                                         @endforeach
                                     @endfor
                                 </select>
+                                @error('start_time')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="end-time-display">End hour</label>
-                                <input id="end-time-display" type="text" value="{{ old('end_time') ? \Illuminate\Support\Carbon::createFromFormat('H:i', old('end_time'))->format('g:i A') : '' }}" class="w-full rounded-2xl border border-white/10 bg-stone-900/60 px-4 py-3 text-white outline-none" readonly>
+                                <input id="end-time-display" type="text" value="{{ old('end_time') ? \Illuminate\Support\Carbon::createFromFormat('H:i', old('end_time'))->format('g:i A') : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
                                 <input id="end-time" name="end_time" type="hidden" value="{{ old('end_time') }}" required>
+                                @error('end_time')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration</label>
-                                <input id="total-hours-display" type="number" min="0.50" step="0.50" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <input id="total-hours-display" type="number" min="0.50" step="0.50" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                @error('total_hours')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                         <div>
@@ -390,6 +416,9 @@
                                 </div>
                             @endforelse
                         </div>
+                        @error('package_id')
+                            <p class="mt-3 text-xs font-medium text-rose-200">{{ $message }}</p>
+                        @enderror
 
                         <div id="package-tier-summary" class="mt-5 hidden rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-5">
                             <div class="flex items-start justify-between gap-4">
@@ -417,6 +446,9 @@
                                 Continue to Add-Ons
                             </button>
                         </div>
+                        @error('package_hourly_price_id')
+                            <p class="mt-3 text-xs font-medium text-rose-200">{{ $message }}</p>
+                        @enderror
                     </section>
 
                     <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="3" hidden>
@@ -726,9 +758,9 @@
             </div>
         </div>
 
-        <div id="book-now-modal" class="fixed inset-0 z-[85] hidden items-center justify-center bg-stone-950/90 p-4 backdrop-blur-sm">
-            <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-white/10 bg-stone-950 shadow-2xl shadow-black/40">
-                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-stone-950/95 px-6 py-4 backdrop-blur">
+        <div id="book-now-modal" class="fixed inset-0 z-[85] hidden items-center justify-center bg-stone-950/55 p-4 backdrop-blur-[2px]">
+            <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-white/10 bg-stone-950/95 shadow-2xl shadow-black/40">
+                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-stone-950/90 px-6 py-4 backdrop-blur">
                     <div>
                         <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Book Now</p>
                         <h2 class="mt-2 text-2xl font-semibold">Confirm your booking and pay the deposit</h2>
@@ -833,9 +865,9 @@
             </div>
         </div>
 
-        <div id="package-tier-modal" class="fixed inset-0 z-[84] hidden items-center justify-center bg-stone-950/90 p-4 backdrop-blur-sm">
-            <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-white/10 bg-stone-950 shadow-2xl shadow-black/40">
-                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-stone-950/95 px-6 py-4 backdrop-blur">
+        <div id="package-tier-modal" class="fixed inset-0 z-[84] hidden items-center justify-center bg-stone-950/55 p-4 backdrop-blur-[2px]">
+            <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-white/10 bg-stone-950/95 shadow-2xl shadow-black/40">
+                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-stone-950/90 px-6 py-4 backdrop-blur">
                     <div>
                         <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Package Timing</p>
                         <h2 id="package-tier-modal-title" class="mt-2 text-2xl font-semibold">Choose a timing and price option</h2>
@@ -2090,8 +2122,6 @@
 
                 @if (session('status'))
                     showToast(@js(session('status')), 'success');
-                @elseif ($errors->any())
-                    showToast(@js($errors->first()), 'error');
                 @endif
 
                 let autosaveTimeout;

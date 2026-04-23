@@ -17,6 +17,7 @@ class Tenant extends Model
     protected $fillable = [
         'name',
         'slug',
+        'referral_code',
         'logo_path',
         'theme',
         'subscription_id',
@@ -93,5 +94,20 @@ class Tenant extends Model
     public function latestSubscriptionCharge()
     {
         return $this->hasOne(TenantSubscriptionCharge::class)->latestOfMany();
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
+    public function sentReferrals(): HasMany
+    {
+        return $this->hasMany(TenantReferral::class, 'referrer_tenant_id');
+    }
+
+    public function receivedReferral()
+    {
+        return $this->hasOne(TenantReferral::class, 'referred_tenant_id');
     }
 }

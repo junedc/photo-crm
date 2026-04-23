@@ -27,6 +27,13 @@
                 <section class="rounded-3xl border border-white/10 bg-white/8 p-8 shadow-2xl shadow-black/30 backdrop-blur">
                     <form method="POST" action="{{ route('workspaces.store') }}" class="space-y-5">
                         @csrf
+                        <input type="hidden" name="ref" value="{{ old('ref', request('ref')) }}">
+
+                        @if (request('ref'))
+                            <div class="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+                                Referral code <span class="font-semibold">{{ request('ref') }}</span> will be applied to this workspace signup.
+                            </div>
+                        @endif
 
                         <div class="space-y-2">
                             <label for="tenant_name" class="text-sm font-medium text-stone-200">Workspace name</label>

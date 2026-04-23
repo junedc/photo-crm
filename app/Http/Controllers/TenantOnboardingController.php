@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Models\TenantReferral;
 use App\Models\User;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\RedirectResponse;
@@ -42,12 +43,18 @@ class TenantOnboardingController extends Controller
             ],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
+            'ref' => ['nullable', 'string', 'max:32'],
         ]);
 
         [$tenant, $user] = DB::transaction(function () use ($validated): array {
+            $referrer = filled($validated['ref'] ?? null)
+                ? Tenant::query()->where('referral_code', Str::upper($validated['ref']))->first()
+                : null;
+
             $tenant = Tenant::query()->create([
                 'name' => $validated['tenant_name'],
                 'slug' => Str::lower($validated['tenant_slug']),
+                'referral_code' => $this->newReferralCode(),
             ]);
 
             $user = User::query()->create([
@@ -58,6 +65,17 @@ class TenantOnboardingController extends Controller
             ]);
 
             $user->tenants()->attach($tenant, ['role' => 'owner']);
+
+            if ($referrer instanceof Tenant && $referrer->isNot($tenant)) {
+                TenantReferral::query()->create([
+                    'referrer_tenant_id' => $referrer->id,
+                    'referred_tenant_id' => $tenant->id,
+                    'referral_code' => $referrer->referral_code,
+                    'referred_workspace_name' => $tenant->name,
+                    'referred_owner_email' => $user->email,
+                    'status' => TenantReferral::STATUS_REGISTERED,
+                ]);
+            }
 
             return [$tenant, $user];
         });
@@ -76,5 +94,14 @@ class TenantOnboardingController extends Controller
         $portSuffix = in_array($port, [80, 443], true) ? '' : ':'.$port;
 
         return $scheme.'://'.$host.$portSuffix.$path;
+    }
+
+    private function newReferralCode(): string
+    {
+        do {
+            $code = Str::upper(Str::random(8));
+        } while (Tenant::query()->where('referral_code', $code)->exists());
+
+        return $code;
     }
 }
