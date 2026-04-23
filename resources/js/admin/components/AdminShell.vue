@@ -24,7 +24,10 @@ const navItems = computed(() => [
     { key: 'equipment', label: 'Equipment', href: props.data.routes.equipment, accent: 'cyan', icon: 'camera' },
     { key: 'addons', label: 'Add-Ons', href: props.data.routes.addons, accent: 'emerald', icon: 'plus' },
     { key: 'discounts', label: 'Discounts', href: props.data.routes.discounts, accent: 'violet', icon: 'tag' },
-]);
+    { key: 'users', label: 'Users', href: props.data.routes.users, accent: 'cyan', icon: 'users' },
+    { key: 'roles', label: 'Roles', href: props.data.routes.roles, accent: 'violet', icon: 'shield' },
+    { key: 'access', label: 'Access', href: props.data.routes.access, accent: 'amber', icon: 'key' },
+].filter((item) => item.href && (!Array.isArray(props.data.allowedScreens) || props.data.allowedScreens.includes(item.key))));
 
 const navIcons = {
     dashboard: ['M4 13h6V4H4v9Z', 'M14 20h6V4h-6v16Z', 'M4 20h6v-3H4v3Z'],
@@ -38,6 +41,8 @@ const navIcons = {
     camera: ['M5 8h3l1.5-2h5L16 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z', 'M12 17a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
     plus: ['M12 5v14M5 12h14', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z'],
     tag: ['M4 12V5h7l9 9-7 7-9-9Z', 'M8 8h.01'],
+    shield: ['M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z', 'M9 12l2 2 4-4'],
+    key: ['M15 7a4 4 0 1 0-2.8 6.8L10 16H7v3H4v3', 'M16.5 7.5h.01'],
     settings: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04-1.8 3.12-.05-.02a1.8 1.8 0 0 0-2 .36l-.3.24a1.8 1.8 0 0 0-.66 1.5V22h-6v-.08a1.8 1.8 0 0 0-.66-1.5l-.3-.24a1.8 1.8 0 0 0-2-.36l-.05.02-1.8-3.12.04-.04A1.8 1.8 0 0 0 4.6 15l-.06-.38A1.8 1.8 0 0 0 3.2 13.2L3 13.14V9.86l.2-.06a1.8 1.8 0 0 0 1.34-1.42L4.6 8a1.8 1.8 0 0 0-.36-1.98l-.04-.04 1.8-3.12.05.02a1.8 1.8 0 0 0 2-.36l.3-.24A1.8 1.8 0 0 0 9 1.08V1h6v.08a1.8 1.8 0 0 0 .66 1.5l.3.24a1.8 1.8 0 0 0 2 .36l.05-.02 1.8 3.12-.04.04A1.8 1.8 0 0 0 19.4 8l.06.38A1.8 1.8 0 0 0 20.8 9.8l.2.06v3.28l-.2.06a1.8 1.8 0 0 0-1.34 1.42l-.06.38Z'],
 };
 
@@ -92,6 +97,18 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('settings')) {
         return 'settings';
+    }
+
+    if (props.page.startsWith('users')) {
+        return 'users';
+    }
+
+    if (props.page.startsWith('roles')) {
+        return 'roles';
+    }
+
+    if (props.page.startsWith('access')) {
+        return 'access';
     }
 
     return props.page;
@@ -263,7 +280,7 @@ onBeforeUnmount(() => {
                         </a>
                     </nav>
 
-                    <div class="mt-3 shrink-0 border-t border-white/10 pt-3">
+                    <div v-if="!Array.isArray(data.allowedScreens) || data.allowedScreens.includes('settings')" class="mt-3 shrink-0 border-t border-white/10 pt-3">
                         <a
                             :href="data.routes.settings"
                             class="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition"

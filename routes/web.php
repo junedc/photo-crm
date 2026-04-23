@@ -14,6 +14,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TenantOnboardingController;
+use App\Http\Controllers\UserRoleController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 
@@ -74,7 +75,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/register', [RegisteredUserController::class, 'store'])->name('register.store');
     });
 
-    Route::middleware('auth')->group(function () {
+    Route::middleware(['auth', 'admin.access'])->group(function () {
         Route::get('/dashboard', [CatalogAdminController::class, 'index'])->name('dashboard');
         Route::get('/packages', [CatalogAdminController::class, 'packagesIndex'])->name('packages.index');
         Route::get('/packages/create', [CatalogAdminController::class, 'packagesCreate'])->name('packages.create');
@@ -103,6 +104,9 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/admin/calendar', [BookingController::class, 'calendar'])->name('admin.calendar.index');
         Route::get('/admin/bookings/{booking}', [BookingController::class, 'show'])->name('admin.bookings.show');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::get('/users', [UserRoleController::class, 'users'])->name('users.index');
+        Route::get('/roles', [UserRoleController::class, 'roles'])->name('roles.index');
+        Route::get('/access-control', [UserRoleController::class, 'access'])->name('access.index');
         Route::post('/packages', [CatalogAdminController::class, 'storePackage'])->name('packages.store');
         Route::put('/packages/{package}', [CatalogAdminController::class, 'updatePackage'])->name('packages.update');
         Route::delete('/packages/{package}', [CatalogAdminController::class, 'destroyPackage'])->name('packages.destroy');
@@ -135,6 +139,13 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/settings/workspace', [SettingsController::class, 'updateWorkspace'])->name('settings.workspace.update');
         Route::post('/settings/subscription/pay', [SettingsController::class, 'paySubscription'])->name('settings.subscription.pay');
         Route::post('/settings/account', [SettingsController::class, 'updateAccount'])->name('settings.account.update');
+        Route::post('/users', [UserRoleController::class, 'storeUser'])->name('users.store');
+        Route::put('/users/{user}', [UserRoleController::class, 'updateUser'])->name('users.update');
+        Route::delete('/users/{user}', [UserRoleController::class, 'destroyUser'])->name('users.destroy');
+        Route::post('/roles', [UserRoleController::class, 'storeRole'])->name('roles.store');
+        Route::put('/roles/{role}', [UserRoleController::class, 'updateRole'])->name('roles.update');
+        Route::delete('/roles/{role}', [UserRoleController::class, 'destroyRole'])->name('roles.destroy');
+        Route::post('/access-control', [UserRoleController::class, 'updateAccess'])->name('access.update');
         Route::put('/admin/bookings/{booking}', [BookingController::class, 'update'])->name('admin.bookings.update');
         Route::post('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'store'])->name('admin.bookings.invoice.store');
         Route::post('/admin/bookings/{booking}/invoice/send', [InvoiceController::class, 'send'])->name('admin.bookings.invoice.send');

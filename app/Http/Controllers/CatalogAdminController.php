@@ -494,13 +494,15 @@ class CatalogAdminController extends Controller
         return $request->validate([
             'sku' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
-            'addon_category' => ['nullable', 'string', 'max:255'],
+            'addon_category' => ['nullable', Rule::in($this->addOnCategories())],
+            'is_publicly_displayed' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'duration' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
         ]) + [
             'category' => 'add-on',
+            'is_publicly_displayed' => $request->boolean('is_publicly_displayed'),
             'quantity' => 1,
             'maintenance_status' => 'ready',
             'last_maintained_at' => null,
@@ -610,15 +612,7 @@ class CatalogAdminController extends Controller
 
     private function addOnCategories(): array
     {
-        return InventoryItem::query()
-            ->where('category', 'add-on')
-            ->whereNotNull('addon_category')
-            ->where('addon_category', '<>', '')
-            ->distinct()
-            ->orderBy('addon_category')
-            ->pluck('addon_category')
-            ->values()
-            ->all();
+        return ['Action', 'Items'];
     }
 
     private function renderLeadsPage(CurrentTenant $currentTenant, Request $request): View|JsonResponse
@@ -704,6 +698,9 @@ class CatalogAdminController extends Controller
             'leads' => route('leads.index'),
             'customers' => route('customers.index'),
             'campaigns' => route('campaigns.index'),
+            'users' => route('users.index'),
+            'roles' => route('roles.index'),
+            'access' => route('access.index'),
             'settings' => route('settings.index'),
             'logout' => route('logout'),
         ];
@@ -759,6 +756,7 @@ class CatalogAdminController extends Controller
                     'id' => $asset->id,
                     'name' => $asset->name,
                     'category' => $asset->category,
+                    'daily_rate' => number_format((float) $asset->daily_rate, 2, '.', ''),
                     'photo_url' => $asset->photo_path ? $this->publicStorageUrl($asset->photo_path) : null,
                 ])->values()->all()
                 : [],
@@ -815,6 +813,7 @@ class CatalogAdminController extends Controller
             'product_code' => $addon->sku,
             'name' => $addon->name,
             'addon_category' => $addon->addon_category,
+            'is_publicly_displayed' => (bool) $addon->is_publicly_displayed,
             'description' => $addon->description,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
             'duration' => $addon->duration,
@@ -867,6 +866,7 @@ class CatalogAdminController extends Controller
             'name' => $addon->name,
             'product_code' => $addon->sku,
             'addon_category' => $addon->addon_category,
+            'is_publicly_displayed' => (bool) $addon->is_publicly_displayed,
             'duration' => $addon->duration,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
         ];

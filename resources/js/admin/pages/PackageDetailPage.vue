@@ -34,6 +34,26 @@ const makeFormState = (record) => ({
 
 const form = ref(makeFormState(props.data.package));
 const validationErrors = computed(() => mergeFieldErrors(clientErrors.value, fieldErrors.value));
+const assignedItems = computed(() => [
+    ...(packageRecord.value.equipment ?? []).map((asset) => ({
+        key: `equipment-${asset.id}`,
+        type: 'Equipment',
+        name: asset.name,
+        code: asset.category || 'Uncategorized',
+        duration: '-',
+        price: asset.daily_rate ? `$${asset.daily_rate}` : '-',
+        description: 'Assigned equipment',
+    })),
+    ...(packageRecord.value.add_ons ?? []).map((addOn) => ({
+        key: `addon-${addOn.id}`,
+        type: 'Add-On',
+        name: addOn.name,
+        code: [addOn.product_code, addOn.addon_category].filter(Boolean).join(' / ') || 'Add-On',
+        duration: addOn.duration || '-',
+        price: addOn.price ? `$${addOn.price}` : '-',
+        description: addOn.description || 'No description added yet.',
+    })),
+]);
 
 const validatePackageForm = () => {
     const errors = {};
@@ -166,31 +186,31 @@ const confirmRemovePackage = () => {
         </p>
     </section>
 
-    <section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-        <div class="mb-5 flex items-center justify-between gap-3">
+    <section class="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
-                <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Package Details</p>
+                <p class="text-[10px] uppercase tracking-[0.3em] text-amber-200">Package Details</p>
                 <h3 class="mt-1 text-sm font-semibold italic">{{ packageRecord.name }}</h3>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="rounded-full px-3 py-1 text-xs font-medium" :class="packageRecord.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-stone-700/60 text-stone-300'">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="packageRecord.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-stone-700/60 text-stone-300'">
                     {{ packageRecord.is_active ? 'Active' : 'Inactive' }}
                 </span>
                 <button
                     type="button"
-                    class="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/10"
+                    class="rounded-lg border border-amber-300/30 px-3 py-1.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/10"
                     @click="beginEditing"
                 >
                     Edit package
                 </button>
                 <button
                     type="button"
-                    class="rounded-xl border border-rose-400/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-60"
                     @click="removePackage"
                 >
                     Delete package
                 </button>
-                <a :href="data.routes.packages" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5">
+                <a :href="data.routes.packages" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/5">
                     Back to list
                 </a>
             </div>
@@ -201,97 +221,89 @@ const confirmRemovePackage = () => {
             <input type="hidden" name="_method" value="DELETE">
         </form>
 
-        <div v-if="packageRecord.photo_url" class="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-            <img :src="packageRecord.photo_url" :alt="packageRecord.name" class="h-64 w-full rounded-xl object-contain">
+        <div v-if="packageRecord.photo_url" class="mb-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 p-2">
+            <img :src="packageRecord.photo_url" :alt="packageRecord.name" class="h-40 w-full rounded-lg object-contain">
         </div>
 
-        <div class="mb-4 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Base Price</p>
-                <p class="mt-2 text-xl font-semibold">${{ packageRecord.base_price }}</p>
+        <div class="mb-3 grid gap-2 sm:grid-cols-2">
+            <div class="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                <p class="text-[10px] uppercase tracking-[0.25em] text-stone-500">Base Price</p>
+                <p class="mt-1 text-base font-semibold">${{ packageRecord.base_price }}</p>
             </div>
-            <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Created</p>
-                <p class="mt-2 text-base font-semibold">{{ packageRecord.created_at }}</p>
+            <div class="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                <p class="text-[10px] uppercase tracking-[0.25em] text-stone-500">Created</p>
+                <p class="mt-1 text-base font-semibold">{{ packageRecord.created_at }}</p>
             </div>
         </div>
 
-        <div class="mb-4 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Hourly Pricing</p>
-            <div v-if="packageRecord.hourly_prices?.length" class="mt-3 grid gap-3 sm:grid-cols-2">
-                <div v-for="(entry, index) in packageRecord.hourly_prices" :key="`${entry.hours}-${index}`" class="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div class="mb-3 overflow-hidden rounded-lg border border-white/10 bg-slate-950/50">
+            <p class="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-stone-500">Hourly Pricing</p>
+            <div v-if="packageRecord.hourly_prices?.length" class="grid gap-px bg-white/10 sm:grid-cols-2 lg:grid-cols-3">
+                <div v-for="(entry, index) in packageRecord.hourly_prices" :key="`${entry.hours}-${index}`" class="flex items-center justify-between gap-3 bg-slate-950/70 px-3 py-2">
                     <p class="text-sm font-semibold text-white">{{ entry.hours_label }}</p>
-                    <p class="mt-2 text-sm text-amber-100">${{ entry.price }}</p>
+                    <p class="text-sm font-semibold text-amber-100">${{ entry.price }}</p>
                 </div>
             </div>
-            <p v-else class="mt-3 text-sm text-stone-500">No hour-based pricing added yet. Base price is used for all durations.</p>
+            <p v-else class="px-3 py-2 text-sm text-stone-500">No hour-based pricing added yet. Base price is used for all durations.</p>
         </div>
 
-        <div class="mb-4 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Description</p>
-            <p class="mt-3 text-sm leading-6 text-stone-300">{{ packageRecord.description || 'No description added yet.' }}</p>
+        <div class="mb-3 rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-stone-500">Description</p>
+            <p class="mt-1 text-sm leading-5 text-stone-300">{{ packageRecord.description || 'No description added yet.' }}</p>
         </div>
 
-        <div class="mb-4 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Assigned Equipment</p>
-            <div v-if="packageRecord.equipment?.length" class="mt-3 grid gap-3 lg:grid-cols-2">
-                <article v-for="asset in packageRecord.equipment" :key="asset.id" class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-lg shadow-black/10">
-                    <div v-if="asset.photo_url" class="bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/30 p-3">
-                        <div class="flex h-32 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-2 shadow-inner shadow-black/30">
-                            <img :src="asset.photo_url" :alt="asset.name" class="max-h-full max-w-full object-contain drop-shadow-2xl">
-                        </div>
-                    </div>
-                    <div v-else class="flex h-32 items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/30 p-3">
-                        <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-2xl text-stone-500">P</div>
-                    </div>
-                    <div class="p-3">
-                        <p class="text-base font-medium text-white">{{ asset.name }}</p>
-                        <p class="mt-1 text-xs text-stone-400">{{ asset.category || 'Uncategorized' }}</p>
-                    </div>
-                </article>
+        <div class="mb-3 overflow-hidden rounded-lg border border-white/10 bg-slate-950/50">
+            <div class="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+                <p class="text-[10px] uppercase tracking-[0.25em] text-stone-500">Assigned Items</p>
+                <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ assignedItems.length }}</span>
             </div>
-            <p v-else class="mt-3 text-sm text-stone-500">No equipment assigned yet.</p>
-        </div>
-
-        <div class="mb-4 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Assigned Add-Ons</p>
-            <div v-if="packageRecord.add_ons?.length" class="mt-3 grid gap-3 lg:grid-cols-2">
-                <article v-for="addOn in packageRecord.add_ons" :key="addOn.id" class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-lg shadow-black/10">
-                    <div v-if="addOn.photo_url" class="bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950/30 p-3">
-                        <div class="flex h-32 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-2 shadow-inner shadow-black/30">
-                            <img :src="addOn.photo_url" :alt="addOn.name" class="max-h-full max-w-full object-contain drop-shadow-2xl">
-                        </div>
+            <div v-if="assignedItems.length" class="overflow-x-auto">
+                <div class="min-w-[760px]">
+                    <div class="grid grid-cols-[8rem_minmax(0,1fr)_11rem_7rem_7rem_minmax(0,1.3fr)] gap-3 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                        <span>Type</span>
+                        <span>Name</span>
+                        <span>Code / Category</span>
+                        <span>Duration</span>
+                        <span>Price</span>
+                        <span>Description</span>
                     </div>
-                    <div v-else class="flex h-32 items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950/30 p-3">
-                        <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-2xl text-stone-500">A</div>
+                    <div
+                        v-for="item in assignedItems"
+                        :key="item.key"
+                        class="grid grid-cols-[8rem_minmax(0,1fr)_11rem_7rem_7rem_minmax(0,1.3fr)] items-center gap-3 border-b border-white/10 px-3 py-2 last:border-b-0"
+                    >
+                        <span class="inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-medium" :class="item.type === 'Equipment' ? 'bg-amber-300/15 text-amber-100' : 'bg-rose-300/15 text-rose-100'">
+                            {{ item.type }}
+                        </span>
+                        <p class="truncate text-sm font-medium text-white">{{ item.name }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ item.code }}</p>
+                        <p class="text-sm text-stone-300">{{ item.duration }}</p>
+                        <p class="text-sm font-semibold text-amber-100">{{ item.price }}</p>
+                        <p class="truncate text-sm text-stone-400">{{ item.description }}</p>
                     </div>
-                    <div class="p-3">
-                        <p class="text-base font-medium text-white">{{ addOn.name }}</p>
-                        <p class="mt-1 text-xs text-stone-400">{{ addOn.product_code || 'Add-On' }}<span v-if="addOn.addon_category"> · {{ addOn.addon_category }}</span><span v-if="addOn.duration"> · {{ addOn.duration }}</span></p>
-                        <p class="mt-2 text-xs text-stone-300">${{ addOn.price }}</p>
-                        <p class="mt-3 text-sm leading-6 text-stone-300">{{ addOn.description || 'No description added yet.' }}</p>
-                    </div>
-                </article>
-            </div>
-            <p v-else class="mt-3 text-sm text-stone-500">No add-ons assigned yet.</p>
-        </div>
-
-        <section v-if="isEditing" class="mt-6 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
-            <div class="mb-5 flex items-center justify-between gap-3">
-                <div>
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Edit Package</p>
-                    <h4 class="mt-1 text-sm font-semibold italic">Update details</h4>
                 </div>
-                <button
-                    type="button"
-                    class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5"
-                    @click="cancelEditing"
-                >
-                    Cancel
-                </button>
             </div>
+            <p v-else class="px-3 py-4 text-sm text-stone-500">No equipment or add-ons assigned yet.</p>
+        </div>
 
-            <form class="space-y-4" novalidate @submit.prevent="updatePackage">
+        <transition name="modal">
+            <div v-if="isEditing" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" @click.self="cancelEditing">
+                <section class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-amber-300/20 bg-[#132035] shadow-2xl shadow-black/30">
+                    <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/10 bg-[#132035] px-5 py-4 shadow-lg shadow-black/10">
+                        <div>
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Edit Package</p>
+                            <h4 class="mt-1 text-sm font-semibold italic">Update details</h4>
+                        </div>
+                        <button
+                            type="button"
+                            class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5"
+                            @click="cancelEditing"
+                        >
+                            Close
+                        </button>
+                    </div>
+
+                    <form class="space-y-4 p-5" novalidate @submit.prevent="updatePackage">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Package name</label>
@@ -365,7 +377,7 @@ const confirmRemovePackage = () => {
                         <p v-if="!data.addOnOptions?.length" class="text-sm text-stone-500">Add add-on records first to assign them here.</p>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3">
+                <div class="sticky bottom-0 z-20 -mx-5 -mb-5 flex justify-end gap-3 border-t border-white/10 bg-[#132035] px-5 py-4 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.7)]">
                     <button
                         type="button"
                         class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5"
@@ -377,8 +389,10 @@ const confirmRemovePackage = () => {
                         {{ saving ? 'Saving...' : 'Update package' }}
                     </button>
                 </div>
-            </form>
-        </section>
+                    </form>
+                </section>
+            </div>
+        </transition>
     </section>
 
     <ConfirmDialog

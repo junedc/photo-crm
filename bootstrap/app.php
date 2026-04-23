@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\RequireCurrentTenant;
 use App\Http\Middleware\RequireSuperAdmin;
+use App\Http\Middleware\EnsureAdminScreenAccess;
 use App\Http\Middleware\SetCurrentTenant;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => SetCurrentTenant::class,
             'tenant.required' => RequireCurrentTenant::class,
+            'admin.access' => EnsureAdminScreenAccess::class,
             'super.admin' => RequireSuperAdmin::class,
         ]);
 
