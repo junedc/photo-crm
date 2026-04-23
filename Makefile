@@ -1,4 +1,4 @@
-.PHONY: default shell ssh artisan deploy-build deploy-check-ssh-env deploy-check-ssh-public-env deploy-public-prepare deploy-ssh deploy-ssh-delete deploy-ssh-public deploy-ssh-public-delete deploy-ssh-all deploy-all
+.PHONY: default shell ssh artisan phpstan deploy-build deploy-check-ssh-env deploy-check-ssh-public-env deploy-public-prepare deploy-ssh deploy-ssh-delete deploy-ssh-public deploy-ssh-public-delete deploy-ssh-all deploy-all
 
 COMPOSE_FILE := /Users/junedelacruz/Desktop/aaa-project/docker/compose.yaml
 SERVICE := photobooth-crm-php
@@ -17,6 +17,9 @@ ssh: shell
 
 artisan:
 	docker compose -f $(COMPOSE_FILE) exec $(SERVICE) php artisan $(filter-out $@,$(MAKECMDGOALS))
+
+phpstan:
+	./vendor/bin/phpstan analyse --memory-limit=2G
 
 deploy-build:
 	composer install --no-dev --optimize-autoloader

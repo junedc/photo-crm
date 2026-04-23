@@ -1,0 +1,47 @@
+.PHONY: default help shell ssh artisan phpstan deploy-build deploy-public-prepare deploy-ssh deploy-ssh-delete deploy-ssh-public deploy-ssh-public-delete deploy-ssh-all deploy-all
+
+POWERSHELL := powershell
+RUNNER := ./make.ps1
+
+default: help
+
+help:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) help
+
+shell:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) shell
+
+ssh: shell
+
+artisan:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) artisan $(filter-out $@,$(MAKECMDGOALS))
+
+phpstan:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) phpstan
+
+deploy-build:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-build
+
+deploy-public-prepare:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-public-prepare
+
+deploy-ssh:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-ssh
+
+deploy-ssh-delete:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-ssh-delete
+
+deploy-ssh-public:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-ssh-public
+
+deploy-ssh-public-delete:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-ssh-public-delete
+
+deploy-ssh-all:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-ssh-all
+
+deploy-all:
+	$(POWERSHELL) -ExecutionPolicy Bypass -File $(RUNNER) deploy-all
+
+%:
+	@:

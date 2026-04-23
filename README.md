@@ -100,43 +100,51 @@ This is already expected to run on container startup.
 
 ## Windows Task Runner
 
-For Windows, the project now includes a small Makefile-style task runner in:
+For Windows, the project includes a PowerShell Makefile-style task runner in:
 
-- [make.ps1](D:/Memoshot%20Web/memoshot/make.ps1)
-- [make.cmd](D:/Memoshot%20Web/memoshot/make.cmd)
+- `make.ps1`
+- `make.cmd`
+- `Makefile.windows`
 
 Run commands from the Laravel project folder:
 
 ```powershell
-cd "D:\Memoshot Web\memoshot"
+cd "D:\path\to\photobooth-crm"
 .\make.cmd help
 ```
 
 Useful commands:
 
 ```powershell
-.\make.cmd up
-.\make.cmd build
-.\make.cmd ps
-.\make.cmd logs
 .\make.cmd shell
-.\make.cmd migrate
-.\make.cmd test
-.\make.cmd test tests/Feature/BookingTest.php
+.\make.cmd artisan migrate
 .\make.cmd artisan route:list
-.\make.cmd tinker
-.\make.cmd optimize-clear
-.\make.cmd storage-link
+.\make.cmd phpstan
+.\make.cmd deploy-build
+.\make.cmd deploy-ssh
+.\make.cmd deploy-ssh-public
+.\make.cmd deploy-all
+```
+
+If GNU Make is installed on Windows, you can also run:
+
+```powershell
+make -f Makefile.windows phpstan
+make -f Makefile.windows deploy-all
+```
+
+For Windows deployment, set `DEPLOY_LOCAL_DIR` in `.env.deploy` to your Windows project path, for example:
+
+```env
+DEPLOY_LOCAL_DIR=D:/path/to/photobooth-crm
 ```
 
 What these do:
 
-- `up`: starts the Docker stack from `memodocker`
-- `build`: rebuilds and starts the Laravel container
 - `shell`: opens a shell inside the Laravel container
-- `migrate`: runs `php artisan migrate --force`
-- `test`: runs Laravel tests inside the container
 - `artisan ...`: forwards any custom artisan command
+- `phpstan`: runs `./vendor/bin/phpstan analyse --memory-limit=2G`
+- `deploy-*`: mirrors the Mac/Linux Makefile deployment tasks using `.env.deploy`
 
 ## MailHog
 
