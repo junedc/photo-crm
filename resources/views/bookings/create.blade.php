@@ -109,8 +109,8 @@
                 <input type="hidden" name="travel_fee" id="travel-fee" value="{{ old('travel_fee', '0.00') }}">
                 <input type="hidden" name="total_hours" id="total-hours" value="{{ old('total_hours', '0.00') }}">
 
-                <nav class="rounded-2xl border border-white/10 bg-white/5 px-3 py-2" aria-label="Booking steps">
-                    <div class="grid gap-1.5 sm:grid-cols-5">
+                <nav class="rounded-3xl border border-white/10 bg-white/5 px-3 py-3" aria-label="Booking steps">
+                    <div class="flex items-start overflow-x-auto">
                         @foreach ([
                             ['Customer', 'Your details'],
                             ['Package', 'Choose package'],
@@ -120,16 +120,52 @@
                         ] as $index => [$label, $description])
                             <button
                                 type="button"
-                                class="group flex items-center gap-2 rounded-xl border border-white/10 bg-stone-950/40 px-2.5 py-2 text-left transition hover:border-cyan-300/30"
+                                class="group flex min-w-[5.25rem] shrink-0 flex-col items-center text-center transition"
                                 data-wizard-nav="{{ $index + 1 }}"
                                 aria-current="{{ $index === 0 ? 'step' : 'false' }}"
                             >
-                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold text-stone-300 transition group-aria-[current=step]:border-cyan-300/50 group-aria-[current=step]:bg-cyan-300 group-aria-[current=step]:text-stone-950">{{ $index + 1 }}</span>
-                                <span class="min-w-0">
-                                    <span class="block truncate text-xs font-semibold text-white">{{ $label }}</span>
-                                    <span class="block truncate text-[11px] text-stone-400">{{ $description }}</span>
+                                <span data-step-circle class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-stone-950 text-stone-400 shadow-lg shadow-black/20 transition group-hover:border-cyan-300/40">
+                                    @switch($index)
+                                        @case(0)
+                                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M5 5h14v14H5V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                                                <path d="M8 9h.01M8 15h.01M11 9h5M11 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                            </svg>
+                                            @break
+                                        @case(1)
+                                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="1.8" />
+                                                <path d="M4 21a8 8 0 0 1 16 0M19 8v6M16 11h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                            </svg>
+                                            @break
+                                        @case(2)
+                                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.8" />
+                                                <path d="M19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.5-1.5M5.5 18.5 7 17M7 7 5.5 5.5M18.5 18.5 17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                            </svg>
+                                            @break
+                                        @case(3)
+                                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                                                <path d="M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.8" />
+                                            </svg>
+                                            @break
+                                        @default
+                                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M20 7 10 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                                                <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="currentColor" stroke-width="1.8" />
+                                            </svg>
+                                    @endswitch
                                 </span>
+                                <span data-step-label class="mt-2 text-xs font-semibold text-stone-300 transition">{{ $label }}</span>
+                                <span class="mt-0.5 hidden text-[10px] leading-none text-stone-500 sm:block">{{ $description }}</span>
                             </button>
+
+                            @if (! $loop->last)
+                                <span class="mt-5 h-1.5 min-w-10 flex-1 overflow-hidden rounded-full bg-white/5 sm:min-w-16" aria-hidden="true">
+                                    <span data-wizard-connector="{{ $index + 1 }}" class="block h-full w-0 rounded-full bg-emerald-300 transition-all duration-300"></span>
+                                </span>
+                            @endif
                         @endforeach
                     </div>
                 </nav>
@@ -967,6 +1003,7 @@
                 const bookNowTotalAmount = document.getElementById('book-now-total-amount');
                 const wizardSteps = Array.from(document.querySelectorAll('[data-wizard-step]'));
                 const wizardNavButtons = Array.from(document.querySelectorAll('[data-wizard-nav]'));
+                const wizardConnectors = Array.from(document.querySelectorAll('[data-wizard-connector]'));
                 const wizardNextButtons = Array.from(document.querySelectorAll('[data-wizard-next]'));
                 const wizardPrevButtons = Array.from(document.querySelectorAll('[data-wizard-prev]'));
                 const wizardSummaryItems = document.getElementById('wizard-summary-items');
@@ -1018,11 +1055,27 @@
                         const step = Number(button.dataset.wizardNav);
                         const active = step === currentWizardStep;
                         const completed = step < currentWizardStep;
+                        const circle = button.querySelector('[data-step-circle]');
+                        const label = button.querySelector('[data-step-label]');
 
                         button.setAttribute('aria-current', active ? 'step' : 'false');
-                        button.classList.toggle('border-cyan-300/40', active);
-                        button.classList.toggle('bg-cyan-300/10', active);
-                        button.classList.toggle('border-emerald-300/30', completed && !active);
+                        circle?.classList.toggle('border-emerald-300/60', active || completed);
+                        circle?.classList.toggle('bg-emerald-400/80', active || completed);
+                        circle?.classList.toggle('text-stone-950', active || completed);
+                        circle?.classList.toggle('border-white/10', !active && !completed);
+                        circle?.classList.toggle('bg-stone-950', !active && !completed);
+                        circle?.classList.toggle('text-stone-400', !active && !completed);
+                        circle?.classList.toggle('shadow-emerald-950/30', active || completed);
+                        label?.classList.toggle('text-white', active);
+                        label?.classList.toggle('text-emerald-100', completed && !active);
+                        label?.classList.toggle('text-stone-300', !active && !completed);
+                    });
+
+                    wizardConnectors.forEach((connector) => {
+                        const step = Number(connector.dataset.wizardConnector);
+                        connector.classList.toggle('w-full', step < currentWizardStep);
+                        connector.classList.toggle('w-1/3', step === currentWizardStep);
+                        connector.classList.toggle('w-0', step > currentWizardStep);
                     });
                 };
 
