@@ -16,6 +16,7 @@ const filteredAddOns = computed(() =>
     addOns.value.filter((entry) =>
         [entry.product_code, entry.name, entry.description, entry.duration]
             .concat(entry.addon_category)
+            .concat(entry.is_publicly_displayed ? 'visible public displayed' : 'hidden private')
             .filter(Boolean)
             .some((value) => value.toLowerCase().includes(search.value.toLowerCase())),
     ),
@@ -48,10 +49,11 @@ const filteredAddOns = computed(() =>
             <div class="mt-3 grid gap-2">
                 <input v-model="search" type="text" placeholder="Search add-ons" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/50">
             </div>
-            <div class="mt-3 grid grid-cols-[72px_minmax(0,1fr)_auto] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-[82px_minmax(0,1fr)_180px_auto]">
+            <div class="mt-3 grid grid-cols-[72px_minmax(0,1fr)_auto] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-[82px_minmax(0,1fr)_160px_120px_auto]">
                 <span>Image</span>
                 <span>Name</span>
                 <span class="hidden sm:block">Category</span>
+                <span class="hidden sm:block">Public</span>
                 <span>Price</span>
             </div>
         </div>
@@ -61,7 +63,7 @@ const filteredAddOns = computed(() =>
                 v-for="entry in filteredAddOns"
                 :key="entry.id"
                 :href="entry.show_url"
-                class="grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03] sm:grid-cols-[82px_minmax(0,1fr)_180px_auto]"
+                class="grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition hover:bg-white/[0.03] sm:grid-cols-[82px_minmax(0,1fr)_160px_120px_auto]"
             >
                 <div class="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
                     <img v-if="entry.photo_url" :src="entry.photo_url" :alt="entry.name" class="h-full w-full object-cover">
@@ -78,6 +80,14 @@ const filteredAddOns = computed(() =>
                 <div class="hidden min-w-0 sm:block">
                     <span class="inline-flex h-7 max-w-full items-center rounded-full border border-sky-300/20 bg-sky-300/10 px-2.5 text-[11px] font-medium text-sky-100">
                         <span class="truncate">{{ entry.addon_category || 'Uncategorized' }}</span>
+                    </span>
+                </div>
+                <div class="hidden min-w-0 sm:block">
+                    <span
+                        class="inline-flex h-7 max-w-full items-center rounded-full border px-2.5 text-[11px] font-medium"
+                        :class="entry.is_publicly_displayed ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' : 'border-white/10 bg-white/5 text-stone-300'"
+                    >
+                        {{ entry.is_publicly_displayed ? 'Visible' : 'Hidden' }}
                     </span>
                 </div>
                 <span class="inline-flex h-8 items-center justify-center rounded-full bg-emerald-400/15 px-3 text-[11px] font-medium leading-none text-emerald-200">

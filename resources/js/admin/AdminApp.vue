@@ -27,6 +27,9 @@ import DiscountDetailPage from './pages/DiscountDetailPage.vue';
 import LeadsPage from './pages/LeadsPage.vue';
 import LeadCreatePage from './pages/LeadCreatePage.vue';
 import LeadDetailPage from './pages/LeadDetailPage.vue';
+import UsersPage from './pages/UsersPage.vue';
+import RolesPage from './pages/RolesPage.vue';
+import AccessControlPage from './pages/AccessControlPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 
 const props = defineProps({
@@ -67,6 +70,9 @@ const pages = {
     leads: LeadsPage,
     'leads-create': LeadCreatePage,
     'leads-detail': LeadDetailPage,
+    users: UsersPage,
+    roles: RolesPage,
+    access: AccessControlPage,
     settings: SettingsPage,
 };
 

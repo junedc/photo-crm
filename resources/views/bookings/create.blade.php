@@ -16,6 +16,10 @@
                 background: rgb(167 243 208);
                 color: rgb(12 10 9);
             }
+
+            [data-wizard-step][hidden] {
+                display: none;
+            }
         </style>
     </head>
     <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
@@ -25,6 +29,7 @@
         @php
             $customerPackageDiscountPercentage = (float) ($customerPackageDiscountPercentage ?? 0);
             $applyCustomerPackageDiscount = static fn (float $amount): float => round($amount * (1 - ($customerPackageDiscountPercentage / 100)), 2);
+            $bookingCurrencyCode = strtoupper($tenant?->stripe_currency ?: config('services.platform_stripe.currency', 'usd'));
         @endphp
         <div id="booking-toast" class="pointer-events-none fixed right-4 top-24 z-[90] hidden max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl shadow-black/30 backdrop-blur">
             <p id="booking-toast-message"></p>
@@ -39,16 +44,16 @@
                 <div class="flex items-center gap-6 text-right">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Travel Fee</p>
-                        <p id="booking-summary-travel" class="mt-1 text-sm font-medium text-stone-200">$0.00</p>
+                        <p id="booking-summary-travel" class="mt-1 text-sm font-medium text-stone-200">{{ $bookingCurrencyCode }} $0.00</p>
                     </div>
                     <p id="booking-summary-discount" class="hidden">-$0.00</p>
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Deposit</p>
-                        <p id="booking-summary-deposit" class="mt-1 text-sm font-medium text-amber-200">$0.00</p>
+                        <p id="booking-summary-deposit" class="mt-1 text-sm font-medium text-amber-200">{{ $bookingCurrencyCode }} $0.00</p>
                     </div>
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Total Price</p>
-                        <p id="booking-summary-total" class="mt-1 text-xl font-semibold text-cyan-200">$0.00</p>
+                        <p id="booking-summary-total" class="mt-1 text-xl font-semibold text-cyan-200">{{ $bookingCurrencyCode }} $0.00</p>
                     </div>
                     <button
                         type="button"
@@ -109,7 +114,32 @@
                 <input type="hidden" name="travel_fee" id="travel-fee" value="{{ old('travel_fee', '0.00') }}">
                 <input type="hidden" name="total_hours" id="total-hours" value="{{ old('total_hours', '0.00') }}">
 
-                <section class="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                <nav class="rounded-2xl border border-white/10 bg-white/5 px-3 py-2" aria-label="Booking steps">
+                    <div class="grid gap-1.5 sm:grid-cols-5">
+                        @foreach ([
+                            ['Customer', 'Your details'],
+                            ['Package', 'Choose package'],
+                            ['Add-ons', 'Optional extras'],
+                            ['Location', 'Travel fee'],
+                            ['Summary', 'Quote or book'],
+                        ] as $index => [$label, $description])
+                            <button
+                                type="button"
+                                class="group flex items-center gap-2 rounded-xl border border-white/10 bg-stone-950/40 px-2.5 py-2 text-left transition hover:border-cyan-300/30"
+                                data-wizard-nav="{{ $index + 1 }}"
+                                aria-current="{{ $index === 0 ? 'step' : 'false' }}"
+                            >
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold text-stone-300 transition group-aria-[current=step]:border-cyan-300/50 group-aria-[current=step]:bg-cyan-300 group-aria-[current=step]:text-stone-950">{{ $index + 1 }}</span>
+                                <span class="min-w-0">
+                                    <span class="block truncate text-xs font-semibold text-white">{{ $label }}</span>
+                                    <span class="block truncate text-[11px] text-stone-400">{{ $description }}</span>
+                                </span>
+                            </button>
+                        @endforeach
+                    </div>
+                </nav>
+
+                <section class="rounded-[2rem] border border-white/10 bg-white/5 p-5" data-wizard-step="1">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <p class="text-xs uppercase tracking-[0.3em] text-cyan-200">Customer Details</p>
@@ -136,7 +166,7 @@
                                 <input id="customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
                             </div>
                         </div>
-                        <div class="grid gap-4 lg:grid-cols-4">
+                        <div class="grid gap-4 lg:grid-cols-2">
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date</label>
                                 <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" onkeydown="return false" required>
@@ -149,10 +179,6 @@
                                         <option value="{{ $eventType }}" @selected(old('event_type') === $eventType)>{{ $eventType }}</option>
                                     @endforeach
                                 </select>
-                            </div>
-                            <div class="lg:col-span-2">
-                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location</label>
-                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
                             </div>
                         </div>
                         <div class="grid gap-4 sm:grid-cols-3">
@@ -187,10 +213,16 @@
                         </div>
                     </div>
 
+                    <div class="mt-6 flex justify-end">
+                        <button type="button" class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200" data-wizard-next>
+                            Continue to Packages
+                        </button>
+                    </div>
+
                 </section>
 
                 <div class="space-y-6">
-                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="2" hidden>
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-amber-200">Choose Package</span>
@@ -376,9 +408,18 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+                            <button type="button" class="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/5" data-wizard-prev>
+                                Back
+                            </button>
+                            <button type="button" class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200" data-wizard-next>
+                                Continue to Add-Ons
+                            </button>
+                        </div>
                     </section>
 
-                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="3" hidden>
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-emerald-200">Choose Add-Ons</span>
@@ -402,9 +443,17 @@
                             </div>
                         @endif
 
-                        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" id="addon-grid">
+                        <div id="addon-grid" class="overflow-hidden rounded-3xl border border-white/10 bg-stone-950/40">
+                            <div class="hidden grid-cols-[3rem_minmax(0,1.6fr)_8rem_8rem_7rem_8rem] gap-3 border-b border-white/10 bg-stone-950/70 px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
+                                <span>Select</span>
+                                <span>Add-on</span>
+                                <span>Category</span>
+                                <span>Duration</span>
+                                <span class="text-right">Price</span>
+                                <span class="text-right">Details</span>
+                            </div>
                             @forelse ($addOns as $addOn)
-                                <label class="block cursor-pointer" data-addon-card data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}">
+                                <label class="block cursor-pointer border-b border-white/10 last:border-b-0" data-addon-card data-addon-id="{{ $addOn->id }}" data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}">
                                     <input
                                         type="checkbox"
                                         name="add_on_ids[]"
@@ -418,50 +467,42 @@
                                         data-addon-photo-url="{{ $addOn->photo_path ? Storage::disk('public')->url($addOn->photo_path) : '' }}"
                                         @checked(collect(old('add_on_ids', []))->map(fn ($id) => (int) $id)->contains($addOn->id))
                                     >
-                                    <article class="h-full overflow-hidden rounded-3xl border border-white/10 bg-stone-950/50 transition peer-checked:border-emerald-300/60 peer-checked:bg-emerald-300/10 hover:border-white/20">
-                                        <div class="relative">
-                                            @if ($addOn->photo_path)
-                                                <img src="{{ Storage::disk('public')->url($addOn->photo_path) }}" alt="{{ $addOn->name }}" class="h-40 w-full object-cover">
-                                            @else
-                                                <div class="flex h-40 items-center justify-center bg-stone-900 text-5xl text-stone-600">A</div>
-                                            @endif
-                                            <span class="absolute right-3 top-3 rounded-full border border-rose-300/40 bg-stone-950/90 px-3.5 py-1.5 text-sm font-bold tracking-wide text-rose-300 shadow-lg shadow-black/30">
-                                                ${{ number_format((float) $addOn->unit_price, 2) }}
+                                    <article class="grid gap-3 px-4 py-3 transition peer-checked:bg-emerald-300/10 hover:bg-white/[0.03] lg:grid-cols-[3rem_minmax(0,1.6fr)_8rem_8rem_7rem_8rem] lg:items-center">
+                                        <div class="flex items-center justify-between gap-3 lg:justify-center">
+                                            <span class="selection-indicator flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
+                                                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                                    <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
                                             </span>
+                                            <span class="text-xs uppercase tracking-[0.2em] text-stone-500 lg:hidden">Select</span>
                                         </div>
-
-                                        <div class="p-4">
-                                            <div class="flex items-start justify-between gap-4">
-                                                <div class="min-w-0">
-                                                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ $addOn->sku }}</p>
-                                                    <h3 class="mt-1 text-lg font-semibold">{{ $addOn->name }}</h3>
-                                                    @if ($addOn->addon_category)
-                                                        <p class="mt-1 text-xs text-emerald-100/80">{{ $addOn->addon_category }}</p>
-                                                    @endif
-                                                </div>
-                                                @if ($addOn->duration)
-                                                    <span class="rounded-full bg-white/5 px-3 py-1 text-xs text-stone-300">
-                                                        {{ $addOn->duration }}
-                                                    </span>
-                                                @endif
-                                            </div>
-
-                                            <div class="mt-3 flex items-center justify-between gap-2">
-                                                <button
-                                                    type="button"
-                                                    class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100 transition hover:border-emerald-200/60 hover:bg-emerald-300/20"
-                                                    data-details-modal="addon-details-{{ $addOn->id }}"
-                                                    data-details-name="{{ $addOn->name }}"
-                                                    data-details-label="Add-On Details"
-                                                >
-                                                    View details
-                                                </button>
-                                                <span class="selection-indicator flex h-8 w-8 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
-                                                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                                                        <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                                                    </svg>
-                                                </span>
-                                            </div>
+                                        <div class="min-w-0">
+                                            <p class="text-[11px] uppercase tracking-[0.22em] text-stone-500">{{ $addOn->sku ?: 'Add-On' }}</p>
+                                            <h3 class="mt-1 truncate text-sm font-semibold text-white">{{ $addOn->name }}</h3>
+                                            <p class="mt-1 line-clamp-2 text-xs leading-5 text-stone-400 lg:hidden">{{ Str::limit($addOn->description ?: 'No description provided.', 90) }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Category</p>
+                                            <span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">{{ $addOn->addon_category ?: 'Uncategorized' }}</span>
+                                        </div>
+                                        <div>
+                                            <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Duration</p>
+                                            <span class="text-sm text-stone-300">{{ $addOn->duration ?: 'Not set' }}</span>
+                                        </div>
+                                        <div>
+                                            <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Price</p>
+                                            <p class="text-sm font-semibold text-emerald-100 lg:text-right">${{ number_format((float) $addOn->unit_price, 2) }}</p>
+                                        </div>
+                                        <div class="flex lg:justify-end">
+                                            <button
+                                                type="button"
+                                                class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100 transition hover:border-emerald-200/60 hover:bg-emerald-300/20"
+                                                data-details-modal="addon-details-{{ $addOn->id }}"
+                                                data-details-name="{{ $addOn->name }}"
+                                                data-details-label="Add-On Details"
+                                            >
+                                                View details
+                                            </button>
                                         </div>
                                     </article>
                                 </label>
@@ -495,13 +536,22 @@
                                     </div>
                                 </template>
                             @empty
-                                <div class="rounded-3xl border border-dashed border-white/15 bg-stone-950/40 p-6 text-sm text-stone-400">
+                                <div class="p-6 text-sm text-stone-400">
                                     No add-ons are available yet.
                                 </div>
                             @endforelse
                         </div>
                         <div id="addon-filter-empty" class="mt-4 hidden rounded-3xl border border-dashed border-white/15 bg-stone-950/40 p-6 text-sm text-stone-400">
                             No add-ons match this category.
+                        </div>
+
+                        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+                            <button type="button" class="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/5" data-wizard-prev>
+                                Back
+                            </button>
+                            <button type="button" class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200" data-wizard-next>
+                                Continue to Location
+                            </button>
                         </div>
                     </section>
 
@@ -526,10 +576,20 @@
                     <p id="discount-amount-label" class="hidden">-$0.00</p>
                     <p id="discount-note" class="hidden">No discount selected.</p>
 
-                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-4">
-                        <div class="flex flex-wrap items-center justify-between gap-3">
+                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="4" hidden>
+                        <div class="mb-5">
+                            <h2 class="text-lg font-semibold text-white">
+                                <span class="text-cyan-200">Location Address</span>
+                                <span class="mx-2 text-stone-500">&bull;</span>
+                                <span>Calculate travel fee</span>
+                            </h2>
+                        </div>
+
+                        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                             <div class="min-w-0">
-                                <h2 class="text-sm font-semibold text-white">
+                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location</label>
+                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <h2 class="sr-only">
                                     <span class="text-cyan-200">Travel Fee</span>
                                     <span class="mx-2 text-stone-500">•</span>
                                     <span>Auto distance pricing</span>
@@ -549,25 +609,104 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+                            <button type="button" class="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/5" data-wizard-prev>
+                                Back
+                            </button>
+                            <button type="button" class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200" data-wizard-next>
+                                Continue to Summary
+                            </button>
+                        </div>
                     </section>
 
-                    <div class="grid gap-3 md:grid-cols-2">
-                        <button
-                            type="submit"
-                            class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                            @disabled($packages->isEmpty())
-                        >
-                            Get Quote
-                        </button>
-                        <button
-                            type="button"
-                            id="open-book-now-modal"
-                            class="w-full rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
-                            @disabled($packages->isEmpty())
-                        >
-                            Book Now
-                        </button>
-                    </div>
+                    <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="5" hidden>
+                        <div class="mb-5">
+                            <h2 class="text-lg font-semibold text-white">
+                                <span class="text-cyan-200">Summary</span>
+                                <span class="mx-2 text-stone-500">&bull;</span>
+                                <span>Review your booking</span>
+                            </h2>
+                        </div>
+
+                        <div class="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+                            <div class="space-y-4">
+                                <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
+                                    <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
+                                    <div id="wizard-summary-items" class="mt-4 text-sm text-stone-200">
+                                        <p class="text-stone-400">No package selected.</p>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
+                                    <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Customer and location</p>
+                                    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <dt class="text-stone-500">Name</dt>
+                                            <dd id="wizard-summary-customer" class="mt-1 font-medium text-white">Not entered</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-stone-500">Event date</dt>
+                                            <dd id="wizard-summary-date" class="mt-1 font-medium text-white">Not selected</dd>
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <dt class="text-stone-500">Location</dt>
+                                            <dd id="wizard-summary-location" class="mt-1 font-medium text-white">Not entered</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            </div>
+
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
+                                <p class="text-sm uppercase tracking-[0.3em] text-amber-200">Totals</p>
+                                <div class="mt-5 space-y-3 text-sm">
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-stone-400">Package</span>
+                                        <span id="wizard-summary-package-total" class="font-medium text-white">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-stone-400">Add-ons</span>
+                                        <span id="wizard-summary-addon-total" class="font-medium text-white">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-stone-400">Travel fee</span>
+                                        <span id="wizard-summary-travel" class="font-medium text-white">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-4 border-t border-white/10 pt-4">
+                                        <span class="text-stone-300">Total</span>
+                                        <span id="wizard-summary-total" class="text-2xl font-semibold text-cyan-200">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-stone-400">Deposit</span>
+                                        <span id="wizard-summary-deposit" class="font-semibold text-amber-200">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <button type="button" class="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/5" data-wizard-prev>
+                                Back
+                            </button>
+                            <div class="grid flex-1 gap-3 sm:max-w-xl sm:grid-cols-2">
+                                <button
+                                    type="submit"
+                                    class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                    @disabled($packages->isEmpty())
+                                >
+                                    Get Quote
+                                </button>
+                                <button
+                                    type="button"
+                                    id="open-book-now-modal"
+                                    class="w-full rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    @disabled($packages->isEmpty())
+                                >
+                                    Book Now
+                                </button>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </form>
         </main>
@@ -783,6 +922,19 @@
                 const bookNowDiscountFeedback = document.getElementById('book-now-discount-feedback');
                 const bookNowDepositAmount = document.getElementById('book-now-deposit-amount');
                 const bookNowTotalAmount = document.getElementById('book-now-total-amount');
+                const wizardSteps = Array.from(document.querySelectorAll('[data-wizard-step]'));
+                const wizardNavButtons = Array.from(document.querySelectorAll('[data-wizard-nav]'));
+                const wizardNextButtons = Array.from(document.querySelectorAll('[data-wizard-next]'));
+                const wizardPrevButtons = Array.from(document.querySelectorAll('[data-wizard-prev]'));
+                const wizardSummaryItems = document.getElementById('wizard-summary-items');
+                const wizardSummaryCustomer = document.getElementById('wizard-summary-customer');
+                const wizardSummaryDate = document.getElementById('wizard-summary-date');
+                const wizardSummaryLocation = document.getElementById('wizard-summary-location');
+                const wizardSummaryPackageTotal = document.getElementById('wizard-summary-package-total');
+                const wizardSummaryAddonTotal = document.getElementById('wizard-summary-addon-total');
+                const wizardSummaryTravel = document.getElementById('wizard-summary-travel');
+                const wizardSummaryTotal = document.getElementById('wizard-summary-total');
+                const wizardSummaryDeposit = document.getElementById('wizard-summary-deposit');
                 const autosaveFields = [
                     document.getElementById('customer-name'),
                     document.getElementById('customer-email'),
@@ -792,7 +944,7 @@
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit) {
                     return;
                 }
 
@@ -811,6 +963,86 @@
                     toastTimeout = window.setTimeout(() => {
                         toast.classList.add('hidden');
                     }, 2800);
+                };
+
+                let currentWizardStep = 1;
+
+                const stepElement = (step) => wizardSteps.find((element) => Number(element.dataset.wizardStep) === step);
+
+                const updateWizardNav = () => {
+                    wizardNavButtons.forEach((button) => {
+                        const step = Number(button.dataset.wizardNav);
+                        const active = step === currentWizardStep;
+                        const completed = step < currentWizardStep;
+
+                        button.setAttribute('aria-current', active ? 'step' : 'false');
+                        button.classList.toggle('border-cyan-300/40', active);
+                        button.classList.toggle('bg-cyan-300/10', active);
+                        button.classList.toggle('border-emerald-300/30', completed && !active);
+                    });
+                };
+
+                const showWizardStep = (step) => {
+                    currentWizardStep = Math.max(1, Math.min(5, step));
+                    wizardSteps.forEach((element) => {
+                        element.hidden = Number(element.dataset.wizardStep) !== currentWizardStep;
+                    });
+                    updateWizardNav();
+                    updateSummary();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                };
+
+                const validateField = (field) => {
+                    if (!field.checkValidity()) {
+                        field.reportValidity();
+                        field.focus({ preventScroll: true });
+                        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return false;
+                    }
+
+                    return true;
+                };
+
+                const validateWizardStep = (step) => {
+                    const section = stepElement(step);
+
+                    if (!section) {
+                        return true;
+                    }
+
+                    for (const field of Array.from(section.querySelectorAll('input, select, textarea'))) {
+                        if (step === 2 && field.matches('input[name="package_id"]')) {
+                            continue;
+                        }
+
+                        if (!validateField(field)) {
+                            return false;
+                        }
+                    }
+
+                    if (step === 2) {
+                        const selectedPackage = document.querySelector('input[name="package_id"]:checked');
+
+                        if (!selectedPackage) {
+                            showToast('Please choose a package before continuing.', 'error');
+                            return false;
+                        }
+
+                        let hourlyPrices = [];
+                        try {
+                            hourlyPrices = JSON.parse(selectedPackage.dataset.packageHourlyPrices || '[]');
+                        } catch {
+                            hourlyPrices = [];
+                        }
+
+                        if (hourlyPrices.length && !selectedPackageTimingOption()) {
+                            showToast('Please choose the package timing and price option first.', 'error');
+                            openPackageTierModal();
+                            return false;
+                        }
+                    }
+
+                    return true;
                 };
 
                 const escapeHtml = (value) => {
@@ -930,13 +1162,33 @@
                 };
 
                 const normalizeCategory = (value) => String(value || '').trim().toLowerCase();
+                let activeAddOnCategory = 'all';
+
+                const syncPackageIncludedAddOnVisibility = () => {
+                    const includedIds = selectedPackageIncludedAddOnIds();
+
+                    addOnCards.forEach((card) => {
+                        const addOnId = Number(card.dataset.addonId);
+                        const includedInPackage = includedIds.includes(addOnId);
+                        const input = card.querySelector('input[name="add_on_ids[]"]');
+
+                        card.dataset.includedInPackage = includedInPackage ? 'true' : 'false';
+
+                        if (includedInPackage && input) {
+                            input.checked = false;
+                        }
+                    });
+                };
 
                 const applyAddOnCategoryFilter = (category) => {
+                    activeAddOnCategory = category || 'all';
                     const selectedCategory = normalizeCategory(category);
                     let visibleCount = 0;
 
                     addOnCards.forEach((card) => {
-                        const matches = selectedCategory === 'all' || normalizeCategory(card.dataset.addonCategory) === selectedCategory;
+                        const includedInPackage = card.dataset.includedInPackage === 'true';
+                        const matchesCategory = selectedCategory === 'all' || normalizeCategory(card.dataset.addonCategory) === selectedCategory;
+                        const matches = matchesCategory && !includedInPackage;
                         card.classList.toggle('hidden', !matches);
 
                         if (matches) {
@@ -995,7 +1247,9 @@
                 const customerPackageDiscountPercentage = {{ $customerPackageDiscountPercentage }};
                 const initialPackageTimingId = @json(old('package_hourly_price_id'));
                 const requestedPackageId = new URLSearchParams(window.location.search).get('package_id');
+                const bookingCurrencyCode = @json($bookingCurrencyCode);
                 const formatCurrency = (value) => `$${value.toFixed(2)}`;
+                const formatSummaryCurrency = (value) => `${bookingCurrencyCode} ${formatCurrency(value)}`;
                 const parseAmount = (value) => Number.parseFloat(value || '0') || 0;
                 const applyPackageDiscount = (amount) => {
                     const normalizedAmount = parseAmount(amount);
@@ -1451,6 +1705,40 @@
                     };
                 };
 
+                const renderWizardSummary = () => {
+                    const totals = quoteTotals();
+                    const customerName = document.getElementById('customer-name')?.value.trim();
+                    const eventDate = document.getElementById('event-date')?.value;
+                    const eventLocation = eventLocationInput.value.trim();
+
+                    wizardSummaryPackageTotal.textContent = formatCurrency(totals.packageTotal);
+                    wizardSummaryAddonTotal.textContent = formatCurrency(totals.addOnTotal);
+                    wizardSummaryTravel.textContent = formatCurrency(totals.travelFee);
+                    wizardSummaryTotal.textContent = formatCurrency(totals.total);
+                    wizardSummaryDeposit.textContent = formatCurrency(totals.depositAmount);
+                    wizardSummaryCustomer.textContent = customerName || 'Not entered';
+                    wizardSummaryDate.textContent = eventDate || 'Not selected';
+                    wizardSummaryLocation.textContent = eventLocation || 'Not entered';
+
+                    if (!totals.selectedPackage) {
+                        wizardSummaryItems.innerHTML = '<p class="text-stone-400">No package selected.</p>';
+                        return;
+                    }
+
+                    const packageRow = `<tr class="border-t border-white/10"><td class="px-3 py-2.5"><span class="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100">Package</span></td><td class="max-w-0 px-3 py-2.5"><p class="truncate font-medium text-white">${escapeHtml(totals.packageName)}</p></td><td class="px-3 py-2.5 text-stone-300">Package</td><td class="px-3 py-2.5 text-right font-medium text-cyan-100">${formatCurrency(totals.packageTotal)}</td></tr>`;
+                    const addOnRows = totals.selectedAddOns
+                        .map((input) => {
+                            const name = input.dataset.addonName || 'Add-On';
+                            const category = input.dataset.addonCategory || 'Add-on';
+                            const price = formatCurrency(parseAmount(input.dataset.addonPrice));
+
+                            return `<tr class="border-t border-white/10"><td class="px-3 py-2.5"><span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">Add-on</span></td><td class="max-w-0 px-3 py-2.5"><p class="truncate font-medium text-white">${escapeHtml(name)}</p></td><td class="px-3 py-2.5 text-stone-300">${escapeHtml(category)}</td><td class="px-3 py-2.5 text-right font-medium text-emerald-100">${price}</td></tr>`;
+                        })
+                        .join('');
+
+                    wizardSummaryItems.innerHTML = `<div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]"><table class="w-full min-w-[34rem] table-fixed border-collapse text-left text-sm"><thead class="bg-stone-950/60 text-[11px] uppercase tracking-[0.18em] text-stone-500"><tr><th class="w-24 px-3 py-2 font-medium">Type</th><th class="w-1/2 px-3 py-2 font-medium">Name</th><th class="w-1/4 px-3 py-2 font-medium">Category</th><th class="w-28 px-3 py-2 text-right font-medium">Price</th></tr></thead><tbody>${packageRow}${addOnRows}</tbody></table></div>`;
+                };
+
                 const updatePackageDrivenTiming = () => {
                     const selectedPackage = document.querySelector('input[name="package_id"]:checked');
                     const enteredDuration = parseAmount(totalHoursDisplay.value);
@@ -1480,10 +1768,10 @@
                     const totals = quoteTotals();
 
                     summaryPackage.textContent = totals.packageName;
-                    summaryTotal.textContent = formatCurrency(totals.total);
-                    summaryTravel.textContent = formatCurrency(totals.travelFee);
+                    summaryTotal.textContent = formatSummaryCurrency(totals.total);
+                    summaryTravel.textContent = formatSummaryCurrency(totals.travelFee);
                     summaryDiscount.textContent = '-$0.00';
-                    summaryDeposit.textContent = formatCurrency(totals.depositAmount);
+                    summaryDeposit.textContent = formatSummaryCurrency(totals.depositAmount);
 
                     const discountedTotals = bookNowTotals();
                     discountAmountLabel.textContent = `-${formatCurrency(discountedTotals.discountAmount)}`;
@@ -1495,6 +1783,7 @@
                     }
 
                     renderBookingCart();
+                    renderWizardSummary();
                 };
 
                 let travelFeeTimeout;
@@ -1666,8 +1955,9 @@
 
                         renderPackageTimingOptions();
                         refreshDiscountOptions();
+                        syncPackageIncludedAddOnVisibility();
+                        applyAddOnCategoryFilter(activeAddOnCategory);
                         updateSummary();
-                        notifyIncludedAddOns(Array.from(document.querySelectorAll('input[name="add_on_ids[]"]:checked')));
 
                         if (input.checked && hourlyPrices.length) {
                             openPackageTierModal();
@@ -1756,11 +2046,46 @@
                     window.clearTimeout(discountCodeTimeout);
                     applyDiscountCode();
                 });
+                wizardNextButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        if (!validateWizardStep(currentWizardStep)) {
+                            return;
+                        }
+
+                        showWizardStep(currentWizardStep + 1);
+                    });
+                });
+                wizardPrevButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        showWizardStep(currentWizardStep - 1);
+                    });
+                });
+                wizardNavButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const targetStep = Number(button.dataset.wizardNav);
+
+                        if (targetStep <= currentWizardStep) {
+                            showWizardStep(targetStep);
+                            return;
+                        }
+
+                        for (let step = currentWizardStep; step < targetStep; step += 1) {
+                            if (!validateWizardStep(step)) {
+                                return;
+                            }
+                        }
+
+                        showWizardStep(targetStep);
+                    });
+                });
                 applyAddOnCategoryFilter('all');
                 applyRequestedPackageSelection();
                 renderPackageTimingOptions();
                 refreshDiscountOptions();
+                syncPackageIncludedAddOnVisibility();
+                applyAddOnCategoryFilter(activeAddOnCategory);
                 updateSummary();
+                showWizardStep(1);
                 queueTravelCalculation();
 
                 @if (session('status'))
@@ -1888,8 +2213,29 @@
                 eventLocationInput.addEventListener('input', queueTravelCalculation);
                 eventLocationInput.addEventListener('change', queueTravelCalculation);
                 eventLocationInput.addEventListener('blur', queueTravelCalculation);
-                form.addEventListener('submit', () => {
+                form.addEventListener('submit', (event) => {
                     updatePackageDrivenTiming();
+
+                    if (currentWizardStep < 5) {
+                        event.preventDefault();
+
+                        if (validateWizardStep(currentWizardStep)) {
+                            showWizardStep(currentWizardStep + 1);
+                        }
+
+                        return;
+                    }
+
+                    for (let step = 1; step <= 4; step += 1) {
+                        showWizardStep(step);
+
+                        if (!validateWizardStep(step)) {
+                            event.preventDefault();
+                            return;
+                        }
+                    }
+
+                    showWizardStep(5);
                 });
                 snapTimeInput(startTimeInput);
                 snapTimeInput(endTimeInput);

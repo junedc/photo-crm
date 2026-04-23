@@ -15,6 +15,7 @@ const bookingList = ref([...(props.data.bookings ?? [])]);
 const bookings = computed(() => bookingList.value);
 const bookingSearch = ref('');
 const bookingStatusFilter = ref('all');
+const bookingKindFilter = ref('all');
 const pagination = ref(props.data.pagination ?? { total: bookings.value.length, has_more: false, next_page: null });
 const loadingMore = ref(false);
 const selectedId = ref(props.data.selectedId ?? null);
@@ -269,6 +270,7 @@ const fetchBookings = async (page = 1, append = false) => {
         page: String(page),
         search: bookingSearch.value.trim(),
         status: bookingStatusFilter.value,
+        booking_kind: bookingKindFilter.value,
     });
 
     try {
@@ -294,7 +296,7 @@ const fetchBookings = async (page = 1, append = false) => {
     }
 };
 
-watch([bookingSearch, bookingStatusFilter], () => fetchBookings(1, false));
+watch([bookingSearch, bookingStatusFilter, bookingKindFilter], () => fetchBookings(1, false));
 
 watch(showCreateModal, async (open) => {
     if (!open) {
@@ -643,16 +645,32 @@ const updateBooking = async () => {
             </div>
             <div class="mt-3 grid gap-2">
                 <input v-model="bookingSearch" type="text" placeholder="Search name, quote number, email or package" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
-                <div class="grid grid-cols-5 gap-2">
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="bookingStatusFilter === 'all' ? 'border-rose-300/40 bg-rose-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="bookingStatusFilter = 'all'">All</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="bookingStatusFilter === 'pending' ? 'border-amber-300/40 bg-amber-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="bookingStatusFilter = 'pending'">Pending</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="bookingStatusFilter === 'confirmed' ? 'border-emerald-300/40 bg-emerald-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="bookingStatusFilter = 'confirmed'">Confirmed</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="bookingStatusFilter === 'completed' ? 'border-cyan-300/40 bg-cyan-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="bookingStatusFilter = 'completed'">Completed</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="bookingStatusFilter === 'cancelled' ? 'border-rose-300/40 bg-rose-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="bookingStatusFilter = 'cancelled'">Cancelled</button>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <label>
+                        <span class="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-500">Status</span>
+                        <select v-model="bookingStatusFilter" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                            <option value="all">All statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-500">Booking Type</span>
+                        <select v-model="bookingKindFilter" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                            <option value="all">All types</option>
+                            <option v-for="kind in bookingKinds" :key="kind" :value="kind">{{ bookingKindLabel(kind) }}</option>
+                        </select>
+                    </label>
                 </div>
             </div>
-            <div class="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+            <div class="mt-3 hidden grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
                 <span>Booking</span>
+                <span>Type</span>
+                <span>Date</span>
+                <span>Package</span>
+                <span>Total</span>
                 <span>Status</span>
             </div>
         </div>
@@ -662,22 +680,37 @@ const updateBooking = async () => {
                 v-for="entry in bookings"
                 :key="entry.id"
                 type="button"
-                class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-3 text-left transition"
+                class="grid w-full gap-3 border-b px-3 py-3 text-left transition lg:grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem] lg:items-center"
                 :class="selectedId === entry.id ? 'border-rose-300/30 bg-rose-300/8' : 'border-white/10 hover:bg-white/[0.03]'"
                 @click="selectBooking(entry)"
             >
                 <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <p class="truncate text-sm font-medium text-white">{{ entry.display_name || entry.customer_name }}</p>
-                        <span class="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-cyan-100">
-                            {{ entry.booking_kind_label }}
-                        </span>
-                    </div>
-                    <p class="mt-1 truncate text-xs text-stone-400">{{ entry.package_name }} - {{ entry.event_date_label }}</p>
+                    <p class="truncate text-sm font-medium text-white">{{ entry.display_name || entry.customer_name }}</p>
+                    <p class="mt-1 truncate text-xs text-stone-400">{{ entry.quote_number || 'No quote number' }}</p>
                 </div>
-                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-medium leading-none" :class="entry.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : entry.status === 'pending' ? 'bg-amber-300/15 text-amber-200' : entry.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : 'bg-rose-400/15 text-rose-200'">
-                    {{ statusLabel(entry.status) }}
-                </span>
+                <div>
+                    <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Type</p>
+                    <span class="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100">{{ entry.booking_kind_label }}</span>
+                </div>
+                <div>
+                    <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Date</p>
+                    <p class="text-sm text-stone-200">{{ entry.event_date_label || 'Not set' }}</p>
+                    <p class="mt-1 text-xs text-stone-500">{{ entry.start_time_label || '' }}</p>
+                </div>
+                <div class="min-w-0">
+                    <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Package</p>
+                    <p class="truncate text-sm text-stone-200">{{ entry.package_name || 'No package' }}</p>
+                </div>
+                <div>
+                    <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Total</p>
+                    <p class="text-sm font-semibold text-cyan-100">${{ entry.booking_total }}</p>
+                </div>
+                <div>
+                    <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Status</p>
+                    <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-medium leading-none" :class="entry.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : entry.status === 'pending' ? 'bg-amber-300/15 text-amber-200' : entry.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : 'bg-rose-400/15 text-rose-200'">
+                        {{ statusLabel(entry.status) }}
+                    </span>
+                </div>
             </button>
 
             <div v-if="!bookings.length" class="rounded-2xl border border-dashed border-white/15 bg-stone-950/40 px-4 py-5 text-sm text-stone-400">

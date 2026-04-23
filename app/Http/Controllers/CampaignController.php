@@ -728,6 +728,9 @@ class CampaignController extends Controller
             'leads' => route('leads.index'),
             'customers' => route('customers.index'),
             'campaigns' => route('campaigns.index'),
+            'users' => route('users.index'),
+            'roles' => route('roles.index'),
+            'access' => route('access.index'),
             'settings' => route('settings.index'),
             'logout' => route('logout'),
         ];

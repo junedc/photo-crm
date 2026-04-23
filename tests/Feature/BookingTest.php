@@ -39,10 +39,36 @@ class BookingTest extends TestCase
             'is_active' => false,
         ]);
 
+        InventoryItem::query()->create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'ADD-PUBLIC',
+            'name' => 'Public Props',
+            'category' => 'add-on',
+            'addon_category' => 'Items',
+            'is_publicly_displayed' => true,
+            'quantity' => 1,
+            'unit_price' => 50,
+            'maintenance_status' => 'ready',
+        ]);
+
+        InventoryItem::query()->create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'ADD-HIDDEN',
+            'name' => 'Private Back Office Add-On',
+            'category' => 'add-on',
+            'addon_category' => 'Action',
+            'is_publicly_displayed' => false,
+            'quantity' => 1,
+            'unit_price' => 80,
+            'maintenance_status' => 'ready',
+        ]);
+
         $this->get('http://'.$tenant->slug.'.memoshot.test/bookings/create')
             ->assertOk()
             ->assertSee('Wedding Booth')
-            ->assertDontSee('Hidden Package');
+            ->assertDontSee('Hidden Package')
+            ->assertSee('Public Props')
+            ->assertDontSee('Private Back Office Add-On');
     }
 
     public function test_customer_can_create_booking_for_active_package(): void

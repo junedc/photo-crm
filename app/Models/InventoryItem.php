@@ -15,6 +15,7 @@ class InventoryItem extends Model
         'name',
         'category',
         'addon_category',
+        'is_publicly_displayed',
         'sku',
         'description',
         'quantity',
@@ -31,6 +32,7 @@ class InventoryItem extends Model
         return [
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
+            'is_publicly_displayed' => 'boolean',
             'last_maintained_at' => 'date',
         ];
     }

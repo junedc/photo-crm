@@ -12,10 +12,24 @@
         @endif
     </head>
     <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $props['tenant']['theme'] ?? 'dark' }}">
+        @php
+            $allowedScreens = null;
+            $tenantId = $props['tenant']['id'] ?? null;
+            $user = auth()->user();
+
+            if ($user !== null && $tenantId !== null) {
+                $membership = $user->tenants()->whereKey($tenantId)->first()?->pivot;
+
+                if ($membership !== null && $membership->role !== 'owner' && $membership->role_id !== null) {
+                    $allowedScreens = \App\Models\Role::query()->find($membership->role_id)?->screen_access ?? [];
+                }
+            }
+        @endphp
         <script>
             window.googleMapsApiKey = @js($props['tenant']['google_maps_api_key'] ?? env('VITE_GOOGLE_MAPS_API_KEY', ''));
             window.adminPage = @js($page);
             window.adminProps = @js(array_merge($props, [
+                'allowedScreens' => $allowedScreens,
                 'csrfToken' => csrf_token(),
                 'flash' => [
                     'status' => session('status'),

@@ -68,6 +68,7 @@ class BookingController extends Controller
         $tenant = $currentTenant->get();
         $addOns = InventoryItem::query()
             ->where('category', 'add-on')
+            ->where('is_publicly_displayed', true)
             ->latest()
             ->get();
 
@@ -75,7 +76,11 @@ class BookingController extends Controller
             'tenant' => $tenant,
             'packages' => Package::query()
                 ->where('is_active', true)
-                ->with(['equipment', 'addOns', 'hourlyPrices'])
+                ->with([
+                    'equipment',
+                    'addOns' => fn ($query) => $query->where('is_publicly_displayed', true),
+                    'hourlyPrices',
+                ])
                 ->latest()
                 ->get(),
             'addOns' => $addOns,
@@ -464,6 +469,9 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'users' => route('users.index'),
+                    'roles' => route('roles.index'),
+                    'access' => route('access.index'),
                     'bookings' => route('admin.bookings.index'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
@@ -514,6 +522,7 @@ class BookingController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $status = (string) $request->query('status', 'all');
+        $bookingKind = (string) $request->query('booking_kind', 'all');
 
         return Booking::query()
             ->with(['package', 'addOns', 'equipment', 'discount', 'invoice.installments'])
@@ -528,6 +537,7 @@ class BookingController extends Controller
                 });
             })
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when(in_array($bookingKind, $this->bookingKinds(), true), fn ($query) => $query->where('booking_kind', $bookingKind))
             ->latest()
             ->paginate(10);
     }
@@ -572,6 +582,9 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'users' => route('users.index'),
+                    'roles' => route('roles.index'),
+                    'access' => route('access.index'),
                     'bookings' => route('admin.bookings.index'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
@@ -615,6 +628,9 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'users' => route('users.index'),
+                    'roles' => route('roles.index'),
+                    'access' => route('access.index'),
                     'bookings' => route('admin.bookings.index'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
