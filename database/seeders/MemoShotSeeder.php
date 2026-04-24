@@ -6,8 +6,8 @@ use App\Models\Equipment;
 use App\Models\InventoryItem;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
-use App\Models\Tenant;
 use App\Models\TaskStatus;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceStatus;
 use App\Support\TenantStatuses;
@@ -59,10 +59,16 @@ class MemoShotSeeder extends Seeder
             ]
         );
 
-        foreach (TenantStatuses::scopes() as $scope => $label) {
-            $defaults = TenantStatuses::defaults($scope);
+        $seedStatuses = [
+            TenantStatuses::SCOPE_INVOICE => ['draft', 'issued', 'partially_paid', 'paid', 'cancelled'],
+            TenantStatuses::SCOPE_TASK => ['pending', 'in_progress', 'completed'],
+            TenantStatuses::SCOPE_BOOKING => ['pending', 'confirmed', 'completed', 'cancelled'],
+            TenantStatuses::SCOPE_PACKAGE => ['active', 'inactive'],
+            TenantStatuses::SCOPE_EQUIPMENT => ['ready', 'maintenance', 'retired'],
+        ];
 
-            foreach ($defaults as $name) {
+        foreach ($seedStatuses as $scope => $statuses) {
+            foreach ($statuses as $name) {
                 if ($scope === TenantStatuses::SCOPE_TASK) {
                     TaskStatus::query()->updateOrCreate(
                         [

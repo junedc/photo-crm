@@ -192,7 +192,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, string> $statusesByEmail
+     * @param  array<string, string>  $statusesByEmail
      */
     private function seedResults(Campaign $campaign, SubscriberGroup $group, array $statusesByEmail): void
     {
@@ -525,7 +525,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, string> $attributes
+     * @param  array<string, string>  $attributes
      * @return array<string, string>
      */
     private function batchCustomerAttributes(array $attributes, int $batch): array
@@ -540,7 +540,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
     private function batchLeadAttributes(array $attributes, int $batch, int $index): array
@@ -556,7 +556,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, string> $attributes
+     * @param  array<string, string>  $attributes
      * @return array<string, string>
      */
     private function batchTemplateAttributes(array $attributes, int $batch): array
