@@ -25,7 +25,7 @@ class DemoSeeder extends Seeder
 {
     public function run(): void
     {
-        $tenant = Tenant::query()->where('slug', 'memoshot')->first()
+        $tenant = Tenant::query()->where('slug', 'm')->first()
             ?? Tenant::query()->first();
 
         if ($tenant === null) {
@@ -70,24 +70,30 @@ class DemoSeeder extends Seeder
                     ),
                 ]);
 
-            $templates = collect($this->templateSeedData())
-                ->map(fn (array $attributes): array => $this->batchTemplateAttributes($attributes, $batch))
-                ->mapWithKeys(fn (array $attributes): array => [
-                    $attributes['name'] => Template::query()->updateOrCreate(
-                        [
-                            'tenant_id' => $tenant->id,
-                            'name' => $attributes['name'],
-                        ],
-                        [
-                            'subject' => $attributes['subject'],
-                            'preheader' => $attributes['preheader'],
-                            'headline' => $attributes['headline'],
-                            'html_body' => $attributes['html_body'],
-                            'button_text' => $attributes['button_text'],
-                            'button_url' => $attributes['button_url'],
-                        ]
-                    ),
-                ]);
+            $templates = $batch === 1
+                ? Template::query()
+                    ->where('tenant_id', $tenant->id)
+                    ->whereIn('name', ['Monthly Promo', 'Lead Follow Up'])
+                    ->get()
+                    ->keyBy('name')
+                : collect($this->templateSeedData())
+                    ->map(fn (array $attributes): array => $this->batchTemplateAttributes($attributes, $batch))
+                    ->mapWithKeys(fn (array $attributes): array => [
+                        $attributes['name'] => Template::query()->updateOrCreate(
+                            [
+                                'tenant_id' => $tenant->id,
+                                'name' => $attributes['name'],
+                            ],
+                            [
+                                'subject' => $attributes['subject'],
+                                'preheader' => $attributes['preheader'],
+                                'headline' => $attributes['headline'],
+                                'html_body' => $attributes['html_body'],
+                                'button_text' => $attributes['button_text'],
+                                'button_url' => $attributes['button_url'],
+                            ]
+                        ),
+                    ]);
 
             $groups = collect([
                 [

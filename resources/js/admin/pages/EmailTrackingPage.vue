@@ -13,12 +13,63 @@ const { saving, submitForm } = useWorkspaceCrud();
 const emailLogs = ref([...(props.data.emailLogs ?? [])]);
 const selectedIds = ref([]);
 const activeLogId = ref(props.data.emailLogs?.[0]?.id ?? null);
+const tableColumnClass = 'grid-cols-[3rem_minmax(14rem,1.5fr)_8rem_8rem_11rem_10rem]';
+const sortState = ref({
+    key: 'sent_at_sort',
+    direction: 'desc',
+});
+
+const sortOptions = {
+    recipient_label: (log) => log.recipient_label ?? '',
+    type: (log) => log.type ?? '',
+    type_label: (log) => log.type_label ?? '',
+    subject: (log) => log.subject ?? '',
+    status_label: (log) => log.status_label ?? '',
+    sent_at_sort: (log) => log.sent_at_sort ?? 0,
+};
+
+const sortedEmailLogs = computed(() => {
+    const logs = [...emailLogs.value];
+    const extractor = sortOptions[sortState.value.key] ?? sortOptions.sent_at_sort;
+
+    logs.sort((left, right) => {
+        const leftValue = extractor(left);
+        const rightValue = extractor(right);
+        const comparison = typeof leftValue === 'number' && typeof rightValue === 'number'
+            ? leftValue - rightValue
+            : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' });
+
+        return sortState.value.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return logs;
+});
 
 const activeLog = computed(() => emailLogs.value.find((entry) => entry.id === activeLogId.value) ?? null);
-const allSelected = computed(() => emailLogs.value.length > 0 && selectedIds.value.length === emailLogs.value.length);
+const allSelected = computed(() => sortedEmailLogs.value.length > 0 && selectedIds.value.length === sortedEmailLogs.value.length);
+
+const setSort = (key) => {
+    sortState.value = sortState.value.key === key
+        ? {
+            key,
+            direction: sortState.value.direction === 'asc' ? 'desc' : 'asc',
+        }
+        : {
+            key,
+            direction: 'asc',
+        };
+};
+
+const sortArrow = (key) => {
+    if (sortState.value.key !== key) {
+        return '↕';
+    }
+
+    return sortState.value.direction === 'asc' ? '↑↓' : '↓↑';
+};
 
 const toggleAll = () => {
-    selectedIds.value = allSelected.value ? [] : emailLogs.value.map((entry) => entry.id);
+    selectedIds.value = allSelected.value ? [] : sortedEmailLogs.value.map((entry) => entry.id);
 };
 
 const toggleSelection = (id) => {
@@ -96,27 +147,43 @@ const deleteSelected = async () => {
             </div>
 
             <div v-if="emailLogs.length" class="overflow-x-auto">
-                <div class="min-w-[920px]">
-                    <div class="grid grid-cols-[3rem_minmax(0,1.4fr)_minmax(0,1.4fr)_8rem_11rem_9rem] gap-3 border-b border-white/10 px-4 py-3 text-xs font-medium uppercase tracking-[0.2em] text-stone-400">
+                <div class="min-w-[1080px]">
+                    <div class="grid gap-3 border-b border-white/10 px-4 py-3 text-xs font-medium uppercase tracking-[0.2em] text-stone-400" :class="tableColumnClass">
                         <label class="flex items-center justify-center">
                             <input :checked="allSelected" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-slate-950 text-cyan-300" @change="toggleAll">
                         </label>
-                        <span>Recipient</span>
-                        <span>Subject</span>
-                        <span>Status</span>
-                        <span>Sent</span>
+                        <button type="button" class="flex items-center gap-1 text-left transition hover:text-white" @click="setSort('recipient_label')">
+                            <span>Recipient</span>
+                            <span class="text-[10px] tracking-normal text-stone-500">{{ sortArrow('recipient_label') }}</span>
+                        </button>
+                        <button type="button" class="flex items-center gap-1 text-left transition hover:text-white" @click="setSort('type')">
+                            <span>Type</span>
+                            <span class="text-[10px] tracking-normal text-stone-500">{{ sortArrow('type') }}</span>
+                        </button>
+
+                        <button type="button" class="flex items-center gap-1 text-left transition hover:text-white" @click="setSort('status_label')">
+                            <span>Status</span>
+                            <span class="text-[10px] tracking-normal text-stone-500">{{ sortArrow('status_label') }}</span>
+                        </button>
+                        <button type="button" class="flex items-center gap-1 text-left transition hover:text-white" @click="setSort('sent_at_sort')">
+                            <span>Sent</span>
+                            <span class="text-[10px] tracking-normal text-stone-500">{{ sortArrow('sent_at_sort') }}</span>
+                        </button>
                         <span>Actions</span>
                     </div>
 
-                    <div v-for="log in emailLogs" :key="log.id" class="grid grid-cols-[3rem_minmax(0,1.4fr)_minmax(0,1.4fr)_8rem_11rem_9rem] items-center gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0" :class="activeLogId === log.id ? 'bg-cyan-300/5' : ''">
+                    <div v-for="log in sortedEmailLogs" :key="log.id" class="grid items-center gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0" :class="[tableColumnClass, activeLogId === log.id ? 'bg-cyan-300/5' : '']">
                         <label class="flex items-center justify-center">
                             <input :checked="selectedIds.includes(log.id)" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-slate-950 text-cyan-300" @change="toggleSelection(log.id)">
                         </label>
                         <div class="min-w-0">
                             <p class="truncate font-medium text-white">{{ log.recipient_label }}</p>
-                            <p class="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">{{ log.recipient_type }}</p>
                         </div>
-                        <p class="truncate text-stone-200">{{ log.subject }}</p>
+                        <div class="min-w-0">
+                            <p class="font-medium text-stone-200" :title="log.type_label">{{ log.type }}</p>
+
+                        </div>
+
                         <span class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium" :class="log.status === 'sent' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'">
                             {{ log.status_label }}
                         </span>
@@ -144,26 +211,31 @@ const deleteSelected = async () => {
                         <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Recipient</p>
                         <p class="mt-1 text-white">{{ activeLog.recipient_label }}</p>
                     </div>
-                        <div>
-                            <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Status</p>
-                            <p class="mt-1 text-white">{{ activeLog.status_label }}</p>
-                            <p v-if="activeLog.error_message" class="mt-1 text-rose-200">{{ activeLog.error_message }}</p>
+                    <div>
+                        <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Type</p>
+                        <p class="mt-1 text-white">{{ activeLog.type }}</p>
+                        <p class="mt-1 text-sm text-stone-400">{{ activeLog.type_label }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Status</p>
+                        <p class="mt-1 text-white">{{ activeLog.status_label }}</p>
+                        <p v-if="activeLog.error_message" class="mt-1 text-rose-200">{{ activeLog.error_message }}</p>
+                    </div>
+                    <div v-if="activeLog.attachments?.length">
+                        <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Attachments</p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <span
+                                v-for="attachment in activeLog.attachments"
+                                :key="`${attachment.name}-${attachment.mime}`"
+                                class="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100"
+                            >
+                                {{ attachment.name }}
+                            </span>
                         </div>
-                        <div v-if="activeLog.attachments?.length">
-                            <p class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Attachments</p>
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <span
-                                    v-for="attachment in activeLog.attachments"
-                                    :key="`${attachment.name}-${attachment.mime}`"
-                                    class="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100"
-                                >
-                                    {{ attachment.name }}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button type="button" class="rounded-lg border border-cyan-300/30 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/10" :disabled="saving" @click="resendLog(activeLog)">Resend</button>
-                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" class="rounded-lg border border-cyan-300/30 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/10" :disabled="saving" @click="resendLog(activeLog)">Resend</button>
+                    </div>
                 </div>
 
                 <div class="overflow-hidden rounded-xl border border-white/10 bg-white">

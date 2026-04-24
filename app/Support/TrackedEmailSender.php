@@ -6,6 +6,7 @@ use App\Models\EmailLog;
 use App\Models\Tenant;
 use Illuminate\Contracts\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Address;
 use Throwable;
 
 class TrackedEmailSender
@@ -14,6 +15,8 @@ class TrackedEmailSender
     {
         $toRecipients = $this->normalizeRecipients($to, 'to');
         $ccRecipients = $this->normalizeRecipients($cc, 'cc');
+        $trackingConfig = $this->trackingConfigFor($mailable::class);
+        $shouldTrack = (bool) ($trackingConfig['track'] ?? true);
         $tenant = $meta['tenant'] ?? null;
         $attachments = $this->normalizeAttachments($meta['attachments'] ?? []);
         $subject = method_exists($mailable, 'envelope')
@@ -31,6 +34,10 @@ class TrackedEmailSender
 
             $pending->send($mailable);
 
+            if (! $shouldTrack) {
+                return [];
+            }
+
             return $this->storeLogs(
                 array_merge($toRecipients, $ccRecipients),
                 $tenant,
@@ -43,6 +50,10 @@ class TrackedEmailSender
                 null,
             );
         } catch (Throwable $throwable) {
+            if (! $shouldTrack) {
+                throw $throwable;
+            }
+
             $this->storeLogs(
                 array_merge($toRecipients, $ccRecipients),
                 $tenant,
@@ -57,6 +68,38 @@ class TrackedEmailSender
 
             throw $throwable;
         }
+    }
+
+    public static function trackingConfig(string $mailableClass): array
+    {
+        return (array) config("email-tracking.mailables.{$mailableClass}", []);
+    }
+
+    public static function trackingTitle(?string $mailableClass, ?string $fallback = null): ?string
+    {
+        if (! is_string($mailableClass) || $mailableClass === '') {
+            return $fallback;
+        }
+
+        $title = static::trackingConfig($mailableClass)['title'] ?? null;
+
+        return is_string($title) && $title !== '' ? $title : $fallback;
+    }
+
+    public static function trackingCode(?string $mailableClass, ?string $fallback = null): ?string
+    {
+        $title = static::trackingTitle($mailableClass, $fallback);
+
+        if (! is_string($title) || trim($title) === '') {
+            return $fallback;
+        }
+
+        $letters = collect(preg_split('/[^A-Za-z0-9]+/', $title) ?: [])
+            ->filter(fn ($part) => $part !== '')
+            ->map(fn ($part) => strtoupper(substr($part, 0, 1)))
+            ->implode('');
+
+        return $letters !== '' ? $letters : $fallback;
     }
 
     public function resendLog(EmailLog $emailLog): EmailLog
@@ -119,7 +162,11 @@ class TrackedEmailSender
 
     private function normalizeRecipients(array|string $value, string $recipientType): array
     {
-        $items = is_array($value) ? $value : [$value];
+        $items = match (true) {
+            ! is_array($value) => [$value],
+            array_key_exists('email', $value) => [$value],
+            default => $value,
+        };
 
         return collect($items)
             ->map(function ($recipient) use ($recipientType): ?array {
@@ -157,12 +204,18 @@ class TrackedEmailSender
             ->all();
     }
 
+    private function trackingConfigFor(string $mailableClass): array
+    {
+        return static::trackingConfig($mailableClass);
+    }
+
     private function mailAddresses(array $recipients): array
     {
         return collect($recipients)
-            ->map(fn (array $recipient) => $recipient['name']
-                ? ['email' => $recipient['email'], 'name' => $recipient['name']]
-                : $recipient['email'])
+            ->map(fn (array $recipient) => new Address(
+                $recipient['email'],
+                (string) ($recipient['name'] ?? ''),
+            ))
             ->values()
             ->all();
     }

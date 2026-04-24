@@ -72,8 +72,14 @@ class EmailTrackingController extends Controller
 
     private function serializeLog(EmailLog $log): array
     {
+        $trackingType = TrackedEmailSender::trackingTitle($log->mailable_class, $log->subject);
+        $trackingCode = TrackedEmailSender::trackingCode($log->mailable_class, $trackingType);
+
         return [
             'id' => $log->id,
+            'title' => $trackingType,
+            'type' => $trackingCode,
+            'type_label' => $trackingType,
             'recipient_email' => $log->recipient_email,
             'recipient_name' => $log->recipient_name,
             'recipient_label' => $log->recipient_name
@@ -92,6 +98,7 @@ class EmailTrackingController extends Controller
             'status' => $log->status,
             'status_label' => str($log->status)->replace('_', ' ')->title()->toString(),
             'error_message' => $log->error_message,
+            'sent_at_sort' => $log->sent_at?->timestamp ?? 0,
             'sent_at_label' => $log->sent_at?->format('d M Y g:i A') ?? 'Not sent',
             'mailable_class' => $log->mailable_class,
             'resend_url' => route('email-tracking.resend', $log),
