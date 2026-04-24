@@ -12,6 +12,7 @@ const packageList = ref([...(props.data.packages ?? [])]);
 const packages = computed(() => packageList.value);
 const packageSearch = ref('');
 const packageStatusFilter = ref('all');
+const packageStatuses = computed(() => props.data.packageStatuses ?? []);
 const filteredPackages = computed(() =>
     packages.value.filter((entry) => {
         const matchesSearch = [entry.name, entry.description]
@@ -19,7 +20,7 @@ const filteredPackages = computed(() =>
             .some((value) => value.toLowerCase().includes(packageSearch.value.toLowerCase()));
         const matchesStatus =
             packageStatusFilter.value === 'all' ||
-            (packageStatusFilter.value === 'active' ? entry.is_active : !entry.is_active);
+            entry.status === packageStatusFilter.value;
 
         return matchesSearch && matchesStatus;
     }),
@@ -51,10 +52,9 @@ const filteredPackages = computed(() =>
             </div>
             <div class="mt-3 grid gap-2">
                 <input v-model="packageSearch" type="text" placeholder="Search packages" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-amber-300/50">
-                <div class="grid grid-cols-3 gap-2">
+                <div class="grid gap-2" :class="packageStatuses.length > 2 ? 'sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-3'">
                     <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="packageStatusFilter === 'all' ? 'border-amber-300/40 bg-amber-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="packageStatusFilter = 'all'">All</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="packageStatusFilter === 'active' ? 'border-emerald-300/40 bg-emerald-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="packageStatusFilter = 'active'">Active</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="packageStatusFilter === 'inactive' ? 'border-stone-300/30 bg-white/5 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="packageStatusFilter = 'inactive'">Inactive</button>
+                    <button v-for="status in packageStatuses" :key="status" type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="packageStatusFilter === status ? 'border-emerald-300/40 bg-emerald-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="packageStatusFilter = status">{{ status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) }}</button>
                 </div>
             </div>
             <div class="mt-3 grid grid-cols-[72px_minmax(0,1fr)_auto] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-[82px_minmax(0,1fr)_auto]">
@@ -81,8 +81,8 @@ const filteredPackages = computed(() =>
                     <p class="truncate text-sm font-medium text-white">{{ entry.name }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">${{ entry.base_price }}</p>
                 </div>
-                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-medium leading-none" :class="entry.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-stone-700/60 text-stone-300'">
-                    {{ entry.is_active ? 'Active' : 'Inactive' }}
+                <span class="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-medium leading-none" :class="entry.status === 'active' ? 'bg-emerald-400/15 text-emerald-200' : entry.status === 'inactive' ? 'bg-stone-700/60 text-stone-300' : 'bg-amber-300/15 text-amber-200'">
+                    {{ entry.status?.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) }}
                 </span>
             </a>
 

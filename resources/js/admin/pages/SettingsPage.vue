@@ -11,6 +11,7 @@ const props = defineProps({
     },
 });
 
+const activeTab = ref('workspace');
 const workspacePhotoInput = ref(null);
 const tenantRecord = ref(props.data.tenant ?? {});
 const subscriptions = ref(props.data.subscriptions ?? []);
@@ -18,6 +19,27 @@ const csrfToken = window.adminProps?.csrfToken ?? '';
 const userRecord = ref(props.data.user ?? {});
 const workspaceErrors = ref({});
 const accountErrors = ref({});
+const maintenanceRecords = ref({
+    invoice: [...(props.data.maintenance?.invoice ?? [])],
+    task: [...(props.data.maintenance?.task ?? [])],
+    booking: [...(props.data.maintenance?.booking ?? [])],
+    package: [...(props.data.maintenance?.package ?? [])],
+    equipment: [...(props.data.maintenance?.equipment ?? [])],
+});
+const maintenanceDrafts = ref({
+    invoice: '',
+    task: '',
+    booking: '',
+    package: '',
+    equipment: '',
+});
+const maintenanceEditing = ref({
+    invoice: null,
+    task: null,
+    booking: null,
+    package: null,
+    equipment: null,
+});
 const {
     saving: workspaceSaving,
     fieldErrors: workspaceServerErrors,
@@ -27,6 +49,12 @@ const {
     saving: accountSaving,
     fieldErrors: accountServerErrors,
     submitForm: submitAccountForm,
+} = useWorkspaceCrud();
+const {
+    saving: maintenanceSaving,
+    fieldErrors: maintenanceServerErrors,
+    submitForm: submitMaintenanceForm,
+    deleteRecord: deleteMaintenanceRecord,
 } = useWorkspaceCrud();
 
 const workspaceForm = ref({
@@ -52,8 +80,20 @@ const accountForm = ref({
     name: userRecord.value.name ?? '',
     email: userRecord.value.email ?? '',
 });
+
+const maintenanceSections = computed(() => [
+    { key: 'invoice', label: props.data.maintenanceLabels?.invoice ?? 'Invoice Status' },
+    { key: 'task', label: props.data.maintenanceLabels?.task ?? 'Task Status' },
+    { key: 'booking', label: props.data.maintenanceLabels?.booking ?? 'Booking Status' },
+    { key: 'package', label: props.data.maintenanceLabels?.package ?? 'Package Status' },
+    { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
+]);
+
 const workspaceValidationErrors = computed(() => mergeFieldErrors(workspaceErrors.value, workspaceServerErrors.value));
 const accountValidationErrors = computed(() => mergeFieldErrors(accountErrors.value, accountServerErrors.value));
+const maintenanceValidationErrors = computed(() => maintenanceServerErrors.value ?? {});
+
+const prettifyStatus = (value) => (value || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 
 const saveWorkspace = async () => {
     const errors = {};
@@ -165,6 +205,63 @@ const saveAccount = async () => {
     } catch {}
 };
 
+const beginEditStatus = (scope, record) => {
+    maintenanceEditing.value[scope] = record.id;
+    maintenanceDrafts.value[scope] = record.name ?? '';
+};
+
+const cancelEditStatus = (scope) => {
+    maintenanceEditing.value[scope] = null;
+    maintenanceDrafts.value[scope] = '';
+};
+
+const saveStatus = async (scope) => {
+    const name = String(maintenanceDrafts.value[scope] ?? '').trim();
+
+    if (name === '') {
+        return;
+    }
+
+    const editingId = maintenanceEditing.value[scope];
+    const isTask = scope === 'task';
+    const existing = maintenanceRecords.value[scope].find((entry) => entry.id === editingId);
+
+    try {
+        const record = await submitMaintenanceForm({
+            url: editingId
+                ? existing?.update_url
+                : (isTask ? props.data.routes.maintenanceTaskStore : props.data.routes.maintenanceStore),
+            method: editingId ? 'put' : 'post',
+            data: editingId ? { name } : (isTask ? { name } : { scope, name }),
+        });
+
+        const nextRecord = {
+            ...record,
+            update_url: record.update_url ?? existing?.update_url ?? null,
+            delete_url: record.delete_url ?? existing?.delete_url ?? null,
+        };
+        const index = maintenanceRecords.value[scope].findIndex((entry) => entry.id === nextRecord.id);
+        maintenanceRecords.value[scope] = index >= 0
+            ? maintenanceRecords.value[scope].map((entry) => (entry.id === nextRecord.id ? nextRecord : entry))
+            : [...maintenanceRecords.value[scope], nextRecord].sort((left, right) => left.name.localeCompare(right.name));
+        cancelEditStatus(scope);
+    } catch {}
+};
+
+const removeStatus = async (scope, record) => {
+    if (!record.delete_url) {
+        return;
+    }
+
+    try {
+        await deleteMaintenanceRecord({ url: record.delete_url });
+        maintenanceRecords.value[scope] = maintenanceRecords.value[scope].filter((entry) => entry.id !== record.id);
+        if (maintenanceEditing.value[scope] === record.id) {
+            cancelEditStatus(scope);
+        }
+    } catch {}
+};
+
 onMounted(() => {
     nextTick(() => autoAttachGoogleAddressInputs());
 });
@@ -173,14 +270,20 @@ onMounted(() => {
 <template>
     <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-slate-300">Settings</p>
-        <h2 class="text-sm font-bold italic text-white">Workspace and account settings</h2>
+        <h2 class="text-sm font-bold italic text-white">Workspace, account, and maintenance settings</h2>
         <p class="text-sm text-stone-300">
-            Update your business logo, contact details, workspace settings, and admin profile from one place.
+            Manage business setup, admin access, and tenant status lists from one place.
         </p>
     </section>
 
-    <section class="space-y-6">
-        <div class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+    <section class="space-y-4">
+        <div class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+            <button type="button" class="rounded-xl px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'workspace' ? 'bg-slate-200 text-slate-950' : 'text-white hover:bg-white/5'" @click="activeTab = 'workspace'">Workspace</button>
+            <button type="button" class="rounded-xl px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'account' ? 'bg-slate-200 text-slate-950' : 'text-white hover:bg-white/5'" @click="activeTab = 'account'">Account</button>
+            <button type="button" class="rounded-xl px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'maintenance' ? 'bg-slate-200 text-slate-950' : 'text-white hover:bg-white/5'" @click="activeTab = 'maintenance'">Maintenance</button>
+        </div>
+
+        <div v-if="activeTab === 'workspace'" class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Workspace</p>
@@ -229,7 +332,6 @@ onMounted(() => {
                             <option value="dark">Dark theme</option>
                             <option value="light">Paper light theme</option>
                         </select>
-                        <p class="mt-1 text-xs text-stone-500">Controls the workspace admin and public customer pages for this tenant.</p>
                     </div>
                     <div class="sm:col-span-2 rounded-2xl border border-sky-300/20 bg-sky-300/10 p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -238,18 +340,12 @@ onMounted(() => {
                                 <select v-model="workspaceForm.subscription_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-300/50">
                                     <option value="">Choose a subscription</option>
                                     <option v-if="tenantRecord.subscription?.billing_period === 'free_for_life'" :value="tenantRecord.subscription_id" disabled>
-                                        Free for life · assigned by platform admin
+                                        Free for life - assigned by platform admin
                                     </option>
                                     <option v-for="subscription in subscriptions" :key="subscription.id" :value="subscription.id">
-                                        {{ subscription.name }} · {{ subscription.currency }} {{ subscription.price }} · {{ subscription.validity_label }}
+                                        {{ subscription.name }} - {{ subscription.currency }} {{ subscription.price }} - {{ subscription.validity_label }}
                                     </option>
                                 </select>
-                                <p v-if="tenantRecord.subscription && tenantRecord.subscription_enabled" class="mt-2 text-xs text-sky-100">
-                                    Current subscription: {{ tenantRecord.subscription.name }} at {{ tenantRecord.subscription.currency }} {{ tenantRecord.subscription.price }}.
-                                </p>
-                                <p v-if="!tenantRecord.subscription_enabled" class="mt-2 text-xs text-rose-200">
-                                    This workspace is disabled by platform admin. Pay the selected subscription or contact support to reactivate access.
-                                </p>
                             </div>
                             <form v-if="tenantRecord.subscription" method="POST" :action="props.data.routes.subscriptionPay" class="lg:pt-6">
                                 <input type="hidden" name="_token" :value="csrfToken">
@@ -258,166 +354,52 @@ onMounted(() => {
                                 </button>
                             </form>
                         </div>
-
-                        <div v-if="tenantRecord.subscription_charges?.length" class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                            <table class="min-w-full divide-y divide-white/10 text-sm">
-                                <thead class="bg-slate-950/50 text-left text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                                    <tr>
-                                        <th class="px-3 py-2">Period</th>
-                                        <th class="px-3 py-2">Amount</th>
-                                        <th class="px-3 py-2">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/10 bg-slate-950/30">
-                                    <tr v-for="charge in tenantRecord.subscription_charges" :key="charge.id">
-                                        <td class="px-3 py-2 text-stone-300">
-                                            {{ charge.period_starts_at }}<span v-if="charge.period_ends_at"> - {{ charge.period_ends_at }}</span>
-                                        </td>
-                                        <td class="px-3 py-2 text-stone-300">{{ charge.currency }} {{ charge.amount }}</td>
-                                        <td class="px-3 py-2">
-                                            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="charge.status === 'paid' || charge.status === 'waived' ? 'bg-emerald-300/15 text-emerald-200' : 'bg-amber-300/15 text-amber-100'">
-                                                {{ charge.status }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </div>
+
                 <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                     <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace Settings</p>
-                    <p class="mt-1 text-xs text-stone-400">Control booking deposits, travel pricing, and public package API access from one table.</p>
-
-                    <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                        <table class="min-w-full table-fixed divide-y divide-white/10 text-sm">
-                            <thead class="bg-white/[0.03] text-left text-[11px] uppercase tracking-[0.25em] text-stone-500">
-                                <tr>
-                                    <th class="w-[60%] px-4 py-3 font-medium">Setting</th>
-                                    <th class="w-[40%] px-4 py-3 font-medium">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/10 bg-slate-950/40">
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Invoice Deposit Percentage</p>
-                                        <p class="mt-1 text-xs text-stone-500">Default percentage used for booking deposits and installment invoices.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <input v-model="workspaceForm.invoice_deposit_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                            <span class="text-stone-400">%</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Free Travel Kilometers</p>
-                                        <p class="mt-1 text-xs text-stone-500">One-way kilometers included for free. The allowance is doubled for round-trip travel.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <input v-model="workspaceForm.travel_free_kilometers" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                            <span class="text-stone-400">km</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Travel Fee Per Kilometer</p>
-                                        <p class="mt-1 text-xs text-stone-500">Applied to chargeable round-trip kilometers after the free allowance.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-stone-400">$</span>
-                                            <input v-model="workspaceForm.travel_fee_per_kilometer" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                            <span class="text-stone-400">/ km</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Customer Package Discount</p>
-                                        <p class="mt-1 text-xs text-stone-500">Applies a discount to all package prices on the customer booking page. Add-ons and travel are not discounted.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <input v-model="workspaceForm.customer_package_discount_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                            <span class="text-stone-400">%</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Packages API Key</p>
-                                        <p class="mt-1 text-xs text-stone-500">Shared secret used by the MemoShot marketing site when it requests this workspace's package catalog.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.packages_api_key" type="text" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Stripe Secret Key</p>
-                                        <p class="mt-1 text-xs text-stone-500">Tenant-specific Stripe secret used to create checkout sessions. Leave blank to keep the saved key.</p>
-                                        <p v-if="tenantRecord.stripe_secret_configured" class="mt-1 text-xs text-emerald-300">A Stripe secret key is saved for this workspace.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.stripe_secret" type="password" autocomplete="new-password" placeholder="sk_live_..." class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Tenant Stripe Webhook URL</p>
-                                        <p class="mt-1 text-xs text-stone-500">Use this URL in your Stripe Dashboard webhook endpoint.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-                                            <p class="break-all font-mono text-sm text-cyan-100">{{ props.data.routes.tenantStripeWebhook }}</p>
-                                            <p class="mt-2 text-xs font-medium text-cyan-50">Required event: checkout.session.completed</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Stripe Webhook Secret</p>
-                                        <p class="mt-1 text-xs text-stone-500">Tenant-specific webhook signing secret for Stripe payment confirmation. Leave blank to keep the saved secret.</p>
-                                        <p v-if="tenantRecord.stripe_webhook_secret_configured" class="mt-1 text-xs text-emerald-300">A Stripe webhook secret is saved for this workspace.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.stripe_webhook_secret" type="password" autocomplete="new-password" placeholder="whsec_..." class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Stripe Currency</p>
-                                        <p class="mt-1 text-xs text-stone-500">Three-letter currency code used for this workspace's checkout sessions.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.stripe_currency" type="text" maxlength="3" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm uppercase text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'stripe_currency') ? 'border-rose-300/60' : ''">
-                                        <p v-if="firstError(workspaceValidationErrors, 'stripe_currency')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'stripe_currency') }}</p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Quote Number Prefix</p>
-                                        <p class="mt-1 text-xs text-stone-500">Prefix used when new quotes are created for this workspace.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.quote_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="px-4 py-3 align-top">
-                                        <p class="font-medium text-white">Invoice Number Prefix</p>
-                                        <p class="mt-1 text-xs text-stone-500">Prefix used when new invoices are created for this workspace.</p>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <input v-model="workspaceForm.invoice_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Deposit Percentage</label>
+                            <input v-model="workspaceForm.invoice_deposit_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Free Travel Kilometers</label>
+                            <input v-model="workspaceForm.travel_free_kilometers" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Travel Fee Per Kilometer</label>
+                            <input v-model="workspaceForm.travel_fee_per_kilometer" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Customer Package Discount</label>
+                            <input v-model="workspaceForm.customer_package_discount_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Packages API Key</label>
+                            <input v-model="workspaceForm.packages_api_key" type="text" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Stripe Currency</label>
+                            <input v-model="workspaceForm.stripe_currency" type="text" maxlength="3" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm uppercase text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'stripe_currency') ? 'border-rose-300/60' : ''">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Quote Number Prefix</label>
+                            <input v-model="workspaceForm.quote_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Number Prefix</label>
+                            <input v-model="workspaceForm.invoice_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Stripe Secret Key</label>
+                            <input v-model="workspaceForm.stripe_secret" type="password" autocomplete="new-password" placeholder="sk_live_..." class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Stripe Webhook Secret</label>
+                            <input v-model="workspaceForm.stripe_webhook_secret" type="password" autocomplete="new-password" placeholder="whsec_..." class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
                     </div>
                 </div>
                 <div class="flex justify-end">
@@ -428,12 +410,10 @@ onMounted(() => {
             </form>
         </div>
 
-        <div class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Account</p>
-                    <h3 class="mt-1 text-sm font-semibold italic">Login and profile</h3>
-                </div>
+        <div v-if="activeTab === 'account'" class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div>
+                <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Account</p>
+                <h3 class="mt-1 text-sm font-semibold italic">Login and profile</h3>
             </div>
 
             <form class="space-y-4" novalidate @submit.prevent="saveAccount">
@@ -459,6 +439,50 @@ onMounted(() => {
                     </button>
                 </div>
             </form>
+        </div>
+
+        <div v-if="activeTab === 'maintenance'" class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div>
+                <p class="text-[11px] uppercase tracking-[0.3em] text-slate-300">Maintenance</p>
+                <h3 class="mt-1 text-sm font-semibold italic">Manage tenant status lists</h3>
+            </div>
+
+            <section v-for="section in maintenanceSections" :key="section.key" class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">{{ section.label }}</p>
+                        <p class="mt-1 text-xs text-stone-400">Add, rename, and remove values used by this workspace.</p>
+                    </div>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ maintenanceRecords[section.key]?.length ?? 0 }}</span>
+                </div>
+
+                <div class="mt-4 flex gap-3">
+                    <input v-model="maintenanceDrafts[section.key]" type="text" :placeholder="`Add ${section.label.toLowerCase()}`" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                    <button type="button" class="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60" :disabled="maintenanceSaving || isBlank(maintenanceDrafts[section.key])" @click="saveStatus(section.key)">
+                        {{ maintenanceEditing[section.key] ? 'Save' : 'Add' }}
+                    </button>
+                    <button v-if="maintenanceEditing[section.key]" type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5" @click="cancelEditStatus(section.key)">
+                        Cancel
+                    </button>
+                </div>
+                <p v-if="firstError(maintenanceValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(maintenanceValidationErrors, 'name') }}</p>
+
+                <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
+                    <div class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                        <span>Name</span>
+                        <span>Edit</span>
+                        <span>Delete</span>
+                    </div>
+                    <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                        <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
+                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="beginEditStatus(section.key, record)">Edit</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="removeStatus(section.key, record)">Delete</button>
+                    </div>
+                    <div v-if="!(maintenanceRecords[section.key]?.length)" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
+                        No values added yet.
+                    </div>
+                </div>
+            </section>
         </div>
     </section>
 </template>

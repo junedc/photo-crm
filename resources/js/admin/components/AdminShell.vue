@@ -20,6 +20,7 @@ const navItems = computed(() => [
     { key: 'leads', label: 'Leads', href: props.data.routes.leads, accent: 'violet', icon: 'spark' },
     { key: 'customers', label: 'Customers', href: props.data.routes.customers, accent: 'cyan', icon: 'users' },
     { key: 'campaigns', label: 'Campaigns', href: props.data.routes.campaigns, accent: 'rose', icon: 'megaphone' },
+    { key: 'tasks', label: 'Tasks', href: props.data.routes.tasks, accent: 'sky', icon: 'clipboard' },
     { key: 'packages', label: 'Packages', href: props.data.routes.packages, accent: 'amber', icon: 'box' },
     { key: 'equipment', label: 'Equipment', href: props.data.routes.equipment, accent: 'cyan', icon: 'camera' },
     { key: 'addons', label: 'Add-Ons', href: props.data.routes.addons, accent: 'emerald', icon: 'plus' },
@@ -35,6 +36,7 @@ const sectionDefinitions = [
     { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices'] },
     { key: 'contacts', label: 'Contacts', items: ['leads', 'customers'] },
     { key: 'marketing', label: 'Marketing', items: ['campaigns'] },
+    { key: 'planning', label: 'Planning', items: ['tasks'] },
     { key: 'catalog', label: 'Catalog', items: ['packages', 'equipment', 'addons', 'discounts'] },
     { key: 'admin', label: 'Admin', items: ['users', 'roles', 'access', 'support', 'referrals'] },
 ];
@@ -100,6 +102,10 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('campaigns')) {
         return 'campaigns';
+    }
+
+    if (props.page.startsWith('tasks')) {
+        return 'tasks';
     }
 
     if (props.page.startsWith('calendar')) {

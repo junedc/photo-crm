@@ -17,6 +17,7 @@ class Package extends Model
         'description',
         'base_price',
         'photo_path',
+        'status',
         'is_active',
     ];
 

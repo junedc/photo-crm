@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
 use App\Support\InvoiceBuilder;
+use App\Support\TenantStatuses;
 use App\Models\User;
 use App\Support\StripeCheckoutLinkGenerator;
 use App\Tenancy\CurrentTenant;
@@ -63,13 +64,14 @@ class InvoiceController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
                     'users' => route('users.index'),
                     'roles' => route('roles.index'),
                     'access' => route('access.index'),
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
-                'invoiceStatuses' => ['all', 'draft', 'issued', 'partially_paid', 'paid', 'cancelled'],
+                'invoiceStatuses' => ['all', ...TenantStatuses::names($tenant, TenantStatuses::SCOPE_INVOICE)],
                 'invoices' => $invoices->getCollection()->map(fn (Invoice $invoice) => $this->serializeInvoiceListRecord($invoice))->values()->all(),
                 'pagination' => $this->paginationMeta($invoices),
             ],

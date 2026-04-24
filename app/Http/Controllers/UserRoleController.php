@@ -55,8 +55,10 @@ class UserRoleController extends Controller
                 ...$this->baseRoutes(),
                 'update' => route('access.update'),
                 'access' => route('access.index'),
+                'guestStore' => route('access.guests.store'),
             ],
             'users' => $this->tenantUsers($currentTenant)->map(fn (User $user) => $this->serializeUser($user))->values(),
+            'guestUsers' => $this->tenantGuestUsers($currentTenant)->map(fn (User $user) => $this->serializeUser($user))->values(),
             'roles' => $this->tenantRoles()->map(fn (Role $role) => $this->serializeRole($role))->values(),
             'screens' => AdminAccess::screens(),
         ]);
@@ -185,8 +187,62 @@ class UserRoleController extends Controller
 
         return $this->savedResponse($request, 'Access updated.', [
             'users' => $this->tenantUsers($currentTenant)->map(fn (User $user) => $this->serializeUser($user))->values(),
+            'guestUsers' => $this->tenantGuestUsers($currentTenant)->map(fn (User $user) => $this->serializeUser($user))->values(),
             'roles' => $this->tenantRoles()->map(fn (Role $role) => $this->serializeRole($role))->values(),
         ], route('access.index'));
+    }
+
+    public function storeGuestAccess(Request $request, CurrentTenant $currentTenant): RedirectResponse|JsonResponse
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'role_id' => ['nullable', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('tenant_id', $tenant->id))],
+        ]);
+
+        $email = Str::lower($data['email']);
+
+        $user = DB::transaction(function () use ($tenant, $email, $data): User {
+            $user = User::query()->firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => Str::headline(Str::before($email, '@')),
+                    'password' => Hash::make(Str::random(48)),
+                    'current_tenant_id' => $tenant->id,
+                ],
+            );
+
+            $existingMembership = $user->tenants()->whereKey($tenant->id)->first()?->pivot;
+
+            if ($existingMembership && $existingMembership->role !== 'guest') {
+                throw ValidationException::withMessages([
+                    'email' => 'This email already has staff access in the workspace.',
+                ]);
+            }
+
+            $user->tenants()->syncWithoutDetaching([
+                $tenant->id => [
+                    'role' => 'guest',
+                    'role_id' => $data['role_id'] ?? null,
+                ],
+            ]);
+
+            return $user->fresh()->load('tenants');
+        });
+
+        return $this->savedResponse($request, 'Guest access granted.', $this->serializeUser($user), route('access.index'));
+    }
+
+    public function destroyGuestAccess(Request $request, CurrentTenant $currentTenant, User $user): RedirectResponse|JsonResponse
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $membership = $user->tenants()->whereKey($tenant->id)->first()?->pivot;
+
+        abort_unless($membership?->role === 'guest', 404);
+
+        $user->tenants()->detach($tenant->id);
+
+        return $this->deletedResponse($request, 'Guest access removed.', route('access.index'));
     }
 
     private function validateUser(Request $request, ?User $user = null): array
@@ -222,7 +278,14 @@ class UserRoleController extends Controller
     {
         $tenant = $this->requireTenant($currentTenant);
 
-        return $tenant->users()->with('tenants')->orderBy('name')->get();
+        return $tenant->users()->with('tenants')->wherePivot('role', '!=', 'guest')->orderBy('name')->get();
+    }
+
+    private function tenantGuestUsers(CurrentTenant $currentTenant)
+    {
+        $tenant = $this->requireTenant($currentTenant);
+
+        return $tenant->users()->with('tenants')->wherePivot('role', 'guest')->orderBy('email')->get();
     }
 
     private function tenantRoles()
@@ -255,10 +318,11 @@ class UserRoleController extends Controller
             'email' => $user->email,
             'membership_role' => $membership?->role ?? 'member',
             'role_id' => $membership?->role_id,
-            'role_name' => $role?->name ?? ($membership?->role === 'owner' ? 'Owner' : 'Unassigned'),
+            'role_name' => $role?->name ?? ($membership?->role === 'owner' ? 'Owner' : ($membership?->role === 'guest' ? 'Guest' : 'Unassigned')),
             'created_at' => $user->created_at?->format('d M Y'),
             'update_url' => route('users.update', $user),
             'delete_url' => route('users.destroy', $user),
+            'guest_delete_url' => route('access.guests.destroy', $user),
         ];
     }
 
@@ -291,6 +355,7 @@ class UserRoleController extends Controller
     private function baseRoutes(): array
     {
         return [
+            'login' => route('login'),
             'dashboard' => route('dashboard'),
             'calendar' => route('admin.calendar.index'),
             'packages' => route('packages.index'),
@@ -303,6 +368,7 @@ class UserRoleController extends Controller
             'leads' => route('leads.index'),
             'customers' => route('customers.index'),
             'campaigns' => route('campaigns.index'),
+            'tasks' => route('tasks.index'),
             'users' => route('users.index'),
             'roles' => route('roles.index'),
             'access' => route('access.index'),

@@ -1015,10 +1015,13 @@
                 const wizardSummaryTravel = document.getElementById('wizard-summary-travel');
                 const wizardSummaryTotal = document.getElementById('wizard-summary-total');
                 const wizardSummaryDeposit = document.getElementById('wizard-summary-deposit');
+                const customerNameInput = document.getElementById('customer-name');
+                const customerEmailInput = document.getElementById('customer-email');
+                const customerPhoneInput = document.getElementById('customer-phone');
                 const autosaveFields = [
-                    document.getElementById('customer-name'),
-                    document.getElementById('customer-email'),
-                    document.getElementById('customer-phone'),
+                    customerNameInput,
+                    customerEmailInput,
+                    customerPhoneInput,
                     document.getElementById('event-date'),
                     document.getElementById('event-location'),
                     document.getElementById('event-location-travel'),
@@ -1044,6 +1047,65 @@
                     toastTimeout = window.setTimeout(() => {
                         toast.classList.add('hidden');
                     }, 2800);
+                };
+
+                const customerSessionStorageKey = `memoshot-booking-customer:${@json($tenant?->slug ?: 'default')}`;
+
+                const readCustomerSessionDetails = () => {
+                    try {
+                        const raw = window.sessionStorage.getItem(customerSessionStorageKey);
+
+                        if (!raw) {
+                            return null;
+                        }
+
+                        return JSON.parse(raw);
+                    } catch {
+                        return null;
+                    }
+                };
+
+                const writeCustomerSessionDetails = () => {
+                    if (!customerNameInput || !customerEmailInput || !customerPhoneInput) {
+                        return;
+                    }
+
+                    const payload = {
+                        customer_name: customerNameInput.value.trim(),
+                        customer_email: customerEmailInput.value.trim(),
+                        customer_phone: customerPhoneInput.value.trim(),
+                    };
+
+                    try {
+                        if (!payload.customer_name && !payload.customer_email && !payload.customer_phone) {
+                            window.sessionStorage.removeItem(customerSessionStorageKey);
+                            return;
+                        }
+
+                        window.sessionStorage.setItem(customerSessionStorageKey, JSON.stringify(payload));
+                    } catch {
+                        // Ignore session storage write issues.
+                    }
+                };
+
+                const restoreCustomerSessionDetails = () => {
+                    const stored = readCustomerSessionDetails();
+
+                    if (!stored) {
+                        return;
+                    }
+
+                    if (customerNameInput && !customerNameInput.value.trim() && stored.customer_name) {
+                        customerNameInput.value = stored.customer_name;
+                    }
+
+                    if (customerEmailInput && !customerEmailInput.value.trim() && stored.customer_email) {
+                        customerEmailInput.value = stored.customer_email;
+                    }
+
+                    if (customerPhoneInput && !customerPhoneInput.value.trim() && stored.customer_phone) {
+                        customerPhoneInput.value = stored.customer_phone;
+                    }
                 };
 
                 let currentWizardStep = 1;
@@ -2322,6 +2384,7 @@
                 });
                 applyAddOnCategoryFilter('all');
                 applyRequestedPackageSelection();
+                restoreCustomerSessionDetails();
                 renderPackageTimingOptions();
                 refreshDiscountOptions();
                 syncPackageIncludedAddOnVisibility();
@@ -2424,6 +2487,11 @@
                     field.addEventListener('input', queueAutosave);
                     field.addEventListener('change', queueAutosave);
                     field.addEventListener('blur', queueAutosave);
+                });
+                [customerNameInput, customerEmailInput, customerPhoneInput].filter(Boolean).forEach((field) => {
+                    field.addEventListener('input', writeCustomerSessionDetails);
+                    field.addEventListener('change', writeCustomerSessionDetails);
+                    field.addEventListener('blur', writeCustomerSessionDetails);
                 });
                 Array.from(form.querySelectorAll('input, select, textarea')).forEach((field) => {
                     field.addEventListener('input', () => clearFieldError(field));

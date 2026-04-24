@@ -20,8 +20,14 @@
             if ($user !== null && $tenantId !== null) {
                 $membership = $user->tenants()->whereKey($tenantId)->first()?->pivot;
 
-                if ($membership !== null && $membership->role !== 'owner' && $membership->role_id !== null) {
-                    $allowedScreens = \App\Models\Role::query()->find($membership->role_id)?->screen_access ?? [];
+                if ($membership !== null && $membership->role !== 'owner') {
+                    if ($membership->role === 'guest') {
+                        $allowedScreens = $membership->role_id
+                            ? (\App\Models\Role::query()->find($membership->role_id)?->screen_access ?? [])
+                            : [];
+                    } elseif ($membership->role_id !== null) {
+                        $allowedScreens = \App\Models\Role::query()->find($membership->role_id)?->screen_access ?? [];
+                    }
                 }
             }
         @endphp

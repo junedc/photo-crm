@@ -9,6 +9,7 @@ use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
 use App\Models\Tenant;
+use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\JsonResponse;
@@ -84,6 +85,7 @@ class CatalogAdminController extends Controller
             ],
             'equipmentOptions' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipmentOption($asset)),
             'addOnOptions' => $this->serializeCollection($addOns, fn (InventoryItem $addon) => $this->serializeAddOnOption($addon)),
+            'packageStatuses' => $this->packageStatuses(),
         ]);
     }
 
@@ -104,6 +106,7 @@ class CatalogAdminController extends Controller
             'equipmentOptions' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipmentOption($asset)),
             'addOnOptions' => $this->serializeCollection($addOns, fn (InventoryItem $addon) => $this->serializeAddOnOption($addon)),
             'package' => $this->serializePackage($package),
+            'packageStatuses' => $this->packageStatuses(),
         ]);
     }
 
@@ -123,7 +126,7 @@ class CatalogAdminController extends Controller
                 'store' => route('equipment.store'),
                 'create' => route('equipment.create'),
             ],
-            'maintenanceStatuses' => $this->maintenanceStatuses(),
+            'maintenanceStatuses' => $this->equipmentStatuses(),
         ]);
     }
 
@@ -139,7 +142,7 @@ class CatalogAdminController extends Controller
                 'store' => route('equipment.store'),
                 'create' => route('equipment.create'),
             ],
-            'maintenanceStatuses' => $this->maintenanceStatuses(),
+            'maintenanceStatuses' => $this->equipmentStatuses(),
             'equipmentRecord' => $this->serializeEquipment($equipment),
         ]);
     }
@@ -478,18 +481,19 @@ class CatalogAdminController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'base_price' => ['required', 'numeric', 'min:0'],
+            'status' => ['required', Rule::in($this->packageStatuses())],
             'hourly_prices' => ['nullable', 'array'],
             'hourly_prices.*.hours' => ['nullable', 'numeric', 'min:0.25'],
             'hourly_prices.*.price' => ['nullable', 'numeric', 'min:0'],
             'photo' => ['nullable', 'image', 'max:4096'],
-            'is_active' => ['nullable', 'boolean'],
             'equipment_ids' => ['nullable', 'array'],
             'equipment_ids.*' => ['integer', 'exists:equipment,id'],
             'add_on_ids' => ['nullable', 'array'],
             'add_on_ids.*' => ['integer', 'exists:inventory_items,id'],
         ]);
 
-        $data['is_active'] = $request->boolean('is_active');
+        $data['status'] = (string) ($data['status'] ?? 'inactive');
+        $data['is_active'] = $data['status'] === 'active';
 
         return $data;
     }
@@ -502,7 +506,7 @@ class CatalogAdminController extends Controller
             'serial_number' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'daily_rate' => ['required', 'numeric', 'min:0'],
-            'maintenance_status' => ['required', Rule::in($this->maintenanceStatuses())],
+            'maintenance_status' => ['required', Rule::in($this->equipmentStatuses())],
             'last_maintained_at' => ['nullable', 'date'],
             'maintenance_notes' => ['nullable', 'string'],
             'photo' => ['nullable', 'image', 'max:4096'],
@@ -524,7 +528,7 @@ class CatalogAdminController extends Controller
             'category' => 'add-on',
             'is_publicly_displayed' => $request->boolean('is_publicly_displayed'),
             'quantity' => 1,
-            'maintenance_status' => 'ready',
+            'maintenance_status' => $this->equipmentStatuses()[0] ?? 'ready',
             'last_maintained_at' => null,
             'maintenance_notes' => null,
         ];
@@ -565,9 +569,14 @@ class CatalogAdminController extends Controller
         return $this->storePhoto($file);
     }
 
-    private function maintenanceStatuses(): array
+    private function equipmentStatuses(): array
     {
-        return ['ready', 'maintenance', 'out_of_service'];
+        return TenantStatuses::names(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_EQUIPMENT);
+    }
+
+    private function packageStatuses(): array
+    {
+        return TenantStatuses::names(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_PACKAGE);
     }
 
     private function leadStatuses(): array
@@ -592,6 +601,7 @@ class CatalogAdminController extends Controller
             'packages' => $this->serializeCollection($packages, fn (Package $package) => $this->serializePackage($package)),
             'equipmentOptions' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipmentOption($asset)),
             'addOnOptions' => $this->serializeCollection($addOns, fn (InventoryItem $addon) => $this->serializeAddOnOption($addon)),
+            'packageStatuses' => $this->packageStatuses(),
         ]);
     }
 
@@ -607,7 +617,7 @@ class CatalogAdminController extends Controller
                 'store' => route('equipment.store'),
                 'create' => route('equipment.create'),
             ],
-            'maintenanceStatuses' => $this->maintenanceStatuses(),
+            'maintenanceStatuses' => $this->equipmentStatuses(),
             'equipment' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipment($asset)),
         ]);
     }
@@ -719,6 +729,7 @@ class CatalogAdminController extends Controller
             'leads' => route('leads.index'),
             'customers' => route('customers.index'),
             'campaigns' => route('campaigns.index'),
+            'tasks' => route('tasks.index'),
             'users' => route('users.index'),
             'roles' => route('roles.index'),
             'access' => route('access.index'),
@@ -764,6 +775,7 @@ class CatalogAdminController extends Controller
             'base_price' => number_format((float) $package->base_price, 2, '.', ''),
             'display_price' => number_format((float) $displayPrice, 2, '.', ''),
             'photo_url' => $package->photo_path ? $this->publicStorageUrl($package->photo_path) : null,
+            'status' => $package->status ?: ($package->is_active ? 'active' : 'inactive'),
             'is_active' => $package->is_active,
             'created_at' => $package->created_at?->format('d M Y'),
             'equipment_ids' => $package->relationLoaded('equipment')
