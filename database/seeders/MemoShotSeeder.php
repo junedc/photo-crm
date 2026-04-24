@@ -8,6 +8,7 @@ use App\Models\Package;
 use App\Models\PackageHourlyPrice;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
+use App\Models\Template;
 use App\Models\User;
 use App\Models\WorkspaceStatus;
 use App\Support\TenantStatuses;
@@ -58,6 +59,23 @@ class MemoShotSeeder extends Seeder
                 'updated_at' => now(),
             ]
         );
+
+        collect($this->templateSeedData())->each(function (array $attributes) use ($tenant): void {
+            Template::query()->updateOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'name' => $attributes['name'],
+                ],
+                [
+                    'subject' => $attributes['subject'],
+                    'preheader' => $attributes['preheader'],
+                    'headline' => $attributes['headline'],
+                    'html_body' => $attributes['html_body'],
+                    'button_text' => $attributes['button_text'],
+                    'button_url' => $attributes['button_url'],
+                ]
+            );
+        });
 
         $seedStatuses = [
             TenantStatuses::SCOPE_INVOICE => ['draft', 'issued', 'partially_paid', 'paid', 'cancelled'],
@@ -254,7 +272,7 @@ class MemoShotSeeder extends Seeder
                     'last_maintained_at' => $attributes['last_maintained_at'],
                     'maintenance_notes' => $attributes['maintenance_notes'],
                     'photo_path' => $attributes['photo_path']
-                        ?? 'catalog/generated/add-on-'.Str::slug($attributes['sku'].'-'.$attributes['name']).'.png',
+                        ?? 'catalog/generated/add-on-'.Str::slug(($attributes['sku'] ?? $attributes['serial_number']).'-'.$attributes['name']).'.png',
                 ]
             );
         }
@@ -390,5 +408,32 @@ class MemoShotSeeder extends Seeder
                 collect($skus)->map(fn (string $sku): int => $inventoryItems[$sku]->id)->all()
             );
         }
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private function templateSeedData(): array
+    {
+        return [
+            [
+                'name' => 'Monthly Promo',
+                'subject' => 'New MemoShot packages for your next celebration',
+                'preheader' => 'Fresh photobooth ideas, styling upgrades, and event extras.',
+                'headline' => 'Make the next celebration feel unforgettable',
+                'html_body' => '<p>Hello {{ first_name }},</p><p>We have refreshed our photobooth packages with premium backdrops, instant sharing, and event-ready add-ons.</p><p>Reply to this email if you would like us to recommend a setup for your date.</p>',
+                'button_text' => 'View packages',
+                'button_url' => 'https://memoshot.com/packages',
+            ],
+            [
+                'name' => 'Lead Follow Up',
+                'subject' => 'Still planning your photobooth experience?',
+                'preheader' => 'Here are a few easy options for your upcoming event.',
+                'headline' => 'Let us help shape the booth experience',
+                'html_body' => '<p>Hi {{ first_name }},</p><p>Thanks for checking out MemoShot. We can tailor a booth setup around your venue, guest count, and celebration style.</p><p>Send us your event date and we can prepare a quick recommendation.</p>',
+                'button_text' => 'Request recommendation',
+                'button_url' => 'https://memoshot.com/contact',
+            ],
+        ];
     }
 }
