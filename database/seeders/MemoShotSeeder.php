@@ -7,7 +7,10 @@ use App\Models\InventoryItem;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
 use App\Models\Tenant;
+use App\Models\TaskStatus;
 use App\Models\User;
+use App\Models\WorkspaceStatus;
+use App\Support\TenantStatuses;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -55,6 +58,33 @@ class MemoShotSeeder extends Seeder
                 'updated_at' => now(),
             ]
         );
+
+        foreach (TenantStatuses::scopes() as $scope => $label) {
+            $defaults = TenantStatuses::defaults($scope);
+
+            foreach ($defaults as $name) {
+                if ($scope === TenantStatuses::SCOPE_TASK) {
+                    TaskStatus::query()->updateOrCreate(
+                        [
+                            'tenant_id' => $tenant->id,
+                            'name' => $name,
+                        ],
+                        []
+                    );
+
+                    continue;
+                }
+
+                WorkspaceStatus::query()->updateOrCreate(
+                    [
+                        'tenant_id' => $tenant->id,
+                        'scope' => $scope,
+                        'name' => $name,
+                    ],
+                    []
+                );
+            }
+        }
 
         $packages = collect([
             [
@@ -109,6 +139,7 @@ class MemoShotSeeder extends Seeder
                     'description' => $attributes['description'],
                     'base_price' => $attributes['base_price'],
                     'photo_path' => $attributes['photo_path'],
+                    'status' => $attributes['is_active'] ? 'active' : 'inactive',
                     'is_active' => $attributes['is_active'],
                 ]
             );
@@ -277,7 +308,7 @@ class MemoShotSeeder extends Seeder
             ['name' => 'Audio Guest Book', 'category' => 'add-on', 'sku' => 'MS-ADD-001', 'description' => 'Vintage phone guest book for recorded voice messages.', 'quantity' => 1, 'unit_price' => 149, 'duration' => 'Full event', 'maintenance_status' => 'ready', 'last_maintained_at' => '2026-04-01', 'maintenance_notes' => 'Battery charged and greeting reset.', 'photo_path' => null],
             ['name' => 'Custom Neon Sign', 'category' => 'add-on', 'sku' => 'MS-ADD-002', 'description' => 'Statement neon signage for booth styling.', 'quantity' => 2, 'unit_price' => 89, 'duration' => 'Full event', 'maintenance_status' => 'ready', 'last_maintained_at' => '2026-04-01', 'maintenance_notes' => 'Transformer and mounting kit packed.', 'photo_path' => null],
             ['name' => 'Extra Print Pack', 'category' => 'add-on', 'sku' => 'MS-ADD-003', 'description' => 'Extra duplicate prints for guests throughout the event.', 'quantity' => 10, 'unit_price' => 59, 'duration' => 'Per event', 'maintenance_status' => 'ready', 'last_maintained_at' => '2026-04-01', 'maintenance_notes' => 'Stored with printer consumables.', 'photo_path' => null],
-        ])->mapWithKeys(function (array $attributes) use ($tenant): array {
+        ])->mapWithKeys(function (array $attributes) use ($tenant, $addonCategoryFor): array {
             $item = InventoryItem::query()->updateOrCreate(
                 [
                     'tenant_id' => $tenant->id,
