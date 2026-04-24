@@ -90,6 +90,30 @@ class LeadCrudTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_bulk_delete_leads(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+
+        $leads = collect(range(1, 3))->map(fn (int $index) => Lead::query()->create([
+            'tenant_id' => $tenant->id,
+            'customer_name' => 'Lead '.$index,
+            'customer_email' => "lead{$index}@example.com",
+            'status' => 'draft',
+            'last_activity_at' => now()->addMinutes($index),
+        ]));
+
+        $this->actingAs($user)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/leads/bulk-delete', [
+                'lead_ids' => [$leads[0]->id, $leads[1]->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', '2 leads deleted.');
+
+        $this->assertDatabaseMissing('leads', ['id' => $leads[0]->id]);
+        $this->assertDatabaseMissing('leads', ['id' => $leads[1]->id]);
+        $this->assertDatabaseHas('leads', ['id' => $leads[2]->id]);
+    }
+
     /**
      * @return array{Tenant, User}
      */
