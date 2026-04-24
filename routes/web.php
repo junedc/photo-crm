@@ -121,6 +121,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::put('/addons/{addon}', [CatalogAdminController::class, 'updateAddOn'])->name('addons.update');
         Route::delete('/addons/{addon}', [CatalogAdminController::class, 'destroyAddOn'])->name('addons.destroy');
         Route::post('/leads', [CatalogAdminController::class, 'storeLead'])->name('leads.store');
+        Route::post('/leads/bulk-delete', [CatalogAdminController::class, 'destroyLeads'])->name('leads.bulk-destroy');
         Route::put('/leads/{lead}', [CatalogAdminController::class, 'updateLead'])->name('leads.update');
         Route::delete('/leads/{lead}', [CatalogAdminController::class, 'destroyLead'])->name('leads.destroy');
         Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');

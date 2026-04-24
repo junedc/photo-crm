@@ -198,6 +198,7 @@ class CatalogAdminController extends Controller
                 'store' => route('leads.store'),
                 'create' => route('leads.create'),
                 'leads' => route('leads.index'),
+                'bulk_delete' => route('leads.bulk-destroy'),
             ],
             'leadStatuses' => $this->leadStatuses(),
         ]);
@@ -215,6 +216,7 @@ class CatalogAdminController extends Controller
                 'store' => route('leads.store'),
                 'create' => route('leads.create'),
                 'leads' => route('leads.index'),
+                'bulk_delete' => route('leads.bulk-destroy'),
             ],
             'leadStatuses' => $this->leadStatuses(),
             'lead' => $this->serializeLead($lead),
@@ -443,13 +445,31 @@ class CatalogAdminController extends Controller
     {
         $lead->delete();
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'message' => 'Lead deleted.',
-            ]);
-        }
+        return $this->deleteSuccessResponse($request, 'Lead deleted.', route('leads.index'));
+    }
 
-        return redirect()->route('leads.index')->with('status', 'Lead deleted.');
+    public function destroyLeads(CurrentTenant $currentTenant, Request $request): RedirectResponse|JsonResponse
+    {
+        $tenantId = $currentTenant->get()?->id;
+
+        $data = $request->validate([
+            'lead_ids' => ['required', 'array', 'min:1'],
+            'lead_ids.*' => ['integer', Rule::exists('leads', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
+        ]);
+
+        $leadIds = collect($data['lead_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        Lead::query()
+            ->whereIn('id', $leadIds)
+            ->delete();
+
+        $count = $leadIds->count();
+        $message = $count === 1 ? '1 lead deleted.' : "{$count} leads deleted.";
+
+        return $this->deleteSuccessResponse($request, $message, route('leads.index'));
     }
 
     private function validatePackage(Request $request): array
@@ -634,6 +654,7 @@ class CatalogAdminController extends Controller
                 'store' => route('leads.store'),
                 'create' => route('leads.create'),
                 'leads' => route('leads.index'),
+                'bulk_delete' => route('leads.bulk-destroy'),
             ],
             'leadStatuses' => $this->leadStatuses(),
             'leads' => $this->serializeCollection($leads->getCollection(), fn (Lead $lead) => $this->serializeLead($lead)),
