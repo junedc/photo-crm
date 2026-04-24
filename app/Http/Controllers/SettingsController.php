@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\TaskStatus;
 use App\Models\Tenant;
 use App\Models\Subscription;
 use App\Models\TenantSubscriptionCharge;
+use App\Models\WorkspaceStatus;
 use App\Services\PlatformSubscriptionBillingService;
 use App\Support\PlatformSubscriptionCheckoutLinkGenerator;
+use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -58,6 +61,7 @@ class SettingsController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
                     'users' => route('users.index'),
                     'roles' => route('roles.index'),
                     'access' => route('access.index'),
@@ -68,9 +72,19 @@ class SettingsController extends Controller
                     'workspaceUpdate' => route('settings.workspace.update'),
                     'subscriptionPay' => route('settings.subscription.pay'),
                     'accountUpdate' => route('settings.account.update'),
+                    'maintenanceStore' => route('settings.maintenance.store'),
+                    'maintenanceTaskStore' => route('settings.maintenance.tasks.store'),
                     'tenantStripeWebhook' => route('stripe.webhook'),
                     'logout' => route('logout'),
                 ],
+                'maintenance' => [
+                    TenantStatuses::SCOPE_INVOICE => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_INVOICE),
+                    TenantStatuses::SCOPE_TASK => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_TASK),
+                    TenantStatuses::SCOPE_BOOKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_BOOKING),
+                    TenantStatuses::SCOPE_PACKAGE => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_PACKAGE),
+                    TenantStatuses::SCOPE_EQUIPMENT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EQUIPMENT),
+                ],
+                'maintenanceLabels' => TenantStatuses::scopes(),
             ],
         ]);
     }
@@ -183,6 +197,113 @@ class SettingsController extends Controller
         }
 
         return redirect()->route('settings.index')->with('status', 'Account settings updated.');
+    }
+
+    public function storeMaintenanceStatus(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'scope' => ['required', Rule::in([
+                TenantStatuses::SCOPE_BOOKING,
+                TenantStatuses::SCOPE_INVOICE,
+                TenantStatuses::SCOPE_PACKAGE,
+                TenantStatuses::SCOPE_EQUIPMENT,
+            ])],
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $status = WorkspaceStatus::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'scope' => $data['scope'],
+            'name' => trim((string) $data['name']),
+        ]);
+
+        return response()->json([
+            'message' => 'Status added.',
+            'record' => $this->serializeWorkspaceStatus($status),
+        ]);
+    }
+
+    public function updateMaintenanceStatus(CurrentTenant $currentTenant, Request $request, WorkspaceStatus $status): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $status->update([
+            'name' => trim((string) $data['name']),
+        ]);
+
+        return response()->json([
+            'message' => 'Status updated.',
+            'record' => $this->serializeWorkspaceStatus($status->fresh()),
+        ]);
+    }
+
+    public function destroyMaintenanceStatus(CurrentTenant $currentTenant, Request $request, WorkspaceStatus $status): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        $status->delete();
+
+        return response()->json([
+            'message' => 'Status deleted.',
+        ]);
+    }
+
+    public function storeTaskStatus(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $status = TaskStatus::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'name' => trim((string) $data['name']),
+        ]);
+
+        return response()->json([
+            'message' => 'Task status added.',
+            'record' => $this->serializeTaskStatus($status),
+        ]);
+    }
+
+    public function updateTaskStatus(CurrentTenant $currentTenant, Request $request, TaskStatus $status): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $status->update([
+            'name' => trim((string) $data['name']),
+        ]);
+
+        return response()->json([
+            'message' => 'Task status updated.',
+            'record' => $this->serializeTaskStatus($status->fresh()),
+        ]);
+    }
+
+    public function destroyTaskStatus(CurrentTenant $currentTenant, Request $request, TaskStatus $status): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        $status->delete();
+
+        return response()->json([
+            'message' => 'Task status deleted.',
+        ]);
     }
 
     private function validateTenantSelectedSubscription(mixed $subscriptionId, Tenant $tenant): ?Subscription
@@ -303,6 +424,55 @@ class SettingsController extends Controller
             'currency' => strtoupper($charge->currency ?: 'USD'),
             'status' => $charge->status,
             'paid_at' => $charge->paid_at?->format('d M Y g:i A'),
+        ];
+    }
+
+    private function serializeStatusRecords(?Tenant $tenant, string $scope): array
+    {
+        return TenantStatuses::records($tenant, $scope)
+            ->map(function (array $status) use ($scope): array {
+                $updateUrl = null;
+                $deleteUrl = null;
+
+                if ($status['id']) {
+                    if ($scope === TenantStatuses::SCOPE_TASK) {
+                        $updateUrl = route('settings.maintenance.tasks.update', $status['id']);
+                        $deleteUrl = route('settings.maintenance.tasks.destroy', $status['id']);
+                    } else {
+                        $updateUrl = route('settings.maintenance.update', $status['id']);
+                        $deleteUrl = route('settings.maintenance.destroy', $status['id']);
+                    }
+                }
+
+                return [
+                    ...$status,
+                    'update_url' => $updateUrl,
+                    'delete_url' => $deleteUrl,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function serializeWorkspaceStatus(WorkspaceStatus $status): array
+    {
+        return [
+            'id' => $status->id,
+            'scope' => $status->scope,
+            'name' => $status->name,
+            'update_url' => route('settings.maintenance.update', $status),
+            'delete_url' => route('settings.maintenance.destroy', $status),
+        ];
+    }
+
+    private function serializeTaskStatus(TaskStatus $status): array
+    {
+        return [
+            'id' => $status->id,
+            'scope' => TenantStatuses::SCOPE_TASK,
+            'name' => $status->name,
+            'update_url' => route('settings.maintenance.tasks.update', $status),
+            'delete_url' => route('settings.maintenance.tasks.destroy', $status),
         ];
     }
 }

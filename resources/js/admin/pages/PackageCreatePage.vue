@@ -17,7 +17,7 @@ const form = ref({
     name: '',
     description: '',
     base_price: '',
-    is_active: true,
+    status: props.data.packageStatuses?.[0] ?? 'active',
     equipment_ids: [],
     add_on_ids: [],
     hourly_prices: [],
@@ -73,10 +73,7 @@ const createPackage = async () => {
     formData.append('name', form.value.name ?? '');
     formData.append('description', form.value.description ?? '');
     formData.append('base_price', form.value.base_price ?? '');
-
-    if (form.value.is_active) {
-        formData.append('is_active', '1');
-    }
+    formData.append('status', form.value.status ?? '');
 
     (form.value.equipment_ids ?? []).forEach((id) => {
         formData.append('equipment_ids[]', String(id));
@@ -141,6 +138,12 @@ const createPackage = async () => {
                     <input v-model="form.base_price" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-300/50" :class="firstError(validationErrors, 'base_price') ? 'border-rose-300/60' : ''">
                     <p v-if="firstError(validationErrors, 'base_price')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'base_price') }}</p>
                 </div>
+                <div class="sm:col-span-2">
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Package Status</label>
+                    <select v-model="form.status" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-300/50">
+                        <option v-for="status in data.packageStatuses" :key="status" :value="status">{{ status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) }}</option>
+                    </select>
+                </div>
                 <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 p-3">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
@@ -175,12 +178,6 @@ const createPackage = async () => {
                 <div class="sm:col-span-2">
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Photo</label>
                     <input ref="createPhotoInput" type="file" accept="image/*" class="block w-full rounded-xl border border-dashed border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-stone-950">
-                </div>
-                <div class="sm:col-span-2">
-                    <label class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-stone-200">
-                        <input v-model="form.is_active" value="1" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-stone-900 text-amber-300">
-                        Active package
-                    </label>
                 </div>
                 <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 p-3">
                     <p class="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Assign equipment</p>

@@ -25,7 +25,13 @@ class EnsureAdminScreenAccess
             ->whereKey($tenant->getKey())
             ->first()?->pivot;
 
-        if ($membership === null || $membership->role === 'owner' || $membership->role_id === null) {
+        if ($membership === null || $membership->role === 'owner') {
+            return $next($request);
+        }
+
+        if ($membership->role_id === null) {
+            abort_unless($membership->role !== 'guest', Response::HTTP_FORBIDDEN, 'You do not have access to this screen.');
+
             return $next($request);
         }
 

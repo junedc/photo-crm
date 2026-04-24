@@ -14,12 +14,15 @@ use App\Models\InventoryItem;
 use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
+use App\Models\Task;
+use App\Models\TaskStatus;
 use App\Models\User;
 use App\Support\BookingAddonsPdfGenerator;
 use App\Support\BookingDiscountResolver;
 use App\Support\BookingPricing;
 use App\Support\InvoiceBuilder;
 use App\Support\PackagePriceResolver;
+use App\Support\TenantStatuses;
 use App\Support\StripeCheckoutLinkGenerator;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
@@ -50,12 +53,17 @@ class BookingController extends Controller
             ]);
         }
 
-        return $this->renderAdminBookingsPage($currentTenant, $booking, request());
+        return $this->renderAdminBookingDetailPage($currentTenant, $booking);
     }
 
     public function calendar(CurrentTenant $currentTenant): View
     {
         return $this->renderAdminCalendarPage($currentTenant);
+    }
+
+    public function adminCreate(CurrentTenant $currentTenant): View
+    {
+        return $this->renderAdminBookingCreatePage($currentTenant);
     }
 
     public function quotes(CurrentTenant $currentTenant): View
@@ -395,12 +403,106 @@ class BookingController extends Controller
 
     public function update(Request $request, Booking $booking): RedirectResponse|JsonResponse
     {
-        $data = $request->validate([
-            'status' => ['required', Rule::in($this->statuses())],
-            'notes' => ['nullable', 'string'],
+        $tenantId = app(CurrentTenant::class)->id();
+        $isFullEdit = $request->hasAny([
+            'booking_kind',
+            'package_id',
+            'customer_name',
+            'customer_email',
+            'customer_phone',
+            'event_type',
+            'event_date',
+            'start_time',
+            'end_time',
+            'total_hours',
+            'event_location',
+            'discount_id',
+            'add_on_ids',
+            'equipment_ids',
         ]);
 
-        $booking->update($data);
+        if (! $isFullEdit) {
+            $data = $request->validate([
+                'status' => ['required', Rule::in($this->statuses())],
+                'notes' => ['nullable', 'string'],
+            ]);
+
+            $booking->update($data);
+        } else {
+            $data = $request->validate([
+                'status' => ['required', Rule::in($this->statuses())],
+                'booking_kind' => ['nullable', Rule::in($this->bookingKinds())],
+                'entry_name' => ['nullable', 'string', 'max:255'],
+                'entry_description' => ['nullable', 'string'],
+                'package_id' => [
+                    'required',
+                    'integer',
+                    Rule::exists('packages', 'id')->where(fn ($query) => $query
+                        ->where('tenant_id', $tenantId)
+                        ->where('is_active', true)),
+                ],
+                'customer_name' => ['required', 'string', 'max:255'],
+                'customer_email' => ['required', 'email', 'max:255'],
+                'customer_phone' => ['required', 'string', 'max:50'],
+                'event_type' => ['required', Rule::in($this->eventTypes())],
+                'event_date' => ['required', 'date'],
+                'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
+                'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
+                'total_hours' => ['required', 'numeric', 'min:0.25'],
+                'event_location' => ['required', 'string', 'max:255'],
+                'travel_distance_km' => ['nullable', 'numeric', 'min:0'],
+                'travel_fee' => ['nullable', 'numeric', 'min:0'],
+                'notes' => ['nullable', 'string'],
+                'package_hourly_price_id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('package_hourly_prices', 'id')->where(fn ($query) => $query
+                        ->where('tenant_id', $tenantId)),
+                ],
+                'discount_id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('discounts', 'id')->where(fn ($query) => $query
+                        ->where('tenant_id', $tenantId)),
+                ],
+                'add_on_ids' => ['nullable', 'array'],
+                'add_on_ids.*' => [
+                    'integer',
+                    Rule::exists('inventory_items', 'id')->where(fn ($query) => $query
+                        ->where('tenant_id', $tenantId)
+                        ->where('category', 'add-on')),
+                ],
+                'equipment_ids' => ['nullable', 'array'],
+                'equipment_ids.*' => [
+                    'integer',
+                    Rule::exists('equipment', 'id')->where(fn ($query) => $query
+                        ->where('tenant_id', $tenantId)),
+                ],
+            ], [
+                'start_time.regex' => 'Start hour must be on the hour or half hour.',
+                'end_time.regex' => 'End hour must be on the hour or half hour.',
+            ]);
+
+            $package = $this->resolvePackageForSelection($data);
+            $this->ensurePackageTimingSelection($package, $data);
+            $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
+            $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
+            $bookingData = $data;
+            unset($bookingData['add_on_ids'], $bookingData['equipment_ids']);
+            $bookingData['booking_kind'] = $bookingData['booking_kind'] ?? 'customer';
+            $bookingData['customer_id'] = $this->resolveCustomer($bookingData)->id;
+            $bookingData['package_price'] = $this->resolvePackagePrice($bookingData, $package, true);
+            [$discountId, $discountAmount] = $this->resolveDiscountSelection($bookingData, $package, $bookingData['package_price']);
+            $bookingData['discount_id'] = $discountId;
+            $bookingData['discount_amount'] = $discountAmount;
+
+            DB::transaction(function () use ($booking, $bookingData, $addOnIds, $equipmentIds): void {
+                $booking->update($bookingData);
+                $booking->addOns()->sync($addOnIds);
+                $booking->equipment()->sync($equipmentIds);
+            });
+        }
+
         $booking->refresh();
         $booking->load(['package', 'addOns']);
 
@@ -440,11 +542,6 @@ class BookingController extends Controller
         $serializedBookings = $bookings->getCollection()
             ->map(fn (Booking $booking) => $this->serializeBooking($booking));
 
-        if ($selectedBooking && ! $serializedBookings->contains('id', $selectedBooking->id)) {
-            $selectedBooking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments']);
-            $serializedBookings->prepend($this->serializeBooking($selectedBooking));
-        }
-
         return view('admin.app', [
             'page' => 'bookings',
             'props' => [
@@ -469,10 +566,67 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
                     'users' => route('users.index'),
                     'roles' => route('roles.index'),
                     'access' => route('access.index'),
                     'bookings' => route('admin.bookings.index'),
+                    'create' => route('admin.bookings.create'),
+                    'quotes' => route('admin.quotes.index'),
+                    'invoices' => route('admin.invoices.index'),
+                    'settings' => route('settings.index'),
+                    'logout' => route('logout'),
+                ],
+                'bookingStatuses' => $this->statuses(),
+                'bookingKinds' => $this->bookingKinds(),
+                'bookings' => $serializedBookings->values()->all(),
+                'pagination' => $this->paginationMeta($bookings),
+                'eventTypes' => $this->eventTypes(),
+                ...$this->adminBookingCreateProps($tenant, $packages, $equipment, $addOns),
+            ],
+        ]);
+    }
+
+    private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
+    {
+        $tenant = $currentTenant->get();
+        $booking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
+        $tenantUsers = $tenant?->users()
+            ->wherePivot('role', '!=', 'guest')
+            ->orderBy('name')
+            ->get() ?? collect();
+        $taskStatuses = $tenant?->taskStatuses()->orderBy('name')->get() ?? collect();
+
+        return view('admin.app', [
+            'page' => 'bookings-detail',
+            'props' => [
+                'tenant' => [
+                    'id' => $tenant?->id,
+                    'name' => $tenant?->name,
+                    'slug' => $tenant?->slug,
+                    'theme' => $tenant?->theme ?: 'dark',
+                    'address' => $tenant?->address,
+                    'invoice_deposit_percentage' => number_format((float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
+                    'travel_free_kilometers' => number_format((float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
+                    'travel_fee_per_kilometer' => number_format((float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
+                    'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
+                ],
+                'routes' => [
+                    'dashboard' => route('dashboard'),
+                    'calendar' => route('admin.calendar.index'),
+                    'packages' => route('packages.index'),
+                    'equipment' => route('equipment.index'),
+                    'addons' => route('addons.index'),
+                    'discounts' => route('discounts.index'),
+                    'leads' => route('leads.index'),
+                    'customers' => route('customers.index'),
+                    'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
+                    'users' => route('users.index'),
+                    'roles' => route('roles.index'),
+                    'access' => route('access.index'),
+                    'bookings' => route('admin.bookings.index'),
+                    'create' => route('admin.bookings.create'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
                     'settings' => route('settings.index'),
@@ -481,41 +635,120 @@ class BookingController extends Controller
                 'bookingStatuses' => $this->statuses(),
                 'bookingKinds' => $this->bookingKinds(),
                 'eventTypes' => $this->eventTypes(),
-                'bookingCreateUrl' => route('bookings.store'),
                 'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
-                'travelFreeKilometers' => (float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)),
-                'travelFeePerKilometer' => (float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)),
-                'packages' => $packages->map(fn (Package $package) => [
-                    'id' => $package->id,
-                    'name' => $package->name,
-                    'base_price' => number_format((float) $package->base_price, 2, '.', ''),
-                    'display_price' => number_format((float) (($package->hourlyPrices()->min('price')) ?? $package->base_price), 2, '.', ''),
-                    'hourly_prices' => $package->hourlyPrices->map(fn (PackageHourlyPrice $hourlyPrice) => [
-                        'id' => $hourlyPrice->id,
-                        'hours' => number_format((float) $hourlyPrice->hours, 2, '.', ''),
-                        'price' => number_format((float) $hourlyPrice->price, 2, '.', ''),
-                    ])->values()->all(),
+                'booking' => $this->serializeBooking($booking),
+                'taskUsers' => $tenantUsers->map(fn (User $user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
                 ])->values()->all(),
-                'equipmentOptions' => $equipment->map(fn (Equipment $item) => [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'category' => $item->category,
-                    'daily_rate' => number_format((float) $item->daily_rate, 2, '.', ''),
+                'taskStatuses' => $taskStatuses->map(fn (TaskStatus $status) => [
+                    'id' => $status->id,
+                    'name' => $status->name,
                 ])->values()->all(),
-                'addOnOptions' => $addOns->map(fn (InventoryItem $item) => [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'product_code' => $item->sku,
-                    'addon_category' => $item->addon_category,
-                    'duration' => $item->duration,
-                    'price' => number_format((float) $item->unit_price, 2, '.', ''),
-                ])->values()->all(),
-                'discountOptions' => $this->serializeDiscountOptions($this->availableDiscounts()),
-                'bookings' => $serializedBookings->values()->all(),
-                'pagination' => $this->paginationMeta($bookings),
-                'selectedId' => $selectedBooking?->id,
+                'taskRoutes' => [
+                    'store' => route('tasks.store'),
+                ],
+                ...$this->adminBookingCreateProps(
+                    $tenant,
+                    Package::query()->where('is_active', true)->with('hourlyPrices')->latest()->get(),
+                    Equipment::query()->latest()->get(),
+                    InventoryItem::query()->where('category', 'add-on')->latest()->get(),
+                ),
             ],
         ]);
+    }
+
+    private function renderAdminBookingCreatePage(CurrentTenant $currentTenant): View
+    {
+        $tenant = $currentTenant->get();
+        $packages = Package::query()
+            ->where('is_active', true)
+            ->with('hourlyPrices')
+            ->latest()
+            ->get();
+        $equipment = Equipment::query()->latest()->get();
+        $addOns = InventoryItem::query()
+            ->where('category', 'add-on')
+            ->latest()
+            ->get();
+
+        return view('admin.app', [
+            'page' => 'bookings-create',
+            'props' => [
+                'tenant' => [
+                    'id' => $tenant?->id,
+                    'name' => $tenant?->name,
+                    'slug' => $tenant?->slug,
+                    'theme' => $tenant?->theme ?: 'dark',
+                    'address' => $tenant?->address,
+                    'invoice_deposit_percentage' => number_format((float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)), 2, '.', ''),
+                    'travel_free_kilometers' => number_format((float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)), 2, '.', ''),
+                    'travel_fee_per_kilometer' => number_format((float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)), 2, '.', ''),
+                    'google_maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY', ''),
+                ],
+                'routes' => [
+                    'dashboard' => route('dashboard'),
+                    'calendar' => route('admin.calendar.index'),
+                    'packages' => route('packages.index'),
+                    'equipment' => route('equipment.index'),
+                    'addons' => route('addons.index'),
+                    'discounts' => route('discounts.index'),
+                    'leads' => route('leads.index'),
+                    'customers' => route('customers.index'),
+                    'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
+                    'users' => route('users.index'),
+                    'roles' => route('roles.index'),
+                    'access' => route('access.index'),
+                    'bookings' => route('admin.bookings.index'),
+                    'create' => route('admin.bookings.create'),
+                    'quotes' => route('admin.quotes.index'),
+                    'invoices' => route('admin.invoices.index'),
+                    'settings' => route('settings.index'),
+                    'logout' => route('logout'),
+                ],
+                'bookingKinds' => $this->bookingKinds(),
+                'eventTypes' => $this->eventTypes(),
+                ...$this->adminBookingCreateProps($tenant, $packages, $equipment, $addOns),
+            ],
+        ]);
+    }
+
+    private function adminBookingCreateProps($tenant, $packages, $equipment, $addOns): array
+    {
+        return [
+            'bookingCreateUrl' => route('bookings.store'),
+            'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
+            'travelFreeKilometers' => (float) ($tenant?->travel_free_kilometers ?? config('pricing.travel_free_kilometers', 0)),
+            'travelFeePerKilometer' => (float) ($tenant?->travel_fee_per_kilometer ?? config('pricing.travel_fee_per_kilometer', 0)),
+            'packages' => $packages->map(fn (Package $package) => [
+                'id' => $package->id,
+                'name' => $package->name,
+                'base_price' => number_format((float) $package->base_price, 2, '.', ''),
+                'display_price' => number_format((float) (($package->hourlyPrices()->min('price')) ?? $package->base_price), 2, '.', ''),
+                'hourly_prices' => $package->hourlyPrices->map(fn (PackageHourlyPrice $hourlyPrice) => [
+                    'id' => $hourlyPrice->id,
+                    'hours' => number_format((float) $hourlyPrice->hours, 2, '.', ''),
+                    'price' => number_format((float) $hourlyPrice->price, 2, '.', ''),
+                ])->values()->all(),
+            ])->values()->all(),
+            'equipmentOptions' => $equipment->map(fn (Equipment $item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'category' => $item->category,
+                'daily_rate' => number_format((float) $item->daily_rate, 2, '.', ''),
+            ])->values()->all(),
+            'addOnOptions' => $addOns->map(fn (InventoryItem $item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'product_code' => $item->sku,
+                'addon_category' => $item->addon_category,
+                'duration' => $item->duration,
+                'price' => number_format((float) $item->unit_price, 2, '.', ''),
+            ])->values()->all(),
+            'discountOptions' => $this->serializeDiscountOptions($this->availableDiscounts()),
+        ];
     }
 
     private function paginatedBookings(Request $request)
@@ -582,6 +815,7 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
                     'users' => route('users.index'),
                     'roles' => route('roles.index'),
                     'access' => route('access.index'),
@@ -628,6 +862,7 @@ class BookingController extends Controller
                     'leads' => route('leads.index'),
                     'customers' => route('customers.index'),
                     'campaigns' => route('campaigns.index'),
+                    'tasks' => route('tasks.index'),
                     'users' => route('users.index'),
                     'roles' => route('roles.index'),
                     'access' => route('access.index'),
@@ -645,7 +880,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'tasks.assignedUser', 'tasks.status']);
         $package = $booking->package;
         $bookingTotal = app(BookingPricing::class)->totalForBooking($booking);
         $packagePrice = $booking->package_price !== null
@@ -654,6 +889,9 @@ class BookingController extends Controller
                 'package_id' => $booking->package_id,
                 'total_hours' => $booking->total_hours,
             ]);
+        $packageHourlyPriceId = $package?->hourlyPrices
+            ?->first(fn (PackageHourlyPrice $hourlyPrice) => abs((float) $hourlyPrice->hours - (float) $booking->total_hours) < 0.001)
+            ?->id;
 
         return [
             'id' => $booking->id,
@@ -666,6 +904,9 @@ class BookingController extends Controller
             'customer_name' => $booking->customer_name,
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
+            'package_id' => $booking->package_id,
+            'package_hourly_price_id' => $packageHourlyPriceId ? (string) $packageHourlyPriceId : '',
+            'discount_id' => $booking->discount_id ? (string) $booking->discount_id : '',
             'package_price' => number_format($packagePrice, 2, '.', ''),
             'discount_amount' => number_format((float) ($booking->discount_amount ?? 0), 2, '.', ''),
             'event_type' => $booking->event_type,
@@ -721,10 +962,40 @@ class BookingController extends Controller
                 'price' => number_format((float) $item->daily_rate, 2, '.', ''),
                 'photo_url' => $item->photo_path ? Storage::disk('public')->url($item->photo_path) : null,
             ])->values()->all(),
+            'add_on_ids' => $booking->addOns->pluck('id')->values()->all(),
+            'equipment_ids' => $booking->equipment->pluck('id')->values()->all(),
+            'tasks' => $booking->tasks
+                ->sortByDesc(fn (Task $task) => $task->created_at)
+                ->values()
+                ->map(fn (Task $task) => $this->serializeTaskRecord($task))
+                ->all(),
             'invoice' => $booking->invoice ? $this->serializeInvoice($booking->invoice) : null,
             'show_url' => route('admin.bookings.show', $booking),
             'update_url' => route('admin.bookings.update', $booking),
             'invoice_create_url' => route('admin.bookings.invoice.store', $booking),
+        ];
+    }
+
+    private function serializeTaskRecord(Task $task): array
+    {
+        return [
+            'id' => $task->id,
+            'task_name' => $task->task_name,
+            'task_duration_hours' => $task->task_duration_hours,
+            'assigned_to' => $task->assigned_to,
+            'assigned_to_name' => $task->assignedUser?->name ?? 'Unassigned',
+            'booking_id' => $task->booking_id,
+            'task_status_id' => $task->task_status_id,
+            'status_name' => $task->status?->name ?? '',
+            'due_date' => $task->due_date?->format('Y-m-d') ?? '',
+            'due_date_label' => $task->due_date?->format('d M Y') ?? 'Not set',
+            'date_started' => $task->date_started?->format('Y-m-d') ?? '',
+            'date_started_label' => $task->date_started?->format('d M Y') ?? 'Not set',
+            'date_completed' => $task->date_completed?->format('Y-m-d') ?? '',
+            'date_completed_label' => $task->date_completed?->format('d M Y') ?? 'Not set',
+            'remarks' => $task->remarks ?? '',
+            'update_url' => route('tasks.update', $task),
+            'delete_url' => route('tasks.destroy', $task),
         ];
     }
 
@@ -744,7 +1015,7 @@ class BookingController extends Controller
 
     private function statuses(): array
     {
-        return ['pending', 'confirmed', 'completed', 'cancelled'];
+        return TenantStatuses::names(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_BOOKING);
     }
 
     private function eventTypes(): array

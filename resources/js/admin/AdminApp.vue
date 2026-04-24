@@ -13,6 +13,8 @@ import AddOnCreatePage from './pages/AddOnCreatePage.vue';
 import AddOnDetailPage from './pages/AddOnDetailPage.vue';
 import CalendarPage from './pages/CalendarPage.vue';
 import BookingsPage from './pages/BookingsPage.vue';
+import BookingCreatePage from './pages/BookingCreatePage.vue';
+import BookingDetailPage from './pages/BookingDetailPage.vue';
 import QuotesPage from './pages/QuotesPage.vue';
 import InvoicesPage from './pages/InvoicesPage.vue';
 import CustomersPage from './pages/CustomersPage.vue';
@@ -21,6 +23,7 @@ import CustomerDetailPage from './pages/CustomerDetailPage.vue';
 import CampaignsPage from './pages/CampaignsPage.vue';
 import CampaignCreatePage from './pages/CampaignCreatePage.vue';
 import CampaignDetailPage from './pages/CampaignDetailPage.vue';
+import TasksPage from './pages/TasksPage.vue';
 import DiscountsPage from './pages/DiscountsPage.vue';
 import DiscountCreatePage from './pages/DiscountCreatePage.vue';
 import DiscountDetailPage from './pages/DiscountDetailPage.vue';
@@ -59,6 +62,8 @@ const pages = {
     'addons-detail': AddOnDetailPage,
     calendar: CalendarPage,
     bookings: BookingsPage,
+    'bookings-create': BookingCreatePage,
+    'bookings-detail': BookingDetailPage,
     quotes: QuotesPage,
     invoices: InvoicesPage,
     customers: CustomersPage,
@@ -67,6 +72,7 @@ const pages = {
     campaigns: CampaignsPage,
     'campaigns-create': CampaignCreatePage,
     'campaigns-detail': CampaignDetailPage,
+    tasks: TasksPage,
     discounts: DiscountsPage,
     'discounts-create': DiscountCreatePage,
     'discounts-detail': DiscountDetailPage,

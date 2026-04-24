@@ -12,6 +12,7 @@ const equipmentList = ref([...(props.data.equipment ?? [])]);
 const equipment = computed(() => equipmentList.value);
 const equipmentSearch = ref('');
 const equipmentStatusFilter = ref('all');
+const equipmentStatuses = computed(() => props.data.maintenanceStatuses ?? []);
 const filteredEquipment = computed(() =>
     equipment.value.filter((entry) => {
         const matchesSearch = [entry.name, entry.category, entry.serial_number]
@@ -51,11 +52,9 @@ const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (ch
             </div>
             <div class="mt-3 grid gap-2">
                 <input v-model="equipmentSearch" type="text" placeholder="Search equipment" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                <div class="grid grid-cols-4 gap-2">
+                <div class="grid gap-2" :class="equipmentStatuses.length > 3 ? 'sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-4'">
                     <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="equipmentStatusFilter === 'all' ? 'border-cyan-300/40 bg-cyan-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="equipmentStatusFilter = 'all'">All</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="equipmentStatusFilter === 'ready' ? 'border-emerald-300/40 bg-emerald-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="equipmentStatusFilter = 'ready'">Ready</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="equipmentStatusFilter === 'maintenance' ? 'border-amber-300/40 bg-amber-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="equipmentStatusFilter = 'maintenance'">Maint.</button>
-                    <button type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="equipmentStatusFilter === 'retired' ? 'border-rose-300/40 bg-rose-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="equipmentStatusFilter = 'retired'">Retired</button>
+                    <button v-for="status in equipmentStatuses" :key="status" type="button" class="rounded-lg border px-2 py-1.5 text-xs font-medium transition" :class="equipmentStatusFilter === status ? 'border-cyan-300/40 bg-cyan-300/10 text-white' : 'border-white/10 text-stone-300 hover:bg-white/5'" @click="equipmentStatusFilter = status">{{ statusLabel(status) }}</button>
                 </div>
             </div>
             <div class="mt-3 grid grid-cols-[72px_minmax(0,1fr)_auto] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 sm:grid-cols-[82px_minmax(0,1fr)_auto]">

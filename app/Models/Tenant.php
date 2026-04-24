@@ -81,6 +81,21 @@ class Tenant extends Model
         return $this->hasMany(Campaign::class);
     }
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    public function taskStatuses(): HasMany
+    {
+        return $this->hasMany(TaskStatus::class);
+    }
+
+    public function workspaceStatuses(): HasMany
+    {
+        return $this->hasMany(WorkspaceStatus::class);
+    }
+
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
