@@ -764,7 +764,7 @@ const removeTask = async (task) => {
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Tasks</p>
-                            <p class="mt-1 text-sm text-stone-300">Create and manage tasks tied to this booking only.</p>
+                            <p class="mt-1 text-sm text-stone-300">Package action items are added here automatically, and you can still add general tasks manually.</p>
                         </div>
                         <button v-if="editingTask" type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelTaskEdit">Cancel edit</button>
                     </div>

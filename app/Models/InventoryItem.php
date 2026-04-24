@@ -21,6 +21,7 @@ class InventoryItem extends Model
         'quantity',
         'unit_price',
         'duration',
+        'due_days_before_event',
         'maintenance_status',
         'last_maintained_at',
         'maintenance_notes',
@@ -33,6 +34,7 @@ class InventoryItem extends Model
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'is_publicly_displayed' => 'boolean',
+            'due_days_before_event' => 'integer',
             'last_maintained_at' => 'date',
         ];
     }

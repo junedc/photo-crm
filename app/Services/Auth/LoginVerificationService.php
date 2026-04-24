@@ -6,11 +6,15 @@ use App\Mail\LoginVerificationCodeMail;
 use App\Models\LoginCode;
 use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
+use App\Support\TrackedEmailSender;
 
 class LoginVerificationService
 {
     public const SESSION_KEY = 'auth.pending_verification';
+
+    public function __construct(private readonly TrackedEmailSender $trackedEmailSender)
+    {
+    }
 
     public function issueFor(User $user, Tenant $tenant, string $email): LoginCode
     {
@@ -31,12 +35,23 @@ class LoginVerificationService
             'expires_at' => now()->addMinutes(10),
         ]);
 
-        Mail::to($user)->send(new LoginVerificationCodeMail(
-            user: $user,
-            tenant: $tenant,
-            code: $code,
-            expiresAt: $verification->expires_at,
-        ));
+        $this->trackedEmailSender->send(
+            new LoginVerificationCodeMail(
+                user: $user,
+                tenant: $tenant,
+                code: $code,
+                expiresAt: $verification->expires_at,
+            ),
+            [
+                'email' => $email,
+                'name' => $user->name,
+            ],
+            [],
+            [
+                'tenant' => $tenant,
+                'context' => $user,
+            ],
+        );
 
         return $verification;
     }

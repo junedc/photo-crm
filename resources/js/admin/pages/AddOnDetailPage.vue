@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError, hasFieldErrors, isBlank, mergeFieldErrors, requiredMessage } from '../validation';
@@ -25,9 +25,17 @@ const form = ref({
     description: props.data.addon?.description ?? '',
     unit_price: props.data.addon?.price ?? '',
     duration: props.data.addon?.duration ?? '',
+    due_days_before_event: props.data.addon?.due_days_before_event ?? '',
 });
 const validationErrors = computed(() => mergeFieldErrors(clientErrors.value, fieldErrors.value));
 const addOnCategories = computed(() => props.data.addOnCategories ?? []);
+const isActionCategory = computed(() => form.value.addon_category === 'Action');
+
+watch(() => form.value.addon_category, (value) => {
+    if (value !== 'Action') {
+        form.value.due_days_before_event = '';
+    }
+});
 
 const validateAddOnForm = () => {
     const errors = {};
@@ -63,7 +71,7 @@ const updateAddOn = async () => {
     const formData = new FormData();
     formData.append('_method', 'PUT');
 
-    ['sku', 'name', 'addon_category', 'description', 'unit_price', 'duration'].forEach((key) => {
+    ['sku', 'name', 'addon_category', 'description', 'unit_price', 'duration', 'due_days_before_event'].forEach((key) => {
         formData.append(key, form.value[key] ?? '');
     });
     formData.append('is_publicly_displayed', form.value.is_publicly_displayed ? '1' : '0');
@@ -89,6 +97,7 @@ const updateAddOn = async () => {
             description: record.description ?? '',
             unit_price: record.price ?? '',
             duration: record.duration ?? '',
+            due_days_before_event: record.due_days_before_event ?? '',
         };
         clientErrors.value = {};
 
@@ -182,6 +191,11 @@ const confirmRemoveAddOn = () => {
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Duration</label>
                     <input v-model="form.duration" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50">
+                </div>
+                <div v-if="isActionCategory">
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Due Date Before the Event</label>
+                    <input v-model="form.due_days_before_event" type="number" min="0" step="1" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50" placeholder="Number of days">
+                    <p class="mt-1 text-xs text-stone-500">Creates a booking task due this many days before the event date.</p>
                 </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Public Display</label>

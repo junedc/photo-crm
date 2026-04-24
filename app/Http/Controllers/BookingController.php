@@ -24,13 +24,13 @@ use App\Support\InvoiceBuilder;
 use App\Support\PackagePriceResolver;
 use App\Support\TenantStatuses;
 use App\Support\StripeCheckoutLinkGenerator;
+use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -261,6 +261,7 @@ class BookingController extends Controller
         $booking = Booking::query()->create($data);
         $booking->addOns()->sync($addOnIds);
         $booking->equipment()->sync($equipmentIds);
+        $this->syncPackageActionTasks($booking);
         $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
         $this->markLeadAsBooked($lead, $booking);
         $this->sendBookingEmails($booking);
@@ -294,7 +295,7 @@ class BookingController extends Controller
         Request $request,
         InvoiceBuilder $invoiceBuilder,
         StripeCheckoutLinkGenerator $stripeCheckoutLinkGenerator,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $tenantId = app(CurrentTenant::class)->id();
 
         $data = $request->validate([
@@ -356,7 +357,7 @@ class BookingController extends Controller
         $package = $this->resolvePackageForSelection($data);
         $this->ensurePackageTimingSelection($package, $data);
 
-        [$booking, $checkoutUrl] = DB::transaction(function () use ($data, $invoiceBuilder, $stripeCheckoutLinkGenerator, $package) {
+        [$booking, $invoice, $depositInstallment] = DB::transaction(function () use ($data, $invoiceBuilder, $package) {
             $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
             $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
             $selectedEquipment = $this->resolveEquipmentSelection($equipmentIds);
@@ -375,6 +376,7 @@ class BookingController extends Controller
             $booking = Booking::query()->create($bookingData);
             $booking->addOns()->sync($addOnIds);
             $booking->equipment()->sync($equipmentIds);
+            $this->syncPackageActionTasks($booking);
             $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
             $this->markLeadAsBooked($lead, $booking);
 
@@ -392,13 +394,46 @@ class BookingController extends Controller
 
             return [
                 $booking,
-                $stripeCheckoutLinkGenerator->forInstallment($invoice, $depositInstallment),
+                $invoice,
+                $depositInstallment,
             ];
         });
 
         $this->sendBookingEmails($booking);
 
-        return redirect()->away($checkoutUrl);
+        try {
+            $checkoutUrl = $stripeCheckoutLinkGenerator->forInstallment($invoice, $depositInstallment);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Booking created successfully.',
+                    'checkout_url' => $checkoutUrl,
+                    'record' => $this->serializeBooking($booking),
+                ]);
+            }
+
+            return redirect()->away($checkoutUrl);
+        } catch (ValidationException $exception) {
+            $message = $exception->validator->errors()->first('stripe')
+                ?: 'Booking saved, but payment could not be started right now.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'record' => $this->serializeBooking($booking),
+                    'booking_saved' => true,
+                    'payment_pending' => true,
+                ], 202);
+            }
+
+            return redirect()
+                ->route('bookings.create')
+                ->with('warning', sprintf(
+                    'Booking %s was saved, but payment could not be started. %s',
+                    $booking->quote_number,
+                    $message,
+                ));
+        }
     }
 
     public function update(Request $request, Booking $booking): RedirectResponse|JsonResponse
@@ -500,6 +535,7 @@ class BookingController extends Controller
                 $booking->update($bookingData);
                 $booking->addOns()->sync($addOnIds);
                 $booking->equipment()->sync($equipmentIds);
+                $this->syncPackageActionTasks($booking);
             });
         }
 
@@ -590,7 +626,7 @@ class BookingController extends Controller
     private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
     {
         $tenant = $currentTenant->get();
-        $booking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
+        $booking->loadMissing(['package.addOns', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
         $tenantUsers = $tenant?->users()
             ->wherePivot('role', '!=', 'guest')
             ->orderBy('name')
@@ -880,7 +916,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'tasks.assignedUser', 'tasks.status']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'addOns', 'tasks.assignedUser', 'tasks.status']);
         $package = $booking->package;
         $bookingTotal = app(BookingPricing::class)->totalForBooking($booking);
         $packagePrice = $booking->package_price !== null
@@ -985,6 +1021,8 @@ class BookingController extends Controller
             'assigned_to' => $task->assigned_to,
             'assigned_to_name' => $task->assignedUser?->name ?? 'Unassigned',
             'booking_id' => $task->booking_id,
+            'inventory_item_id' => $task->inventory_item_id,
+            'is_booking_action' => (bool) $task->is_booking_action,
             'task_status_id' => $task->task_status_id,
             'status_name' => $task->status?->name ?? '',
             'due_date' => $task->due_date?->format('Y-m-d') ?? '',
@@ -997,6 +1035,56 @@ class BookingController extends Controller
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
         ];
+    }
+
+    private function syncPackageActionTasks(Booking $booking): void
+    {
+        $booking->loadMissing(['package.addOns']);
+
+        $actionItems = collect($booking->package?->addOns ?? [])
+            ->filter(fn (InventoryItem $item) => strcasecmp((string) $item->addon_category, 'Action') === 0)
+            ->values();
+
+        $desiredIds = $actionItems->pluck('id')->filter()->values()->all();
+        $generatedTasks = $booking->tasks()
+            ->where('is_booking_action', true)
+            ->get()
+            ->keyBy('inventory_item_id');
+
+        if ($desiredIds === []) {
+            $booking->tasks()
+                ->where('is_booking_action', true)
+                ->delete();
+
+            return;
+        }
+
+        $booking->tasks()
+            ->where('is_booking_action', true)
+            ->whereNotIn('inventory_item_id', $desiredIds)
+            ->delete();
+
+        foreach ($actionItems as $item) {
+            $task = $generatedTasks->get($item->id) ?? new Task([
+                'tenant_id' => $booking->tenant_id,
+                'booking_id' => $booking->id,
+                'inventory_item_id' => $item->id,
+                'is_booking_action' => true,
+            ]);
+
+            $dueDate = null;
+            if ($booking->event_date && $item->due_days_before_event !== null) {
+                $dueDate = $booking->event_date->copy()->subDays((int) $item->due_days_before_event);
+            }
+
+            $task->fill([
+                'task_name' => $item->name,
+                'inventory_item_id' => $item->id,
+                'is_booking_action' => true,
+                'due_date' => $dueDate,
+            ]);
+            $task->save();
+        }
     }
 
     private function bookingKinds(): array
@@ -1260,12 +1348,42 @@ class BookingController extends Controller
             ->unique()
             ->values()
             ->all() ?? [];
+        $trackedEmailSender = app(TrackedEmailSender::class);
 
         if ($adminRecipients !== []) {
-            Mail::to($adminRecipients)->send(new AdminBookingCreatedMail($booking, $addonsPdf));
+            $trackedEmailSender->send(
+                new AdminBookingCreatedMail($booking, $addonsPdf),
+                $adminRecipients,
+                [],
+                [
+                    'tenant' => $booking->tenant,
+                    'context' => $booking,
+                    'attachments' => $addonsPdf ? [[
+                        'name' => $addonsPdf->name,
+                        'mime' => 'application/pdf',
+                        'content' => $addonsPdf->content,
+                    ]] : [],
+                ],
+            );
         }
 
-        Mail::to($booking->customer_email)->send(new CustomerBookingCreatedMail($booking, $addonsPdf));
+        $trackedEmailSender->send(
+            new CustomerBookingCreatedMail($booking, $addonsPdf),
+            [[
+                'email' => $booking->customer_email,
+                'name' => $booking->customer_name,
+            ]],
+            [],
+            [
+                'tenant' => $booking->tenant,
+                'context' => $booking,
+                'attachments' => $addonsPdf ? [[
+                    'name' => $addonsPdf->name,
+                    'mime' => 'application/pdf',
+                    'content' => $addonsPdf->content,
+                ]] : [],
+            ],
+        );
     }
 
     private function serializeInvoice(Invoice $invoice): array

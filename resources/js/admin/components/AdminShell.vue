@@ -12,6 +12,12 @@ const props = defineProps({
     },
 });
 
+const notificationOpen = ref(false);
+const notificationPanel = ref(null);
+const notificationButton = ref(null);
+const notifications = computed(() => props.data.notifications ?? []);
+const notificationCount = computed(() => notifications.value.length);
+
 const navItems = computed(() => [
     { key: 'overview', label: 'Overview', href: props.data.routes.dashboard, accent: 'amber', icon: 'dashboard' },
     { key: 'calendar', label: 'Calendar', href: props.data.routes.calendar, accent: 'cyan', icon: 'calendar' },
@@ -20,6 +26,7 @@ const navItems = computed(() => [
     { key: 'leads', label: 'Leads', href: props.data.routes.leads, accent: 'violet', icon: 'spark' },
     { key: 'customers', label: 'Customers', href: props.data.routes.customers, accent: 'cyan', icon: 'users' },
     { key: 'campaigns', label: 'Campaigns', href: props.data.routes.campaigns, accent: 'rose', icon: 'megaphone' },
+    { key: 'email_tracking', label: 'Email Tracking', href: props.data.routes.emailTracking ?? '/email-tracking', accent: 'violet', icon: 'receipt' },
     { key: 'tasks', label: 'Tasks', href: props.data.routes.tasks, accent: 'sky', icon: 'clipboard' },
     { key: 'packages', label: 'Packages', href: props.data.routes.packages, accent: 'amber', icon: 'box' },
     { key: 'equipment', label: 'Equipment', href: props.data.routes.equipment, accent: 'cyan', icon: 'camera' },
@@ -35,7 +42,7 @@ const navItems = computed(() => [
 const sectionDefinitions = [
     { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices'] },
     { key: 'contacts', label: 'Contacts', items: ['leads', 'customers'] },
-    { key: 'marketing', label: 'Marketing', items: ['campaigns'] },
+    { key: 'marketing', label: 'Marketing', items: ['campaigns', 'email_tracking'] },
     { key: 'planning', label: 'Planning', items: ['tasks'] },
     { key: 'catalog', label: 'Catalog', items: ['packages', 'equipment', 'addons', 'discounts'] },
     { key: 'admin', label: 'Admin', items: ['users', 'roles', 'access', 'support', 'referrals'] },
@@ -102,6 +109,10 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('campaigns')) {
         return 'campaigns';
+    }
+
+    if (props.page.startsWith('email-tracking')) {
+        return 'email_tracking';
     }
 
     if (props.page.startsWith('tasks')) {
@@ -219,6 +230,30 @@ const onAdminToast = (event) => {
     }
 };
 
+const toggleNotifications = () => {
+    notificationOpen.value = !notificationOpen.value;
+};
+
+const closeNotifications = () => {
+    notificationOpen.value = false;
+};
+
+const onDocumentClick = (event) => {
+    const target = event.target;
+
+    if (notificationPanel.value?.contains(target) || notificationButton.value?.contains(target)) {
+        return;
+    }
+
+    closeNotifications();
+};
+
+const onEscape = (event) => {
+    if (event.key === 'Escape') {
+        closeNotifications();
+    }
+};
+
 watch(
     () => props.data.flash?.status,
     (status) => {
@@ -245,10 +280,14 @@ watch(
 
 onMounted(() => {
     window.addEventListener('admin-toast', onAdminToast);
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onEscape);
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('admin-toast', onAdminToast);
+    document.removeEventListener('click', onDocumentClick);
+    document.removeEventListener('keydown', onEscape);
     window.clearTimeout(statusTimeout);
     window.clearTimeout(errorTimeout);
 });
@@ -292,6 +331,63 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <button
+                            ref="notificationButton"
+                            type="button"
+                            class="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-stone-200 transition hover:border-cyan-300/40 hover:text-white"
+                            @click.stop="toggleNotifications"
+                        >
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M15 18H5l1.6-1.8A2 2 0 0 0 7 14.9V11a5 5 0 1 1 10 0v3.9a2 2 0 0 0 .4 1.3L19 18h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span
+                                v-if="notificationCount"
+                                class="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[11px] font-semibold text-slate-950"
+                            >
+                                {{ notificationCount > 99 ? '99+' : notificationCount }}
+                            </span>
+                        </button>
+
+                        <div
+                            v-if="notificationOpen"
+                            ref="notificationPanel"
+                            class="absolute right-0 top-12 z-[70] w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/98 shadow-2xl shadow-black/40 backdrop-blur-xl"
+                        >
+                            <div class="border-b border-white/10 px-4 py-3">
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Notifications</p>
+                                <div class="mt-1 flex items-center justify-between gap-3">
+                                    <h3 class="text-sm font-semibold text-white">Assigned to {{ data.currentUser?.name || 'you' }}</h3>
+                                    <a :href="data.routes.tasks ?? '/tasks'" class="text-xs font-semibold text-cyan-200 transition hover:text-white">Open tasks</a>
+                                </div>
+                            </div>
+
+                            <div v-if="notifications.length" class="max-h-[26rem] overflow-y-auto p-2">
+                                <a
+                                    v-for="notification in notifications"
+                                    :key="notification.id"
+                                    :href="notification.booking_url || notification.task_url"
+                                    class="block rounded-xl border border-transparent px-3 py-3 transition hover:border-white/10 hover:bg-white/[0.04]"
+                                    @click="closeNotifications"
+                                >
+                                    <div class="flex items-start justify-between gap-3">
+                                        <p class="text-sm font-semibold text-white">{{ notification.title }}</p>
+                                        <span class="shrink-0 rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                                            {{ notification.status }}
+                                        </span>
+                                    </div>
+                                    <p class="mt-1 text-xs text-stone-400">Due {{ notification.due_date_label }}</p>
+                                    <p v-if="notification.booking_label" class="mt-1 text-xs text-stone-300">{{ notification.booking_label }}</p>
+                                </a>
+                            </div>
+
+                            <div v-else class="px-4 py-6 text-sm text-stone-400">
+                                No notifications assigned to you right now.
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="hidden rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-right text-xs text-stone-300 sm:block">
                         <span class="block text-[11px] uppercase tracking-[0.3em] text-stone-500">Workspace</span>
                         <span class="font-medium text-white">{{ data.tenant?.slug }}</span>

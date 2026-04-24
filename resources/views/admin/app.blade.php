@@ -16,6 +16,7 @@
             $allowedScreens = null;
             $tenantId = $props['tenant']['id'] ?? null;
             $user = auth()->user();
+            $notifications = collect();
 
             if ($user !== null && $tenantId !== null) {
                 $membership = $user->tenants()->whereKey($tenantId)->first()?->pivot;
@@ -29,6 +30,33 @@
                         $allowedScreens = \App\Models\Role::query()->find($membership->role_id)?->screen_access ?? [];
                     }
                 }
+
+                $notifications = \App\Models\Task::query()
+                    ->with(['booking', 'status'])
+                    ->where('tenant_id', $tenantId)
+                    ->where('assigned_to', $user->id)
+                    ->whereNull('date_completed')
+                    ->orderByRaw('case when due_date is null then 1 else 0 end')
+                    ->orderBy('due_date')
+                    ->latest('created_at')
+                    ->get()
+                    ->map(function (\App\Models\Task $task) {
+                        $booking = $task->booking;
+                        $bookingLabel = $booking?->quote_number
+                            ? sprintf('%s - %s', $booking->quote_number, $booking->entry_name ?: $booking->customer_name)
+                            : ($booking?->entry_name ?: $booking?->customer_name);
+
+                        return [
+                            'id' => $task->id,
+                            'title' => $task->task_name,
+                            'status' => $task->status?->name ?: 'Open',
+                            'due_date_label' => $task->due_date?->format('d M Y') ?? 'No due date',
+                            'booking_label' => $bookingLabel,
+                            'task_url' => route('tasks.index'),
+                            'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,
+                        ];
+                    })
+                    ->values();
             }
         @endphp
         <script>
@@ -37,6 +65,12 @@
             window.adminProps = @js(array_merge($props, [
                 'allowedScreens' => $allowedScreens,
                 'csrfToken' => csrf_token(),
+                'currentUser' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ] : null,
+                'notifications' => $notifications,
                 'flash' => [
                     'status' => session('status'),
                     'errors' => $errors->all(),

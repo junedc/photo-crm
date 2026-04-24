@@ -30,6 +30,29 @@
             $customerPackageDiscountPercentage = (float) ($customerPackageDiscountPercentage ?? 0);
             $applyCustomerPackageDiscount = static fn (float $amount): float => round($amount * (1 - ($customerPackageDiscountPercentage / 100)), 2);
             $bookingCurrencyCode = strtoupper($tenant?->stripe_currency ?: config('services.platform_stripe.currency', 'usd'));
+            $wizardErrorSteps = [
+                'customer_name' => 1,
+                'customer_phone' => 1,
+                'customer_email' => 1,
+                'event_date' => 1,
+                'event_type' => 1,
+                'start_time' => 1,
+                'end_time' => 1,
+                'total_hours' => 1,
+                'package_id' => 2,
+                'package_hourly_price_id' => 2,
+                'add_on_ids' => 3,
+                'add_on_ids.*' => 3,
+                'equipment_ids' => 3,
+                'equipment_ids.*' => 3,
+                'event_location' => 4,
+                'travel_distance_km' => 4,
+                'travel_fee' => 4,
+                'terms_accepted' => 5,
+            ];
+            $firstErrorKey = $errors->keys()[0] ?? null;
+            $initialWizardStep = $wizardErrorSteps[$firstErrorKey] ?? 1;
+            $firstErrorMessage = $firstErrorKey ? $errors->first($firstErrorKey) : null;
         @endphp
         <div id="booking-toast" class="pointer-events-none fixed right-4 top-24 z-[90] hidden max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl shadow-black/30 backdrop-blur">
             <p id="booking-toast-message"></p>
@@ -95,9 +118,18 @@
                 </div>
             @endif
 
+            @if (session('warning'))
+                <div class="mt-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+                    {{ session('warning') }}
+                </div>
+            @endif
+
             @if ($errors->any())
                 <div class="mt-6 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-5 py-4 text-sm font-medium text-rose-100">
                     Please review the highlighted fields below.
+                    @if ($firstErrorMessage)
+                        <p class="mt-2 text-sm font-normal text-rose-200">{{ $firstErrorMessage }}</p>
+                    @endif
                 </div>
             @endif
 
@@ -110,7 +142,7 @@
                 <input type="hidden" name="total_hours" id="total-hours" value="{{ old('total_hours', '0.00') }}">
 
                 <nav class="rounded-3xl border border-white/10 bg-white/5 px-3 py-3" aria-label="Booking steps">
-                    <div class="flex items-start overflow-x-auto">
+                    <div class="flex items-start overflow-x-auto overflow-y-hidden">
                         @foreach ([
                             ['Customer', 'Your details'],
                             ['Package', 'Choose package'],
@@ -1001,6 +1033,7 @@
                 const bookNowDiscountFeedback = document.getElementById('book-now-discount-feedback');
                 const bookNowDepositAmount = document.getElementById('book-now-deposit-amount');
                 const bookNowTotalAmount = document.getElementById('book-now-total-amount');
+                const initialWizardStep = Number(@json($initialWizardStep)) || 1;
                 const wizardSteps = Array.from(document.querySelectorAll('[data-wizard-step]'));
                 const wizardNavButtons = Array.from(document.querySelectorAll('[data-wizard-nav]'));
                 const wizardConnectors = Array.from(document.querySelectorAll('[data-wizard-connector]'));
@@ -2390,7 +2423,7 @@
                 syncPackageIncludedAddOnVisibility();
                 applyAddOnCategoryFilter(activeAddOnCategory);
                 updateSummary();
-                showWizardStep(1);
+                showWizardStep(initialWizardStep);
                 queueTravelCalculation();
 
                 @if (session('status'))

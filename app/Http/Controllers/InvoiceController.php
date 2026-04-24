@@ -10,13 +10,13 @@ use App\Support\InvoiceBuilder;
 use App\Support\TenantStatuses;
 use App\Models\User;
 use App\Support\StripeCheckoutLinkGenerator;
+use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -194,7 +194,7 @@ class InvoiceController extends Controller
         return redirect()->away($checkoutUrl);
     }
 
-    public function send(CurrentTenant $currentTenant, Booking $booking, StripeCheckoutLinkGenerator $stripeCheckoutLinkGenerator): JsonResponse
+    public function send(CurrentTenant $currentTenant, Booking $booking, StripeCheckoutLinkGenerator $stripeCheckoutLinkGenerator, TrackedEmailSender $trackedEmailSender): JsonResponse
     {
         $booking->loadMissing(['invoice.installments', 'package', 'addOns', 'tenant.users']);
 
@@ -223,9 +223,15 @@ class InvoiceController extends Controller
             ->values()
             ->all() ?? [];
 
-        Mail::to($booking->customer_email)
-            ->cc($adminRecipients)
-            ->send(new InvoiceIssuedMail($invoice, $installment, $stripeCheckoutUrl));
+        $trackedEmailSender->send(
+            new InvoiceIssuedMail($invoice, $installment, $stripeCheckoutUrl),
+            [[
+                'email' => $booking->customer_email,
+                'name' => $booking->customer_name,
+            ]],
+            $adminRecipients,
+            ['tenant' => $booking->tenant, 'context' => $invoice],
+        );
 
         $invoice->load('installments');
 

@@ -23,6 +23,7 @@ import CustomerDetailPage from './pages/CustomerDetailPage.vue';
 import CampaignsPage from './pages/CampaignsPage.vue';
 import CampaignCreatePage from './pages/CampaignCreatePage.vue';
 import CampaignDetailPage from './pages/CampaignDetailPage.vue';
+import EmailTrackingPage from './pages/EmailTrackingPage.vue';
 import TasksPage from './pages/TasksPage.vue';
 import DiscountsPage from './pages/DiscountsPage.vue';
 import DiscountCreatePage from './pages/DiscountCreatePage.vue';
@@ -72,6 +73,7 @@ const pages = {
     campaigns: CampaignsPage,
     'campaigns-create': CampaignCreatePage,
     'campaigns-detail': CampaignDetailPage,
+    'email-tracking': EmailTrackingPage,
     tasks: TasksPage,
     discounts: DiscountsPage,
     'discounts-create': DiscountCreatePage,

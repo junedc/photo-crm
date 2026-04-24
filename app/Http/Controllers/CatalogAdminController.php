@@ -515,7 +515,7 @@ class CatalogAdminController extends Controller
 
     private function validateAddOn(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'sku' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
             'addon_category' => ['nullable', Rule::in($this->addOnCategories())],
@@ -523,6 +523,7 @@ class CatalogAdminController extends Controller
             'description' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'duration' => ['nullable', 'string', 'max:255'],
+            'due_days_before_event' => ['nullable', 'integer', 'min:0'],
             'photo' => ['nullable', 'image', 'max:4096'],
         ]) + [
             'category' => 'add-on',
@@ -532,6 +533,12 @@ class CatalogAdminController extends Controller
             'last_maintained_at' => null,
             'maintenance_notes' => null,
         ];
+
+        if (($data['addon_category'] ?? null) !== 'Action') {
+            $data['due_days_before_event'] = null;
+        }
+
+        return $data;
     }
 
     private function validateLead(Request $request): array
@@ -850,6 +857,7 @@ class CatalogAdminController extends Controller
             'description' => $addon->description,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
             'duration' => $addon->duration,
+            'due_days_before_event' => $addon->due_days_before_event,
             'photo_url' => $addon->photo_path ? $this->publicStorageUrl($addon->photo_path) : null,
             'created_at' => $addon->created_at?->format('d M Y'),
             'show_url' => route('addons.show', $addon),
@@ -901,6 +909,7 @@ class CatalogAdminController extends Controller
             'addon_category' => $addon->addon_category,
             'is_publicly_displayed' => (bool) $addon->is_publicly_displayed,
             'duration' => $addon->duration,
+            'due_days_before_event' => $addon->due_days_before_event,
             'price' => number_format((float) $addon->unit_price, 2, '.', ''),
         ];
     }

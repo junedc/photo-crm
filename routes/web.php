@@ -7,6 +7,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CatalogAdminController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DiscountController;
+use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\PublicCatalogController;
@@ -97,6 +98,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
         Route::get('/campaigns/create', [CampaignController::class, 'create'])->name('campaigns.create');
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
+        Route::get('/email-tracking', [EmailTrackingController::class, 'index'])->name('email-tracking.index');
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
         Route::get('/discounts', [DiscountController::class, 'index'])->name('discounts.index');
         Route::get('/discounts/create', [DiscountController::class, 'create'])->name('discounts.create');
@@ -141,6 +143,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::put('/campaigns/{campaign}', [CampaignController::class, 'update'])->name('campaigns.update');
         Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
         Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
+        Route::post('/email-tracking/bulk-delete', [EmailTrackingController::class, 'bulkDestroy'])->name('email-tracking.bulk-destroy');
+        Route::post('/email-tracking/{emailLog}/resend', [EmailTrackingController::class, 'resend'])->name('email-tracking.resend');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');

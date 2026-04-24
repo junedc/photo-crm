@@ -15,6 +15,8 @@ class Task extends Model
     protected $fillable = [
         'tenant_id',
         'booking_id',
+        'inventory_item_id',
+        'is_booking_action',
         'task_name',
         'task_duration_hours',
         'assigned_to',
@@ -29,6 +31,7 @@ class Task extends Model
     {
         return [
             'task_duration_hours' => 'decimal:2',
+            'is_booking_action' => 'boolean',
             'due_date' => 'date',
             'date_started' => 'date',
             'date_completed' => 'date',

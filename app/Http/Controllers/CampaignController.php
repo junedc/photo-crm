@@ -17,10 +17,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use App\Support\TrackedEmailSender;
 
 class CampaignController extends Controller
 {
@@ -131,7 +131,7 @@ class CampaignController extends Controller
         return redirect()->route('campaigns.show', $campaign)->with('status', 'Campaign updated.');
     }
 
-    public function send(Request $request, Campaign $campaign): RedirectResponse|JsonResponse
+    public function send(Request $request, Campaign $campaign, TrackedEmailSender $trackedEmailSender): RedirectResponse|JsonResponse
     {
         $tenantId = app(CurrentTenant::class)->id();
         $data = $request->validate([
@@ -164,7 +164,15 @@ class CampaignController extends Controller
                 ]
             );
 
-            Mail::to($email)->send(new CampaignMail($campaign, $result));
+            $trackedEmailSender->send(
+                new CampaignMail($campaign, $result),
+                [[
+                    'email' => $email,
+                    'name' => $this->recipientName($recipient),
+                ]],
+                [],
+                ['tenant' => $campaign->tenant, 'context' => $campaign],
+            );
         }
 
         $campaign->update([
