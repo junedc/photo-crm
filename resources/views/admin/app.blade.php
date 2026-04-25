@@ -36,7 +36,7 @@
                     ->where('tenant_id', $tenantId)
                     ->where('assignee_type', \App\Models\Task::ASSIGNEE_USER)
                     ->where('assignee_id', $user->id)
-                    ->whereNull('date_completed')
+                    ->whereNull('notification_dismissed_at')
                     ->orderByRaw('case when due_date is null then 1 else 0 end')
                     ->orderBy('due_date')
                     ->latest('created_at')
@@ -55,6 +55,7 @@
                             'booking_label' => $bookingLabel,
                             'task_url' => route('tasks.index'),
                             'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,
+                            'dismiss_url' => route('tasks.notifications.dismiss', $task),
                         ];
                     })
                     ->values();

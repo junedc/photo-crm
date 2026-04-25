@@ -30,6 +30,7 @@ class Task extends Model
         'due_date',
         'date_started',
         'date_completed',
+        'notification_dismissed_at',
         'remarks',
     ];
 
@@ -41,6 +42,7 @@ class Task extends Model
             'due_date' => 'date',
             'date_started' => 'date',
             'date_completed' => 'date',
+            'notification_dismissed_at' => 'datetime',
         ];
     }
 
