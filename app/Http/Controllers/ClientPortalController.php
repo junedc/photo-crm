@@ -4,11 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\ClientPortalCode;
+use App\Models\ClientPortalDesign;
+use App\Models\ClientPortalTaskUpdate;
+use App\Models\TenantFont;
+use App\Models\Task;
+use App\Models\TaskStatus;
 use App\Services\ClientPortalService;
+use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ClientPortalController extends Controller
@@ -179,7 +187,22 @@ class ClientPortalController extends Controller
         $email = strtolower((string) ($auth['email'] ?? ''));
 
         $bookings = Booking::query()
-            ->with(['package', 'invoice.installments', 'addOns'])
+            ->with([
+                'package',
+                'invoice.installments',
+                'addOns',
+                'clientPortalDesign',
+                'tasks' => fn ($query) => $query
+                    ->where('assignee_type', Task::ASSIGNEE_CUSTOMER)
+                    ->with([
+                        'status',
+                        'clientPortalUpdates',
+                        'clientPortalUpdates.status',
+                    ])
+                    ->orderByRaw('case when due_date is null then 1 else 0 end')
+                    ->orderBy('due_date')
+                    ->orderBy('id'),
+            ])
             ->where('customer_email', $email)
             ->orderByDesc('event_date')
             ->orderByDesc('id')
@@ -202,6 +225,96 @@ class ClientPortalController extends Controller
         ]);
     }
 
+    public function respondToTask(Request $request, CurrentTenant $currentTenant, Booking $booking, Task $task): RedirectResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $auth = $this->clientAuth($request);
+        abort_unless($auth && strtolower((string) $booking->customer_email) === strtolower((string) $auth['email']), 403);
+        abort_unless(
+            $task->tenant_id === $tenant->id
+            && $task->booking_id === $booking->id
+            && $task->assignee_type === Task::ASSIGNEE_CUSTOMER,
+            404,
+        );
+
+        $data = $request->validate([
+            'form_task_id' => ['required', 'integer'],
+            'action' => ['required', Rule::in(['save_note', 'mark_in_progress', 'mark_completed'])],
+            'note' => ['nullable', 'string', 'max:3000'],
+            'attachments' => ['nullable', 'array', 'max:6'],
+            'attachments.*' => [
+                'file',
+                'max:20480',
+                'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/quicktime,video/x-msvideo,video/webm,application/pdf',
+            ],
+        ]);
+
+        abort_unless((int) $data['form_task_id'] === $task->id, 404);
+
+        $note = trim((string) ($data['note'] ?? ''));
+        $files = $request->file('attachments', []);
+
+        if ($data['action'] === 'save_note' && $note === '' && $files === []) {
+            return back()
+                ->withInput()
+                ->withErrors(['note' => 'Add a note or upload at least one file before saving an update.']);
+        }
+
+        $status = $task->status;
+
+        if ($data['action'] === 'mark_in_progress') {
+            $status = $this->resolveTaskStatus($tenant, 'in_progress') ?? $status;
+            $task->forceFill([
+                'task_status_id' => $status?->id,
+                'date_started' => $task->date_started ?: now()->toDateString(),
+                'date_completed' => null,
+            ])->save();
+        }
+
+        if ($data['action'] === 'mark_completed') {
+            $status = $this->resolveTaskStatus($tenant, 'completed') ?? $status;
+            $task->forceFill([
+                'task_status_id' => $status?->id,
+                'date_started' => $task->date_started ?: now()->toDateString(),
+                'date_completed' => now()->toDateString(),
+            ])->save();
+        }
+
+        $attachments = collect($files)
+            ->filter()
+            ->map(function ($file) use ($tenant, $booking, $task): array {
+                $path = $file->store("client-portal-task-updates/{$tenant->id}/{$booking->id}/{$task->id}", 'public');
+
+                return [
+                    'path' => $path,
+                    'url' => $this->publicStorageUrl($path),
+                    'name' => $file->getClientOriginalName(),
+                    'mime' => $file->getMimeType() ?: 'application/octet-stream',
+                    'size' => $file->getSize(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        ClientPortalTaskUpdate::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'task_id' => $task->id,
+            'task_status_id' => $task->fresh('status')->task_status_id,
+            'customer_email' => strtolower((string) $booking->customer_email),
+            'action' => $data['action'],
+            'note' => $note !== '' ? $note : null,
+            'attachments' => $attachments === [] ? null : $attachments,
+        ]);
+
+        return redirect()
+            ->route('client.portal.index')
+            ->withFragment('task-'.$task->id)
+            ->with('status', 'Task update saved.');
+    }
+
     public function logout(Request $request): RedirectResponse
     {
         $request->session()->forget([
@@ -213,5 +326,230 @@ class ClientPortalController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('client.portal.login');
+    }
+
+    public function design(Request $request, CurrentTenant $currentTenant, Booking $booking): View|RedirectResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $auth = $this->clientAuth($request);
+
+        if (! $auth || strtolower((string) $booking->customer_email) !== strtolower((string) $auth['email'])) {
+            return redirect()->route('client.portal.login');
+        }
+
+        $design = ClientPortalDesign::query()->firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'booking_id' => $booking->id,
+            ],
+            [
+                'customer_email' => strtolower((string) $booking->customer_email),
+                'title' => 'Client design draft',
+                'design_data' => [
+                    'width' => 400,
+                    'height' => 1200,
+                    'backgroundColor' => '#f8fafc',
+                    'remarks' => '',
+                    'nodes' => [],
+                ],
+                'status' => 'draft',
+                'last_saved_at' => now(),
+            ],
+        );
+
+        return view('client-portal.design', [
+            'tenant' => $tenant,
+            'booking' => $booking->loadMissing('package'),
+            'design' => [
+                'id' => $design->id,
+                'title' => $design->title,
+                'last_saved_at_label' => $design->last_saved_at?->format('d M Y g:i A'),
+                'design_data' => $this->normalizeDesignData($design->design_data),
+            ],
+            'fonts' => $tenant->fonts()
+                ->get()
+                ->map(fn (TenantFont $font): array => $this->serializeTenantFont($font))
+                ->values()
+                ->all(),
+        ]);
+    }
+
+    public function saveDesign(Request $request, CurrentTenant $currentTenant, Booking $booking): JsonResponse|RedirectResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $auth = $this->clientAuth($request);
+        abort_unless($auth && strtolower((string) $booking->customer_email) === strtolower((string) $auth['email']), 403);
+
+        $data = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'design_data' => ['required', 'array'],
+            'design_data.width' => ['required', 'numeric', 'min:320', 'max:4000'],
+            'design_data.height' => ['required', 'numeric', 'min:320', 'max:4000'],
+            'design_data.backgroundColor' => ['nullable', 'string', 'max:30'],
+            'design_data.remarks' => ['nullable', 'string', 'max:2000'],
+            'design_data.nodes' => ['required', 'array'],
+        ]);
+
+        $design = ClientPortalDesign::query()->updateOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'booking_id' => $booking->id,
+            ],
+            [
+                'customer_email' => strtolower((string) $booking->customer_email),
+                'title' => $data['title'] ?: 'Client design draft',
+                'design_data' => $data['design_data'],
+                'status' => 'draft',
+                'last_saved_at' => now(),
+            ],
+        );
+
+        return response()->json([
+            'message' => 'Draft saved.',
+            'record' => [
+                'id' => $design->id,
+                'title' => $design->title,
+                'last_saved_at_label' => $design->last_saved_at?->format('d M Y g:i A'),
+                'design_data' => $this->normalizeDesignData($design->design_data),
+            ],
+        ]);
+    }
+
+    public function uploadDesignAsset(Request $request, CurrentTenant $currentTenant, Booking $booking): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $auth = $this->clientAuth($request);
+        abort_unless($auth && strtolower((string) $booking->customer_email) === strtolower((string) $auth['email']), 403);
+
+        $data = $request->validate([
+            'image' => ['required', 'image', 'max:5120'],
+        ]);
+
+        $path = $data['image']->store("client-portal-designs/{$tenant->id}/{$booking->id}", 'public');
+
+        return response()->json([
+            'message' => 'Image uploaded.',
+            'record' => [
+                'path' => $path,
+                'url' => $this->publicStorageUrl($path),
+                'name' => basename($path),
+            ],
+        ]);
+    }
+
+    private function clientAuth(Request $request): ?array
+    {
+        return $request->session()->get(ClientPortalService::AUTH_SESSION_KEY);
+    }
+
+    private function normalizeDesignData(?array $designData): ?array
+    {
+        if (! is_array($designData)) {
+            return $designData;
+        }
+
+        $designData['nodes'] = collect($designData['nodes'] ?? [])
+            ->map(function ($node) {
+                if (! is_array($node)) {
+                    return $node;
+                }
+
+                if (isset($node['src']) && is_string($node['src'])) {
+                    $node['src'] = $this->normalizeAssetUrl($node['src']);
+                }
+
+                return $node;
+            })
+            ->values()
+            ->all();
+
+        $designData['remarks'] = is_string($designData['remarks'] ?? null)
+            ? $designData['remarks']
+            : '';
+
+        return $designData;
+    }
+
+    private function normalizeAssetUrl(string $url): string
+    {
+        if (str_starts_with($url, '/storage/')) {
+            return $url;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+
+        return is_string($path) && str_starts_with($path, '/storage/')
+            ? $path
+            : $url;
+    }
+
+    private function publicStorageUrl(string $path): string
+    {
+        return '/storage/'.ltrim($path, '/');
+    }
+
+    private function serializeTenantFont(TenantFont $font): array
+    {
+        return [
+            'id' => $font->id,
+            'family' => $font->family,
+            'weight' => $font->weight,
+            'style' => $font->style,
+            'url' => $this->publicStorageUrl($font->file_path),
+            'css_format' => $this->fontCssFormat($font->extension),
+            'label' => trim($font->family.' '.$this->fontVariantLabel($font->weight, $font->style)),
+        ];
+    }
+
+    private function fontVariantLabel(int $weight, string $style): string
+    {
+        return match (true) {
+            $weight >= 700 && $style === 'italic' => 'Bold Italic',
+            $weight >= 700 => 'Bold',
+            $style === 'italic' => 'Italic',
+            default => 'Regular',
+        };
+    }
+
+    private function fontCssFormat(?string $extension): string
+    {
+        return match (strtolower((string) $extension)) {
+            'woff2' => 'woff2',
+            'woff' => 'woff',
+            'ttf' => 'truetype',
+            'otf' => 'opentype',
+            default => 'woff2',
+        };
+    }
+
+    private function resolveTaskStatus($tenant, string $name): ?TaskStatus
+    {
+        return $this->taskStatuses($tenant)->first(function (TaskStatus $status) use ($name): bool {
+            $normalizedStatus = str_replace([' ', '-'], '_', strtolower(trim($status->name)));
+            $normalizedName = str_replace([' ', '-'], '_', strtolower(trim($name)));
+
+            return $normalizedStatus === $normalizedName;
+        });
+    }
+
+    private function taskStatuses($tenant): Collection
+    {
+        $statuses = $tenant->taskStatuses()->orderBy('name')->get();
+
+        if ($statuses->isNotEmpty()) {
+            return $statuses;
+        }
+
+        foreach (TenantStatuses::defaults(TenantStatuses::SCOPE_TASK) as $name) {
+            $tenant->taskStatuses()->firstOrCreate(['name' => $name]);
+        }
+
+        return $tenant->taskStatuses()->orderBy('name')->get();
     }
 }

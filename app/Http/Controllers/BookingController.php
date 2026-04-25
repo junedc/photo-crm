@@ -23,6 +23,7 @@ use App\Support\BookingDiscountResolver;
 use App\Support\BookingPricing;
 use App\Support\InvoiceBuilder;
 use App\Support\PackagePriceResolver;
+use App\Support\TaskAssignees;
 use App\Support\TenantStatuses;
 use App\Support\StripeCheckoutLinkGenerator;
 use App\Support\TrackedEmailSender;
@@ -559,7 +560,7 @@ class BookingController extends Controller
     {
         abort_unless($currentTenant->id() === $booking->tenant_id, 404);
 
-        $booking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
+        $booking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status']);
         $clientPortalService->grantForBooking($booking, Auth::user());
         $booking->refresh();
 
@@ -647,12 +648,8 @@ class BookingController extends Controller
     private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
     {
         $tenant = $currentTenant->get();
-        $booking->loadMissing(['package.addOns', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
-        $tenantUsers = $tenant?->users()
-            ->wherePivot('role', '!=', 'guest')
-            ->orderBy('name')
-            ->get() ?? collect();
-        $taskStatuses = $tenant?->taskStatuses()->orderBy('name')->get() ?? collect();
+        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status']);
+        $taskStatuses = $tenant ? $this->taskStatuses($tenant) : collect();
 
         return view('admin.app', [
             'page' => 'bookings-detail',
@@ -694,15 +691,8 @@ class BookingController extends Controller
                 'eventTypes' => $this->eventTypes(),
                 'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
                 'booking' => $this->serializeBooking($booking),
-                'taskUsers' => $tenantUsers->map(fn (User $user) => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ])->values()->all(),
-                'taskStatuses' => $taskStatuses->map(fn (TaskStatus $status) => [
-                    'id' => $status->id,
-                    'name' => $status->name,
-                ])->values()->all(),
+                'taskAssignees' => $tenant ? TaskAssignees::optionsForTenant($tenant, $booking)->values()->all() : [],
+                'taskStatuses' => $taskStatuses->values()->all(),
                 'taskRoutes' => [
                     'store' => route('tasks.store'),
                 ],
@@ -937,7 +927,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'addOns', 'tasks.assignedUser', 'tasks.status']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status']);
         $clientPortalAccess = ClientPortalAccess::query()
             ->where('tenant_id', $booking->tenant_id)
             ->where('customer_email', strtolower((string) $booking->customer_email))
@@ -1035,6 +1025,7 @@ class BookingController extends Controller
                 ->values()
                 ->map(fn (Task $task) => $this->serializeTaskRecord($task))
                 ->all(),
+            'task_assignees' => $booking->tenant ? TaskAssignees::optionsForTenant($booking->tenant, $booking)->values()->all() : [],
             'invoice' => $booking->invoice ? $this->serializeInvoice($booking->invoice) : null,
             'show_url' => route('admin.bookings.show', $booking),
             'update_url' => route('admin.bookings.update', $booking),
@@ -1049,8 +1040,9 @@ class BookingController extends Controller
             'id' => $task->id,
             'task_name' => $task->task_name,
             'task_duration_hours' => $task->task_duration_hours,
-            'assigned_to' => $task->assigned_to,
-            'assigned_to_name' => $task->assignedUser?->name ?? 'Unassigned',
+            'assigned_to' => $task->assignee_type && $task->assignee_id ? TaskAssignees::value($task->assignee_type, $task->assignee_id) : '',
+            'assigned_to_name' => TaskAssignees::labelForTask($task),
+            'assignee_type' => $task->assignee_type,
             'booking_id' => $task->booking_id,
             'inventory_item_id' => $task->inventory_item_id,
             'is_booking_action' => (bool) $task->is_booking_action,
@@ -1066,6 +1058,22 @@ class BookingController extends Controller
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
         ];
+    }
+
+    private function taskStatuses($tenant)
+    {
+        if ($tenant->taskStatuses()->doesntExist()) {
+            collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
+                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(['name' => $name]));
+        }
+
+        return $tenant->taskStatuses()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (TaskStatus $status) => [
+                'id' => $status->id,
+                'name' => $status->name,
+            ]);
     }
 
     private function syncPackageActionTasks(Booking $booking): void

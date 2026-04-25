@@ -17,7 +17,9 @@
     },
     "dependencies": {
         "@vitejs/plugin-vue": "^6.0.5",
+        "konva": "^10.2.5",
         "vue": "^3.5.30",
-        "vue-cal": "^5.0.1-rc.40"
+        "vue-cal": "^5.0.1-rc.40",
+        "vue-konva": "^3.4.0"
     }
 }

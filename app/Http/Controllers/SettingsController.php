@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\TaskStatus;
 use App\Models\Tenant;
+use App\Models\TenantFont;
+use App\Models\TenantVendor;
+use App\Models\Task;
 use App\Models\Subscription;
 use App\Models\TenantSubscriptionCharge;
 use App\Models\WorkspaceStatus;
@@ -72,6 +75,8 @@ class SettingsController extends Controller
                     'workspaceUpdate' => route('settings.workspace.update'),
                     'subscriptionPay' => route('settings.subscription.pay'),
                     'accountUpdate' => route('settings.account.update'),
+                    'fontStore' => route('settings.fonts.store'),
+                    'vendorStore' => route('settings.vendors.store'),
                     'maintenanceStore' => route('settings.maintenance.store'),
                     'maintenanceTaskStore' => route('settings.maintenance.tasks.store'),
                     'tenantStripeWebhook' => route('stripe.webhook'),
@@ -85,6 +90,10 @@ class SettingsController extends Controller
                     TenantStatuses::SCOPE_EQUIPMENT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EQUIPMENT),
                 ],
                 'maintenanceLabels' => TenantStatuses::scopes(),
+                'vendors' => $tenant?->vendors()
+                    ->get()
+                    ->map(fn (TenantVendor $vendor): array => $this->serializeVendor($vendor))
+                    ->values(),
             ],
         ]);
     }
@@ -197,6 +206,121 @@ class SettingsController extends Controller
         }
 
         return redirect()->route('settings.index')->with('status', 'Account settings updated.');
+    }
+
+    public function storeFont(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'family' => ['required', 'string', 'max:120'],
+            'weight' => ['required', Rule::in(['400', '700'])],
+            'style' => ['required', Rule::in(['normal', 'italic'])],
+            'file' => ['required', 'file', 'mimes:woff,woff2,ttf,otf', 'max:2048'],
+        ]);
+
+        $family = trim((string) $data['family']);
+        $weight = (int) $data['weight'];
+        $style = (string) $data['style'];
+
+        $existing = TenantFont::query()
+            ->where('tenant_id', $tenant->id)
+            ->whereRaw('LOWER(family) = ?', [mb_strtolower($family)])
+            ->where('weight', $weight)
+            ->where('style', $style)
+            ->first();
+
+        $path = $data['file']->store("tenant-fonts/{$tenant->id}", 'public');
+
+        if ($existing?->file_path) {
+            Storage::disk('public')->delete($existing->file_path);
+        }
+
+        $font = TenantFont::query()->updateOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'family' => $family,
+                'weight' => $weight,
+                'style' => $style,
+            ],
+            [
+                'file_name' => $data['file']->getClientOriginalName(),
+                'file_path' => $path,
+                'extension' => strtolower((string) $data['file']->getClientOriginalExtension()),
+            ],
+        );
+
+        return response()->json([
+            'message' => 'Font uploaded.',
+            'record' => $this->serializeTenantFont($font->fresh()),
+        ]);
+    }
+
+    public function destroyFont(CurrentTenant $currentTenant, TenantFont $font): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $font->tenant_id === $tenant->id, 404);
+
+        if ($font->file_path) {
+            Storage::disk('public')->delete($font->file_path);
+        }
+
+        $font->delete();
+
+        return response()->json([
+            'message' => 'Font deleted.',
+        ]);
+    }
+
+    public function storeVendor(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $vendor = TenantVendor::query()->create([
+            'tenant_id' => $tenant->id,
+            ...$this->validateVendor($request),
+        ]);
+
+        return response()->json([
+            'message' => 'Vendor added.',
+            'record' => $this->serializeVendor($vendor),
+        ]);
+    }
+
+    public function updateVendor(CurrentTenant $currentTenant, Request $request, TenantVendor $vendor): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $vendor->tenant_id === $tenant->id, 404);
+
+        $vendor->update($this->validateVendor($request));
+
+        return response()->json([
+            'message' => 'Vendor updated.',
+            'record' => $this->serializeVendor($vendor->fresh()),
+        ]);
+    }
+
+    public function destroyVendor(CurrentTenant $currentTenant, TenantVendor $vendor): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $vendor->tenant_id === $tenant->id, 404);
+
+        Task::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('assignee_type', Task::ASSIGNEE_VENDOR)
+            ->where('assignee_id', $vendor->id)
+            ->update([
+                'assignee_type' => null,
+                'assignee_id' => null,
+            ]);
+
+        $vendor->delete();
+
+        return response()->json([
+            'message' => 'Vendor deleted.',
+        ]);
     }
 
     public function storeMaintenanceStatus(CurrentTenant $currentTenant, Request $request): JsonResponse
@@ -385,7 +509,57 @@ class SettingsController extends Controller
             'quote_prefix' => $tenant->quote_prefix ?? 'QT',
             'invoice_prefix' => $tenant->invoice_prefix ?? 'INV',
             'customer_package_discount_percentage' => number_format((float) ($tenant->customer_package_discount_percentage ?? 0), 2, '.', ''),
+            'fonts' => $tenant->fonts()
+                ->get()
+                ->map(fn (TenantFont $font): array => $this->serializeTenantFont($font))
+                ->values(),
         ];
+    }
+
+    private function serializeTenantFont(TenantFont $font): array
+    {
+        return [
+            'id' => $font->id,
+            'family' => $font->family,
+            'weight' => $font->weight,
+            'style' => $font->style,
+            'file_name' => $font->file_name,
+            'extension' => $font->extension,
+            'url' => $this->publicStorageUrl($font->file_path),
+            'css_format' => $this->fontCssFormat($font->extension),
+            'label' => trim($font->family.' '.$this->fontVariantLabel($font->weight, $font->style)),
+            'delete_url' => route('settings.fonts.destroy', $font),
+        ];
+    }
+
+    private function fontVariantLabel(int $weight, string $style): string
+    {
+        return match (true) {
+            $weight >= 700 && $style === 'italic' => 'Bold Italic',
+            $weight >= 700 => 'Bold',
+            $style === 'italic' => 'Italic',
+            default => 'Regular',
+        };
+    }
+
+    private function fontCssFormat(?string $extension): string
+    {
+        return match (strtolower((string) $extension)) {
+            'woff2' => 'woff2',
+            'woff' => 'woff',
+            'ttf' => 'truetype',
+            'otf' => 'opentype',
+            default => 'woff2',
+        };
+    }
+
+    private function publicStorageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return '/storage/'.ltrim($path, '/');
     }
 
     private function serializeSubscription(Subscription $subscription): array
@@ -473,6 +647,29 @@ class SettingsController extends Controller
             'name' => $status->name,
             'update_url' => route('settings.maintenance.tasks.update', $status),
             'delete_url' => route('settings.maintenance.tasks.destroy', $status),
+        ];
+    }
+
+    private function validateVendor(Request $request): array
+    {
+        return $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'service_type' => ['required', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+        ]);
+    }
+
+    private function serializeVendor(TenantVendor $vendor): array
+    {
+        return [
+            'id' => $vendor->id,
+            'name' => $vendor->name,
+            'service_type' => $vendor->service_type,
+            'email' => $vendor->email,
+            'phone' => $vendor->phone,
+            'update_url' => route('settings.vendors.update', $vendor),
+            'delete_url' => route('settings.vendors.destroy', $vendor),
         ];
     }
 }

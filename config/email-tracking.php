@@ -5,6 +5,7 @@ use App\Mail\CampaignMail;
 use App\Mail\CustomerBookingCreatedMail;
 use App\Mail\InvoiceIssuedMail;
 use App\Mail\LoginVerificationCodeMail;
+use App\Mail\TaskAssignedMail;
 use App\Mail\ClientPortalCodeMail;
 use App\Mail\ClientPortalInviteMail;
 use App\Mail\PlatformSubscriptionPaidMail;
@@ -40,6 +41,10 @@ return [
         ],
         InvoiceIssuedMail::class => [
             'title' => 'Invoice issued',
+            'track' => true,
+        ],
+        TaskAssignedMail::class => [
+            'title' => 'Task assignment',
             'track' => true,
         ],
         CampaignMail::class => [

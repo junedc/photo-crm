@@ -69,6 +69,10 @@ Route::middleware('tenant.required')->group(function () {
     Route::post('/client/verify', [ClientPortalController::class, 'confirm'])->name('client.portal.verify.store');
     Route::post('/client/verify/resend', [ClientPortalController::class, 'resend'])->name('client.portal.verify.resend');
     Route::get('/client/bookings', [ClientPortalController::class, 'index'])->name('client.portal.index');
+    Route::get('/client/bookings/{booking}/design', [ClientPortalController::class, 'design'])->name('client.portal.design');
+    Route::put('/client/bookings/{booking}/design', [ClientPortalController::class, 'saveDesign'])->name('client.portal.design.save');
+    Route::post('/client/bookings/{booking}/design/assets', [ClientPortalController::class, 'uploadDesignAsset'])->name('client.portal.design.assets.store');
+    Route::post('/client/bookings/{booking}/tasks/{task}/respond', [ClientPortalController::class, 'respondToTask'])->name('client.portal.tasks.respond');
     Route::post('/client/logout', [ClientPortalController::class, 'logout'])->name('client.portal.logout');
     Route::get('/invoices/{invoice:token}', [InvoiceController::class, 'show'])->name('invoices.show');
     Route::get('/invoices/{invoice:token}/status', [InvoiceController::class, 'status'])->name('invoices.status');
@@ -165,6 +169,11 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/settings/workspace', [SettingsController::class, 'updateWorkspace'])->name('settings.workspace.update');
         Route::post('/settings/subscription/pay', [SettingsController::class, 'paySubscription'])->name('settings.subscription.pay');
         Route::post('/settings/account', [SettingsController::class, 'updateAccount'])->name('settings.account.update');
+        Route::post('/settings/fonts', [SettingsController::class, 'storeFont'])->name('settings.fonts.store');
+        Route::post('/settings/vendors', [SettingsController::class, 'storeVendor'])->name('settings.vendors.store');
+        Route::put('/settings/vendors/{vendor}', [SettingsController::class, 'updateVendor'])->name('settings.vendors.update');
+        Route::delete('/settings/vendors/{vendor}', [SettingsController::class, 'destroyVendor'])->name('settings.vendors.destroy');
+        Route::delete('/settings/fonts/{font}', [SettingsController::class, 'destroyFont'])->name('settings.fonts.destroy');
         Route::post('/settings/maintenance-statuses', [SettingsController::class, 'storeMaintenanceStatus'])->name('settings.maintenance.store');
         Route::put('/settings/maintenance-statuses/{status}', [SettingsController::class, 'updateMaintenanceStatus'])->name('settings.maintenance.update');
         Route::delete('/settings/maintenance-statuses/{status}', [SettingsController::class, 'destroyMaintenanceStatus'])->name('settings.maintenance.destroy');

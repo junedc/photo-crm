@@ -12,13 +12,11 @@ const props = defineProps({
 
 const { saving, fieldErrors, submitForm, deleteRecord } = useWorkspaceCrud();
 const tasks = ref([...(props.data.tasks ?? [])]);
-const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
-const users = computed(() => props.data.users ?? []);
+const taskStatuses = computed(() => props.data.taskStatuses ?? []);
+const baseAssigneeOptions = computed(() => props.data.assigneeOptions ?? []);
 const bookings = computed(() => props.data.bookings ?? []);
-const taskStatuses = computed(() => localTaskStatuses.value);
 const editingTask = ref(null);
 const showModal = ref(false);
-const statusMenuOpen = ref(false);
 const form = ref(buildForm());
 
 function buildForm(task = null) {
@@ -28,67 +26,42 @@ function buildForm(task = null) {
         assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
         booking_id: task?.booking_id ? String(task.booking_id) : '',
         task_status_id: task?.task_status_id ? String(task.task_status_id) : '',
-        status_name: task?.status_name ?? '',
         remarks: task?.remarks ?? '',
         due_date: task?.due_date ?? '',
         date_started: task?.date_started ?? '',
         date_completed: task?.date_completed ?? '',
     };
 }
+const selectedBooking = computed(() => bookings.value.find((booking) => String(booking.id) === String(form.value.booking_id ?? '')) ?? null);
+const assigneeGroups = computed(() => {
+    const options = [...baseAssigneeOptions.value];
 
-const statusSuggestions = computed(() => {
-    const term = form.value.status_name.trim().toLowerCase();
-
-    if (term.length < 2) {
-        return [];
+    if (selectedBooking.value?.customer_assignee && !options.some((option) => option.value === selectedBooking.value.customer_assignee.value)) {
+        options.push(selectedBooking.value.customer_assignee);
     }
 
-    return taskStatuses.value.filter((status) => status.name.toLowerCase().includes(term));
+    return options.reduce((groups, option) => {
+        const group = option.group ?? 'Other';
+        groups[group] = [...(groups[group] ?? []), option];
+        return groups;
+    }, {});
 });
-
-const hasExactStatusMatch = computed(() => {
-    const term = form.value.status_name.trim().toLowerCase();
-
-    return term !== '' && taskStatuses.value.some((status) => status.name.toLowerCase() === term);
-});
-
-const statusCreateLabel = computed(() => form.value.status_name.trim());
 
 const openCreate = () => {
     editingTask.value = null;
     form.value = buildForm();
-    statusMenuOpen.value = false;
     showModal.value = true;
 };
 
 const openEdit = (task) => {
     editingTask.value = task;
     form.value = buildForm(task);
-    statusMenuOpen.value = false;
     showModal.value = true;
 };
 
 const closeModal = () => {
     showModal.value = false;
     editingTask.value = null;
-    statusMenuOpen.value = false;
-};
-
-const chooseStatus = (status) => {
-    form.value.task_status_id = String(status.id);
-    form.value.status_name = status.name;
-    statusMenuOpen.value = false;
-};
-
-const useNewStatus = () => {
-    form.value.task_status_id = '';
-    form.value.status_name = statusCreateLabel.value;
-    statusMenuOpen.value = false;
-};
-
-const onStatusInput = () => {
-    form.value.task_status_id = '';
-    statusMenuOpen.value = form.value.status_name.trim().length >= 2;
 };
 
 const bookingLabel = (booking) => [booking.quote_number, booking.display_name, booking.event_date_label].filter(Boolean).join(' - ');
@@ -100,7 +73,6 @@ const saveTask = async () => {
     formData.append('assigned_to', form.value.assigned_to ?? '');
     formData.append('booking_id', form.value.booking_id ?? '');
     formData.append('task_status_id', form.value.task_status_id ?? '');
-    formData.append('status_name', form.value.status_name ?? '');
     formData.append('remarks', form.value.remarks ?? '');
     formData.append('due_date', form.value.due_date ?? '');
     formData.append('date_started', form.value.date_started ?? '');
@@ -120,12 +92,6 @@ const saveTask = async () => {
     tasks.value = index >= 0
         ? tasks.value.map((task) => (task.id === record.id ? record : task))
         : [record, ...tasks.value];
-    if (record.task_status_id && !taskStatuses.value.some((status) => String(status.id) === String(record.task_status_id))) {
-        localTaskStatuses.value = [
-            ...taskStatuses.value,
-            { id: record.task_status_id, name: record.status_name },
-        ];
-    }
     closeModal();
 };
 
@@ -202,47 +168,19 @@ const removeTask = async (task) => {
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
-                        <div class="relative">
-                            <input
-                                v-model="form.status_name"
-                                type="text"
-                                class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50"
-                                :class="firstError(fieldErrors, 'task_status_id') || firstError(fieldErrors, 'status_name') ? 'border-rose-300/60' : ''"
-                                placeholder="Type 2 letters to search"
-                                @input="onStatusInput"
-                                @focus="statusMenuOpen = form.status_name.trim().length >= 2"
-                            >
-                            <div v-if="statusMenuOpen && (statusSuggestions.length || (statusCreateLabel && !hasExactStatusMatch))" class="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/30">
-                                <button
-                                    v-for="status in statusSuggestions"
-                                    :key="status.id"
-                                    type="button"
-                                    class="flex w-full items-center justify-between border-b border-white/10 px-3 py-2 text-left text-sm text-white transition last:border-b-0 hover:bg-white/5"
-                                    @click="chooseStatus(status)"
-                                >
-                                    <span>{{ status.name }}</span>
-                                    <span class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Existing</span>
-                                </button>
-                                <button
-                                    v-if="statusCreateLabel && !hasExactStatusMatch"
-                                    type="button"
-                                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-emerald-200 transition hover:bg-emerald-400/10"
-                                    @click="useNewStatus"
-                                >
-                                    <span>Create new: {{ statusCreateLabel }}</span>
-                                    <span class="text-[11px] uppercase tracking-[0.18em] text-emerald-300">New</span>
-                                </button>
-                            </div>
-                        </div>
-                        <p v-if="firstError(fieldErrors, 'task_status_id') || firstError(fieldErrors, 'status_name')" class="mt-1 text-xs font-medium text-rose-300">
-                            {{ firstError(fieldErrors, 'task_status_id') || firstError(fieldErrors, 'status_name') }}
-                        </p>
+                        <select v-model="form.task_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
+                            <option value="">No status</option>
+                            <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.name }}</option>
+                        </select>
+                        <p v-if="firstError(fieldErrors, 'task_status_id')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'task_status_id') }}</p>
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Assigned To</label>
                         <select v-model="form.assigned_to" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'assigned_to') ? 'border-rose-300/60' : ''">
                             <option value="">Unassigned</option>
-                            <option v-for="user in users" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
+                            <optgroup v-for="(options, group) in assigneeGroups" :key="group" :label="group">
+                                <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+                            </optgroup>
                         </select>
                         <p v-if="firstError(fieldErrors, 'assigned_to')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'assigned_to') }}</p>
                     </div>

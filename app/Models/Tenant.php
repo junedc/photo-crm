@@ -71,6 +71,16 @@ class Tenant extends Model
         return $this->hasMany(Package::class);
     }
 
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(TenantVendor::class)->orderBy('service_type')->orderBy('name');
+    }
+
+    public function fonts(): HasMany
+    {
+        return $this->hasMany(TenantFont::class)->orderBy('family')->orderBy('weight')->orderBy('style');
+    }
+
     public function equipment(): HasMany
     {
         return $this->hasMany(Equipment::class);

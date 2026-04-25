@@ -113,8 +113,18 @@ class Booking extends Model
         return $this->hasOne(Invoice::class);
     }
 
+    public function clientPortalDesign(): HasOne
+    {
+        return $this->hasOne(ClientPortalDesign::class);
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    public function clientPortalTaskUpdates(): HasMany
+    {
+        return $this->hasMany(ClientPortalTaskUpdate::class);
     }
 }
