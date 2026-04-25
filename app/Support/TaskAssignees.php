@@ -87,7 +87,7 @@ class TaskAssignees
     public static function labelForTask(Task $task): string
     {
         return match ($task->assignee_type) {
-            Task::ASSIGNEE_USER => $task->assigneeUser?->name ?? 'Unassigned',
+            Task::ASSIGNEE_USER => $task->assignedUser?->name ?? 'Unassigned',
             Task::ASSIGNEE_VENDOR => $task->assigneeVendor?->name ?? 'Unassigned',
             Task::ASSIGNEE_CUSTOMER => $task->assigneeCustomer?->full_name ?? ($task->booking?->customer_name ?: 'Customer'),
             default => 'Unassigned',

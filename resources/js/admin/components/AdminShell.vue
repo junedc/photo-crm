@@ -1,4 +1,5 @@
 <script setup>
+import axios from 'axios';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -15,7 +16,8 @@ const props = defineProps({
 const notificationOpen = ref(false);
 const notificationPanel = ref(null);
 const notificationButton = ref(null);
-const notifications = computed(() => props.data.notifications ?? []);
+const notifications = ref([...(props.data.notifications ?? [])]);
+const dismissingNotifications = ref(new Set());
 const notificationCount = computed(() => notifications.value.length);
 
 const navItems = computed(() => [
@@ -238,6 +240,38 @@ const closeNotifications = () => {
     notificationOpen.value = false;
 };
 
+const dismissNotification = async (notification) => {
+    if (!notification?.dismiss_url || dismissingNotifications.value.has(notification.id)) {
+        return;
+    }
+
+    const previousNotifications = [...notifications.value];
+    notifications.value = notifications.value.filter((entry) => entry.id !== notification.id);
+    dismissingNotifications.value = new Set([...dismissingNotifications.value, notification.id]);
+
+    try {
+        await axios.post(notification.dismiss_url, {
+            _token: props.data.csrfToken,
+        }, {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+    } catch (error) {
+        notifications.value = previousNotifications;
+        window.dispatchEvent(new CustomEvent('admin-toast', {
+            detail: {
+                type: 'error',
+                errors: [error.response?.data?.message ?? 'Could not remove that task notification.'],
+            },
+        }));
+    } finally {
+        const next = new Set(dismissingNotifications.value);
+        next.delete(notification.id);
+        dismissingNotifications.value = next;
+    }
+};
+
 const onDocumentClick = (event) => {
     const target = event.target;
 
@@ -276,6 +310,13 @@ watch(
         }
     },
     { immediate: true },
+);
+
+watch(
+    () => props.data.notifications,
+    (nextNotifications) => {
+        notifications.value = [...(nextNotifications ?? [])];
+    },
 );
 
 onMounted(() => {
@@ -364,22 +405,34 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div v-if="notifications.length" class="max-h-[26rem] overflow-y-auto p-2">
-                                <a
+                                <div
                                     v-for="notification in notifications"
                                     :key="notification.id"
-                                    :href="notification.booking_url || notification.task_url"
-                                    class="block rounded-xl border border-transparent px-3 py-3 transition hover:border-white/10 hover:bg-white/[0.04]"
-                                    @click="closeNotifications"
+                                    class="group flex items-start gap-2 rounded-xl border border-transparent px-3 py-3 transition hover:border-white/10 hover:bg-white/[0.04]"
                                 >
-                                    <div class="flex items-start justify-between gap-3">
-                                        <p class="text-sm font-semibold text-white">{{ notification.title }}</p>
-                                        <span class="shrink-0 rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-                                            {{ notification.status }}
-                                        </span>
-                                    </div>
-                                    <p class="mt-1 text-xs text-stone-400">Due {{ notification.due_date_label }}</p>
-                                    <p v-if="notification.booking_label" class="mt-1 text-xs text-stone-300">{{ notification.booking_label }}</p>
-                                </a>
+                                    <a
+                                        :href="notification.booking_url || notification.task_url"
+                                        class="min-w-0 flex-1"
+                                        @click="closeNotifications"
+                                    >
+                                        <div class="flex items-start justify-between gap-3">
+                                            <p class="text-sm font-semibold text-white">{{ notification.title }}</p>
+                                            <span class="shrink-0 rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                                                {{ notification.status }}
+                                            </span>
+                                        </div>
+                                        <p class="mt-1 text-xs text-stone-400">Due {{ notification.due_date_label }}</p>
+                                        <p v-if="notification.booking_label" class="mt-1 truncate text-xs text-stone-300">{{ notification.booking_label }}</p>
+                                    </a>
+                                    <button
+                                        type="button"
+                                        class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 text-stone-400 transition hover:border-rose-300/40 hover:bg-rose-400/10 hover:text-rose-100"
+                                        :aria-label="`Remove ${notification.title} from notifications`"
+                                        @click.stop="dismissNotification(notification)"
+                                    >
+                                        <span aria-hidden="true" class="text-sm leading-none">&times;</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div v-else class="px-4 py-6 text-sm text-stone-400">

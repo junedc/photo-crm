@@ -158,6 +158,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/email-tracking/bulk-delete', [EmailTrackingController::class, 'bulkDestroy'])->name('email-tracking.bulk-destroy');
         Route::post('/email-tracking/{emailLog}/resend', [EmailTrackingController::class, 'resend'])->name('email-tracking.resend');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
+        Route::post('/tasks/{task}/dismiss-notification', [TaskController::class, 'dismissNotification'])->name('tasks.notifications.dismiss');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
         Route::post('/discounts', [DiscountController::class, 'store'])->name('discounts.store');

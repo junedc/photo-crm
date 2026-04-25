@@ -73,7 +73,15 @@ class TaskController extends Controller
     {
         $tenant = $this->requireTenant($currentTenant);
         $this->assertTenantTask($tenant, $task);
-        $task->update($this->validateTask($request, $tenant));
+        $validated = $this->validateTask($request, $tenant);
+        $assigneeChanged = $task->assignee_type !== ($validated['assignee_type'] ?? null)
+            || (string) $task->assignee_id !== (string) ($validated['assignee_id'] ?? '');
+
+        if ($assigneeChanged) {
+            $validated['notification_dismissed_at'] = null;
+        }
+
+        $task->update($validated);
         $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status']);
         $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
@@ -86,6 +94,25 @@ class TaskController extends Controller
         $task->delete();
 
         return $this->deletedResponse($request, 'Task deleted.', route('tasks.index'));
+    }
+
+    public function dismissNotification(Request $request, CurrentTenant $currentTenant, Task $task): JsonResponse
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $this->assertTenantTask($tenant, $task);
+
+        abort_unless(
+            $task->assignee_type === Task::ASSIGNEE_USER && $task->assignee_id === $request->user()?->id,
+            403
+        );
+
+        $task->forceFill([
+            'notification_dismissed_at' => now(),
+        ])->save();
+
+        return response()->json([
+            'message' => 'Task removed from notifications.',
+        ]);
     }
 
     private function validateTask(Request $request, Tenant $tenant): array
@@ -163,6 +190,7 @@ class TaskController extends Controller
             'created_at' => DateFormatter::date($task->created_at),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
+            'dismiss_notification_url' => route('tasks.notifications.dismiss', $task),
         ];
     }
 
