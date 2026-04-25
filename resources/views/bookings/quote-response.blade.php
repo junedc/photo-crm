@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
@@ -36,7 +37,7 @@
                 <p class="mt-4 max-w-3xl text-sm leading-7 text-stone-300">
                     You have {{ $response }} the quote for
                     <strong>{{ $booking->package?->name ?? 'your selected package' }}</strong>
-                    on {{ $booking->event_date?->format('d M Y') ?? 'your event date' }}.
+                    on {{ DateFormatter::date($booking->event_date, 'your event date') }}.
                 </p>
 
                 <div class="mt-6 rounded-3xl border border-white/10 bg-stone-950/50 p-5">

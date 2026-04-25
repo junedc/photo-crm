@@ -24,6 +24,7 @@ class SupportTicket extends Model
         'priority',
         'subject',
         'description',
+        'support_status_id',
         'status',
         'admin_notes',
         'resolved_at',
@@ -77,6 +78,11 @@ class SupportTicket extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function supportStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'support_status_id');
     }
 
     public function replies(): HasMany

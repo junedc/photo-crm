@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TenantStatuses;
 use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,12 +15,20 @@ class Tenant extends Model
     /** @use HasFactory<TenantFactory> */
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::created(function (self $tenant): void {
+            TenantStatuses::seedDefaults($tenant);
+        });
+    }
+
     protected $fillable = [
         'name',
         'slug',
         'referral_code',
         'logo_path',
         'theme',
+        'timezone',
         'subscription_id',
         'subscription_enabled',
         'subscription_disabled_at',

@@ -17,6 +17,7 @@ class TenantReferral extends Model
         'referral_code',
         'referred_workspace_name',
         'referred_owner_email',
+        'referral_status_id',
         'status',
         'qualified_at',
         'rewarded_at',
@@ -43,6 +44,11 @@ class TenantReferral extends Model
     public function referrerTenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class, 'referrer_tenant_id');
+    }
+
+    public function referralStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'referral_status_id');
     }
 
     public function referredTenant(): BelongsTo

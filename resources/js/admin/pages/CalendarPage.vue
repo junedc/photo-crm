@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { VueCal } from 'vue-cal';
 import 'vue-cal/style';
+import { formatDateLabel } from '../../dateFormatter';
 
 const props = defineProps({
     data: {
@@ -62,9 +63,10 @@ const parseViewFromUrl = () => {
 };
 const selectedView = ref(parseViewFromUrl());
 const useDarkCalendar = computed(() => props.data.tenant?.theme !== 'light');
+const tenantTimezone = computed(() => props.data.tenant?.timezone ?? 'UTC');
 
 const monthLabel = computed(() =>
-    visibleMonth.value.toLocaleDateString(undefined, {
+    formatDateLabel(visibleMonth.value, tenantTimezone.value, {
         month: 'long',
         year: 'numeric',
     }),

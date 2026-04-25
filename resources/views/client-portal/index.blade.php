@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
@@ -59,7 +60,7 @@
                         <dl class="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
                             <div>
                                 <dt class="text-stone-500">Event date</dt>
-                                <dd class="mt-1 text-stone-100">{{ $booking->event_date?->format('d M Y') ?? 'To be confirmed' }}</dd>
+                                <dd class="mt-1 text-stone-100">{{ DateFormatter::date($booking->event_date, 'To be confirmed') }}</dd>
                             </div>
                             <div>
                                 <dt class="text-stone-500">Time</dt>
@@ -84,7 +85,7 @@
                             </a>
                             @if ($booking->clientPortalDesign?->last_saved_at)
                                 <span class="inline-flex items-center rounded-2xl border border-white/10 px-4 py-2 text-xs text-stone-400">
-                                    Saved {{ $booking->clientPortalDesign->last_saved_at->format('d M Y g:i A') }}
+                                    Saved {{ DateFormatter::dateTime($booking->clientPortalDesign->last_saved_at) }}
                                 </span>
                             @endif
                         </div>
@@ -125,7 +126,7 @@
                                             <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-3">
                                                 <div>
                                                     <dt class="text-stone-500">Due date</dt>
-                                                    <dd class="mt-1 text-stone-100">{{ $task->due_date?->format('d M Y') ?: 'No due date yet' }}</dd>
+                                                    <dd class="mt-1 text-stone-100">{{ DateFormatter::date($task->due_date, 'No due date yet') }}</dd>
                                                 </div>
                                                 <div>
                                                     <dt class="text-stone-500">Hours</dt>
@@ -133,7 +134,7 @@
                                                 </div>
                                                 <div>
                                                     <dt class="text-stone-500">Last update</dt>
-                                                    <dd class="mt-1 text-stone-100">{{ $task->clientPortalUpdates->first()?->created_at?->format('d M Y g:i A') ?: 'No reply yet' }}</dd>
+                                                    <dd class="mt-1 text-stone-100">{{ DateFormatter::dateTime($task->clientPortalUpdates->first()?->created_at, 'No reply yet') }}</dd>
                                                 </div>
                                             </dl>
 
@@ -151,7 +152,7 @@
                                                         <div class="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
                                                             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-400">
                                                                 <span>{{ str($update->action)->replace('_', ' ')->title() }}</span>
-                                                                <span>{{ $update->created_at?->format('d M Y g:i A') }}</span>
+                                                                <span>{{ DateFormatter::dateTime($update->created_at) }}</span>
                                                             </div>
                                                             @if (filled($update->note))
                                                                 <p class="mt-2 text-sm leading-6 text-stone-200">{{ $update->note }}</p>
@@ -225,7 +226,7 @@
                                 <h3 class="mt-1 text-lg font-semibold text-white">{{ $booking->package?->name ?? 'Custom booking' }}</h3>
                             </div>
                             <span class="rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-stone-300">
-                                {{ $booking->event_date?->format('d M Y') ?? 'Past booking' }}
+                                {{ DateFormatter::date($booking->event_date, 'Past booking') }}
                             </span>
                         </div>
                         <p class="mt-4 text-sm leading-6 text-stone-300">

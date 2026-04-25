@@ -88,7 +88,7 @@ class PlatformSubscriptionCheckoutLinkGenerator
     private function descriptionFor(Tenant $tenant, TenantSubscriptionCharge $charge): string
     {
         $period = $charge->period_ends_at
-            ? $charge->period_starts_at->format('d M Y').' to '.$charge->period_ends_at->format('d M Y')
+            ? DateFormatter::date($charge->period_starts_at).' to '.DateFormatter::date($charge->period_ends_at)
             : 'No expiry';
 
         return "{$tenant->name} platform subscription for {$period}";

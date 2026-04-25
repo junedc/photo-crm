@@ -20,9 +20,10 @@ const invoiceErrors = ref({});
 const taskErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
+const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 
 const buildEditForm = (record) => ({
-    status: record?.status ?? 'pending',
+    booking_status_id: record?.status_id ? String(record.status_id) : String(props.data.bookingStatusOptions?.[0]?.id ?? ''),
     booking_kind: record?.booking_kind ?? (props.data.bookingKinds?.[0] ?? 'customer'),
     entry_name: record?.entry_name ?? '',
     entry_description: record?.entry_description ?? '',
@@ -247,8 +248,8 @@ const grantClientAccess = async () => {
 const updateBooking = async () => {
     const errors = {};
 
-    if (isBlank(editForm.value.status)) {
-        errors.status = requiredMessage('Status');
+    if (isBlank(editForm.value.booking_status_id)) {
+        errors.booking_status_id = requiredMessage('Status');
     }
 
     if (isBlank(editForm.value.package_id)) {
@@ -513,8 +514,8 @@ const removeTask = async (task) => {
 
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
-                        <select v-model="editForm.status" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'status') ? 'border-rose-300/60' : ''">
-                            <option v-for="status in data.bookingStatuses" :key="status" :value="status">{{ statusLabel(status) }}</option>
+                        <select v-model="editForm.booking_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'booking_status_id') ? 'border-rose-300/60' : ''">
+                            <option v-for="status in bookingStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                         </select>
                     </div>
                     <div class="sm:col-span-2">
@@ -767,7 +768,7 @@ const removeTask = async (task) => {
                             <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
                             <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
                                 <option value="">No status</option>
-                                <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.name }}</option>
+                                <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
                             </select>
                         </div>
                         <div>

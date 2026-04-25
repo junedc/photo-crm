@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
 use App\Support\TaskAssignees;
 use App\Support\TenantStatuses;
 use App\Support\TrackedEmailSender;
@@ -51,7 +52,7 @@ class TaskController extends Controller
                     'id' => $booking->id,
                     'display_name' => $booking->entry_name ?: $booking->customer_name,
                     'quote_number' => $booking->quote_number,
-                    'event_date_label' => $booking->event_date?->format('d M Y'),
+                    'event_date_label' => DateFormatter::date($booking->event_date),
                     'customer_assignee' => TaskAssignees::customerOption($tenant, $booking),
                 ])
                 ->values(),
@@ -151,14 +152,15 @@ class TaskController extends Controller
                 : ($task->booking?->entry_name ?: $task->booking?->customer_name),
             'task_status_id' => $task->task_status_id,
             'status_name' => $task->status?->name ?? '',
-            'due_date' => $task->due_date?->format('Y-m-d') ?? '',
-            'due_date_label' => $task->due_date?->format('d M Y') ?? 'Not set',
-            'date_started' => $task->date_started?->format('Y-m-d') ?? '',
-            'date_started_label' => $task->date_started?->format('d M Y') ?? 'Not set',
-            'date_completed' => $task->date_completed?->format('Y-m-d') ?? '',
-            'date_completed_label' => $task->date_completed?->format('d M Y') ?? 'Not set',
+            'status_label' => $task->status?->label() ?? '',
+            'due_date' => DateFormatter::inputDate($task->due_date) ?? '',
+            'due_date_label' => DateFormatter::date($task->due_date, 'Not set'),
+            'date_started' => DateFormatter::inputDate($task->date_started) ?? '',
+            'date_started_label' => DateFormatter::date($task->date_started, 'Not set'),
+            'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
+            'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
-            'created_at' => $task->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($task->created_at),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
         ];
@@ -168,7 +170,10 @@ class TaskController extends Controller
     {
         if ($tenant->taskStatuses()->doesntExist()) {
             collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
-                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(['name' => $name]));
+                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(
+                    ['name' => $name],
+                    ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
+                ));
         }
 
         return $tenant->taskStatuses()
@@ -177,6 +182,7 @@ class TaskController extends Controller
             ->map(fn (TaskStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
+                'label' => $status->label(),
             ]);
     }
 

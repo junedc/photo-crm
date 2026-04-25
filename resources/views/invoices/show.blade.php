@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
@@ -62,15 +63,15 @@
                             </div>
                             <div class="rounded-2xl border border-white/10 bg-stone-950/50 p-4">
                                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Date</p>
-                                <p class="mt-2 text-base font-semibold">{{ $invoice->booking->event_date?->format('d M Y') }}</p>
+                                <p class="mt-2 text-base font-semibold">{{ DateFormatter::date($invoice->booking->event_date) }}</p>
                             </div>
                             <div class="rounded-2xl border border-white/10 bg-stone-950/50 p-4">
                                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Start Hour</p>
-                                <p class="mt-2 text-base font-semibold">{{ $invoice->booking->start_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($invoice->booking->start_time) === 5 ? $invoice->booking->start_time.':00' : $invoice->booking->start_time)->format('g:i A') : 'N/A' }}</p>
+                                <p class="mt-2 text-base font-semibold">{{ DateFormatter::time($invoice->booking->start_time, 'N/A') }}</p>
                             </div>
                             <div class="rounded-2xl border border-white/10 bg-stone-950/50 p-4">
                                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">End Hour</p>
-                                <p class="mt-2 text-base font-semibold">{{ $invoice->booking->end_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($invoice->booking->end_time) === 5 ? $invoice->booking->end_time.':00' : $invoice->booking->end_time)->format('g:i A') : 'N/A' }}</p>
+                                <p class="mt-2 text-base font-semibold">{{ DateFormatter::time($invoice->booking->end_time, 'N/A') }}</p>
                             </div>
                             <div class="rounded-2xl border border-white/10 bg-stone-950/50 p-4">
                                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Total Hours</p>
@@ -101,10 +102,10 @@
                                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <p class="text-lg font-semibold">{{ $installment->label }}</p>
-                                            <p class="mt-1 text-sm text-stone-400">Due {{ $installment->due_date?->format('d M Y') }}</p>
+                                            <p class="mt-1 text-sm text-stone-400">Due {{ DateFormatter::date($installment->due_date) }}</p>
                                             <p class="mt-2 text-sm text-emerald-200 {{ $installment->paid_at ? '' : 'hidden' }}" data-installment-paid-at="{{ $installment->id }}">
                                                 @if ($installment->paid_at)
-                                                    Paid {{ $installment->paid_at->format('d M Y g:i A') }}
+                                                    Paid {{ DateFormatter::dateTime($installment->paid_at) }}
                                                 @endif
                                             </p>
                                         </div>

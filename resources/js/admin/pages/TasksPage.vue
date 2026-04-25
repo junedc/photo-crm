@@ -134,7 +134,7 @@ const removeTask = async (task) => {
                 </div>
                 <div v-for="task in tasks" :key="task.id" class="grid grid-cols-[minmax(0,1.3fr)_10rem_10rem_13rem_8rem_8rem_8rem_14rem_9rem] items-center gap-3 border-t border-white/10 px-3 py-2">
                     <p class="truncate text-sm font-medium text-white">{{ task.task_name }}</p>
-                    <p class="truncate text-sm text-cyan-100">{{ task.status_name || 'No status' }}</p>
+                    <p class="truncate text-sm text-cyan-100">{{ task.status_label || 'No status' }}</p>
                     <p class="truncate text-sm text-sky-100">{{ task.assigned_to_name }}</p>
                     <p class="truncate text-sm text-stone-300">{{ task.booking_label || 'General task' }}</p>
                     <p class="text-sm text-stone-300">{{ task.task_duration_hours || '0.00' }}</p>
@@ -170,7 +170,7 @@ const removeTask = async (task) => {
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
                         <select v-model="form.task_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
                             <option value="">No status</option>
-                            <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.name }}</option>
+                            <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
                         </select>
                         <p v-if="firstError(fieldErrors, 'task_status_id')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'task_status_id') }}</p>
                     </div>

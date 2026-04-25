@@ -61,7 +61,7 @@ class StripeCheckoutLinkGenerator
             '%s for %s on %s',
             $installment->label,
             $packageName,
-            $booking?->event_date?->format('d M Y') ?? 'your event date',
+            DateFormatter::date($booking?->event_date, 'your event date'),
         );
     }
 }

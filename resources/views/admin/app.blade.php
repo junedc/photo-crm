@@ -51,7 +51,7 @@
                             'id' => $task->id,
                             'title' => $task->task_name,
                             'status' => $task->status?->name ?: 'Open',
-                            'due_date_label' => $task->due_date?->format('d M Y') ?? 'No due date',
+                            'due_date_label' => \App\Support\DateFormatter::date($task->due_date, 'No due date'),
                             'booking_label' => $bookingLabel,
                             'task_url' => route('tasks.index'),
                             'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,

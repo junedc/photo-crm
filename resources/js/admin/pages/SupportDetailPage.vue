@@ -63,11 +63,11 @@ const statusClass = (status) => ({
             <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-sky-200">Status</p>
                 <div class="mt-4 grid gap-2">
-                    <form v-for="(label, status) in data.tenantTicketStatuses" :key="status" :action="data.ticket.status_update_url" method="POST">
+                    <form v-for="(label, statusId) in data.tenantTicketStatuses" :key="statusId" :action="data.ticket.status_update_url" method="POST">
                         <input type="hidden" name="_token" :value="data.csrfToken">
                         <input type="hidden" name="_method" value="PUT">
-                        <input type="hidden" name="status" :value="status">
-                        <button type="submit" class="w-full rounded-xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40" :class="status === 'resolved' ? 'border-violet-300/30 text-violet-100 hover:bg-violet-300/10' : 'border-cyan-300/30 text-cyan-100 hover:bg-cyan-300/10'" :disabled="data.ticket.status === status">
+                        <input type="hidden" name="support_status_id" :value="statusId">
+                        <button type="submit" class="w-full rounded-xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40" :class="String(label).toLowerCase() === 'resolved' ? 'border-violet-300/30 text-violet-100 hover:bg-violet-300/10' : 'border-cyan-300/30 text-cyan-100 hover:bg-cyan-300/10'" :disabled="String(data.ticket.status_id) === String(statusId)">
                             Mark as {{ label }}
                         </button>
                     </form>

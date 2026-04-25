@@ -24,24 +24,42 @@ const workspaceErrors = ref({});
 const accountErrors = ref({});
 const maintenanceRecords = ref({
     invoice: [...(props.data.maintenance?.invoice ?? [])],
+    invoice_installment: [...(props.data.maintenance?.invoice_installment ?? [])],
     task: [...(props.data.maintenance?.task ?? [])],
     booking: [...(props.data.maintenance?.booking ?? [])],
+    quote_response: [...(props.data.maintenance?.quote_response ?? [])],
     package: [...(props.data.maintenance?.package ?? [])],
     equipment: [...(props.data.maintenance?.equipment ?? [])],
+    campaign: [...(props.data.maintenance?.campaign ?? [])],
+    support: [...(props.data.maintenance?.support ?? [])],
+    referral: [...(props.data.maintenance?.referral ?? [])],
+    email_tracking: [...(props.data.maintenance?.email_tracking ?? [])],
 });
 const maintenanceDrafts = ref({
     invoice: '',
+    invoice_installment: '',
     task: '',
     booking: '',
+    quote_response: '',
     package: '',
     equipment: '',
+    campaign: '',
+    support: '',
+    referral: '',
+    email_tracking: '',
 });
 const maintenanceEditing = ref({
     invoice: null,
+    invoice_installment: null,
     task: null,
     booking: null,
+    quote_response: null,
     package: null,
     equipment: null,
+    campaign: null,
+    support: null,
+    referral: null,
+    email_tracking: null,
 });
 const {
     saving: workspaceSaving,
@@ -78,6 +96,7 @@ const workspaceForm = ref({
     contact_phone: tenantRecord.value.contact_phone ?? '',
     address: tenantRecord.value.address ?? '',
     theme: tenantRecord.value.theme ?? 'dark',
+    timezone: tenantRecord.value.timezone ?? 'UTC',
     subscription_id: tenantRecord.value.subscription_id ?? '',
     invoice_deposit_percentage: tenantRecord.value.invoice_deposit_percentage ?? '30.00',
     travel_free_kilometers: tenantRecord.value.travel_free_kilometers ?? '0.00',
@@ -113,10 +132,16 @@ const editingVendorId = ref(null);
 
 const maintenanceSections = computed(() => [
     { key: 'invoice', label: props.data.maintenanceLabels?.invoice ?? 'Invoice Status' },
+    { key: 'invoice_installment', label: props.data.maintenanceLabels?.invoice_installment ?? 'Invoice Installment Status' },
     { key: 'task', label: props.data.maintenanceLabels?.task ?? 'Task Status' },
     { key: 'booking', label: props.data.maintenanceLabels?.booking ?? 'Booking Status' },
+    { key: 'quote_response', label: props.data.maintenanceLabels?.quote_response ?? 'Quote Response Status' },
     { key: 'package', label: props.data.maintenanceLabels?.package ?? 'Package Status' },
     { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
+    { key: 'campaign', label: props.data.maintenanceLabels?.campaign ?? 'Campaign Status' },
+    { key: 'support', label: props.data.maintenanceLabels?.support ?? 'Support Status' },
+    { key: 'referral', label: props.data.maintenanceLabels?.referral ?? 'Referral Status' },
+    { key: 'email_tracking', label: props.data.maintenanceLabels?.email_tracking ?? 'Email Tracking Status' },
 ]);
 
 const workspaceValidationErrors = computed(() => mergeFieldErrors(workspaceErrors.value, workspaceServerErrors.value));
@@ -126,6 +151,7 @@ const maintenanceValidationErrors = computed(() => maintenanceServerErrors.value
 const vendorValidationErrors = computed(() => mergeFieldErrors(vendorErrors.value, vendorServerErrors.value));
 
 const prettifyStatus = (value) => (value || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const sectionHasEditableStatuses = (key) => (maintenanceRecords.value[key] ?? []).some((record) => !record.system);
 const fontVariantLabel = (font) => {
     if (Number(font?.weight) >= 700 && font?.style === 'italic') {
         return 'Bold Italic';
@@ -169,6 +195,7 @@ const saveWorkspace = async () => {
     formData.append('contact_phone', workspaceForm.value.contact_phone ?? '');
     formData.append('address', workspaceForm.value.address ?? '');
     formData.append('theme', workspaceForm.value.theme ?? 'dark');
+    formData.append('timezone', workspaceForm.value.timezone ?? 'UTC');
     formData.append('subscription_id', workspaceForm.value.subscription_id ?? '');
     formData.append('invoice_deposit_percentage', workspaceForm.value.invoice_deposit_percentage ?? '');
     formData.append('travel_free_kilometers', workspaceForm.value.travel_free_kilometers ?? '');
@@ -199,6 +226,7 @@ const saveWorkspace = async () => {
             contact_phone: record.contact_phone ?? '',
             address: record.address ?? '',
             theme: record.theme ?? 'dark',
+            timezone: record.timezone ?? 'UTC',
             subscription_id: record.subscription_id ?? '',
             invoice_deposit_percentage: record.invoice_deposit_percentage ?? '30.00',
             travel_free_kilometers: record.travel_free_kilometers ?? '0.00',
@@ -545,6 +573,13 @@ onMounted(() => {
                             <option value="light">Paper light theme</option>
                         </select>
                     </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Timezone</label>
+                        <select v-model="workspaceForm.timezone" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'timezone') ? 'border-rose-300/60' : ''">
+                            <option v-for="timezone in (props.data.timezoneOptions ?? [])" :key="timezone.value" :value="timezone.value">{{ timezone.label }}</option>
+                        </select>
+                        <p v-if="firstError(workspaceValidationErrors, 'timezone')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'timezone') }}</p>
+                    </div>
                     <div class="sm:col-span-2 rounded-2xl border border-sky-300/20 bg-sky-300/10 p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div class="flex-1">
@@ -753,14 +788,18 @@ onMounted(() => {
                         <span>Delete</span>
                     </div>
                     <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
-                        <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
-                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="beginEditStatus(section.key, record)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="removeStatus(section.key, record)">Delete</button>
+                        <div class="min-w-0">
+                            <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
+                            <p v-if="record.system" class="mt-1 text-[11px] uppercase tracking-[0.2em] text-cyan-200">System</p>
+                        </div>
+                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="beginEditStatus(section.key, record)">Edit</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="removeStatus(section.key, record)">Delete</button>
                     </div>
                     <div v-if="!(maintenanceRecords[section.key]?.length)" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
                         No values added yet.
                     </div>
                 </div>
+                <p v-if="!sectionHasEditableStatuses(section.key) && maintenanceRecords[section.key]?.length" class="mt-3 text-xs text-stone-500">System statuses are protected and cannot be renamed or deleted here.</p>
             </section>
 
             <section class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">

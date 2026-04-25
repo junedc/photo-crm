@@ -19,6 +19,7 @@ use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\User;
 use App\Support\BookingAddonsPdfGenerator;
+use App\Support\DateFormatter;
 use App\Support\BookingDiscountResolver;
 use App\Support\BookingPricing;
 use App\Support\InvoiceBuilder;
@@ -124,8 +125,12 @@ class BookingController extends Controller
     public function respondToQuote(CurrentTenant $currentTenant, Booking $booking, string $response): View
     {
         $status = $response === 'accept' ? 'accepted' : 'rejected';
+        $statusRecord = $currentTenant->get()
+            ? TenantStatuses::firstOrCreateWorkspaceStatus($currentTenant->get(), TenantStatuses::SCOPE_QUOTE_RESPONSE, $status)
+            : null;
 
         $booking->update([
+            'quote_response_status_id' => $statusRecord?->id,
             'customer_response_status' => $status,
             'customer_responded_at' => now(),
         ]);
@@ -369,6 +374,10 @@ class BookingController extends Controller
             $bookingData = $data;
             unset($bookingData['lead_token'], $bookingData['terms_accepted'], $bookingData['add_on_ids'], $bookingData['equipment_ids']);
             $bookingData['booking_kind'] = $bookingData['booking_kind'] ?? 'customer';
+            $quoteResponseStatus = app(CurrentTenant::class)->get()
+                ? TenantStatuses::firstOrCreateWorkspaceStatus(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_QUOTE_RESPONSE, 'accepted')
+                : null;
+            $bookingData['quote_response_status_id'] = $quoteResponseStatus?->id;
             $bookingData['customer_response_status'] = 'accepted';
             $bookingData['customer_responded_at'] = now();
             $bookingData['customer_id'] = $this->resolveCustomer($bookingData)->id;
@@ -462,14 +471,24 @@ class BookingController extends Controller
 
         if (! $isFullEdit) {
             $data = $request->validate([
-                'status' => ['required', Rule::in($this->statuses())],
+                'booking_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                    ->where('tenant_id', $tenantId)
+                    ->where('scope', TenantStatuses::SCOPE_BOOKING))],
                 'notes' => ['nullable', 'string'],
             ]);
 
-            $booking->update($data);
+            $status = $this->workspaceStatusById($tenantId, TenantStatuses::SCOPE_BOOKING, $data['booking_status_id']);
+
+            $booking->update([
+                'booking_status_id' => $status?->id,
+                'status' => $status?->name ?? $booking->status,
+                'notes' => $data['notes'] ?? null,
+            ]);
         } else {
             $data = $request->validate([
-                'status' => ['required', Rule::in($this->statuses())],
+                'booking_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                    ->where('tenant_id', $tenantId)
+                    ->where('scope', TenantStatuses::SCOPE_BOOKING))],
                 'booking_kind' => ['nullable', Rule::in($this->bookingKinds())],
                 'entry_name' => ['nullable', 'string', 'max:255'],
                 'entry_description' => ['nullable', 'string'],
@@ -521,6 +540,10 @@ class BookingController extends Controller
                 'start_time.regex' => 'Start hour must be on the hour or half hour.',
                 'end_time.regex' => 'End hour must be on the hour or half hour.',
             ]);
+
+            $status = $this->workspaceStatusById($tenantId, TenantStatuses::SCOPE_BOOKING, $data['booking_status_id']);
+            $data['booking_status_id'] = $status?->id;
+            $data['status'] = $status?->name ?? $booking->status;
 
             $package = $this->resolvePackageForSelection($data);
             $this->ensurePackageTimingSelection($package, $data);
@@ -636,6 +659,7 @@ class BookingController extends Controller
                     'logout' => route('logout'),
                 ],
                 'bookingStatuses' => $this->statuses(),
+                'bookingStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_BOOKING) : [],
                 'bookingKinds' => $this->bookingKinds(),
                 'bookings' => $serializedBookings->values()->all(),
                 'pagination' => $this->paginationMeta($bookings),
@@ -687,6 +711,7 @@ class BookingController extends Controller
                     'logout' => route('logout'),
                 ],
                 'bookingStatuses' => $this->statuses(),
+                'bookingStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_BOOKING) : [],
                 'bookingKinds' => $this->bookingKinds(),
                 'eventTypes' => $this->eventTypes(),
                 'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
@@ -919,7 +944,7 @@ class BookingController extends Controller
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
-                'quoteResponseStatuses' => ['all', 'pending', 'accepted', 'rejected'],
+                'quoteResponseStatuses' => ['all', ...TenantStatuses::names($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE)],
                 'quotes' => $quotes->map(fn (Booking $booking) => $this->serializeBooking($booking))->values()->all(),
             ],
         ]);
@@ -956,7 +981,7 @@ class BookingController extends Controller
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
             'client_portal_access_granted' => $clientPortalAccess !== null,
-            'client_portal_access_granted_at_label' => $clientPortalAccess?->granted_at?->format('d M Y g:i A'),
+            'client_portal_access_granted_at_label' => DateFormatter::dateTime($clientPortalAccess?->granted_at),
             'client_portal_access_url' => $clientPortalAccess?->invite_token
                 ? route('client.portal.login', ['access' => $clientPortalAccess->invite_token])
                 : null,
@@ -967,8 +992,8 @@ class BookingController extends Controller
             'discount_amount' => number_format((float) ($booking->discount_amount ?? 0), 2, '.', ''),
             'event_type' => $booking->event_type,
             'event_type_label' => $booking->event_type ? str($booking->event_type)->title()->toString() : null,
-            'event_date' => $booking->event_date?->format('Y-m-d'),
-            'event_date_label' => $booking->event_date?->format('d M Y'),
+            'event_date' => DateFormatter::inputDate($booking->event_date),
+            'event_date_label' => DateFormatter::date($booking->event_date),
             'start_time' => $this->timeValue($booking->start_time),
             'start_time_label' => $this->timeLabel($booking->start_time),
             'end_time' => $this->timeValue($booking->end_time),
@@ -984,14 +1009,17 @@ class BookingController extends Controller
                 'type' => $booking->discount->discount_type,
                 'type_label' => $booking->discount->discount_type === 'percentage' ? 'Percentage' : 'Specific Amount',
                 'value' => number_format((float) $booking->discount->discount_value, 2, '.', ''),
-                'starts_at_label' => $booking->discount->starts_at?->format('d M Y'),
-                'ends_at_label' => $booking->discount->ends_at?->format('d M Y'),
+                'starts_at_label' => DateFormatter::date($booking->discount->starts_at),
+                'ends_at_label' => DateFormatter::date($booking->discount->ends_at),
             ] : null,
             'notes' => $booking->notes,
+            'status_id' => $booking->booking_status_id,
             'status' => $booking->status,
+            'status_label' => $booking->bookingStatus?->label() ?? str($booking->status)->replace('_', ' ')->title()->toString(),
+            'customer_response_status_id' => $booking->quote_response_status_id,
             'customer_response_status' => $booking->customer_response_status,
-            'customer_response_label' => str($booking->customer_response_status)->replace('_', ' ')->title()->toString(),
-            'customer_responded_at_label' => $booking->customer_responded_at?->format('d M Y g:i A'),
+            'customer_response_label' => $booking->quoteResponseStatus?->label() ?? str($booking->customer_response_status)->replace('_', ' ')->title()->toString(),
+            'customer_responded_at_label' => DateFormatter::dateTime($booking->customer_responded_at),
             'package_name' => $booking->package?->name,
             'booking_total' => number_format($bookingTotal, 2, '.', ''),
             'package' => $package ? [
@@ -1048,12 +1076,13 @@ class BookingController extends Controller
             'is_booking_action' => (bool) $task->is_booking_action,
             'task_status_id' => $task->task_status_id,
             'status_name' => $task->status?->name ?? '',
-            'due_date' => $task->due_date?->format('Y-m-d') ?? '',
-            'due_date_label' => $task->due_date?->format('d M Y') ?? 'Not set',
-            'date_started' => $task->date_started?->format('Y-m-d') ?? '',
-            'date_started_label' => $task->date_started?->format('d M Y') ?? 'Not set',
-            'date_completed' => $task->date_completed?->format('Y-m-d') ?? '',
-            'date_completed_label' => $task->date_completed?->format('d M Y') ?? 'Not set',
+            'status_label' => $task->status?->label() ?? '',
+            'due_date' => DateFormatter::inputDate($task->due_date) ?? '',
+            'due_date_label' => DateFormatter::date($task->due_date, 'Not set'),
+            'date_started' => DateFormatter::inputDate($task->date_started) ?? '',
+            'date_started_label' => DateFormatter::date($task->date_started, 'Not set'),
+            'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
+            'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
@@ -1064,7 +1093,10 @@ class BookingController extends Controller
     {
         if ($tenant->taskStatuses()->doesntExist()) {
             collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
-                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(['name' => $name]));
+                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(
+                    ['name' => $name],
+                    ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
+                ));
         }
 
         return $tenant->taskStatuses()
@@ -1073,6 +1105,7 @@ class BookingController extends Controller
             ->map(fn (TaskStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
+                'label' => $status->label(),
             ]);
     }
 
@@ -1143,6 +1176,25 @@ class BookingController extends Controller
     private function statuses(): array
     {
         return TenantStatuses::names(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_BOOKING);
+    }
+
+    private function workspaceStatusOptions($tenant, string $scope): array
+    {
+        return TenantStatuses::ensureWorkspaceRecords($tenant, $scope)
+            ->map(fn ($status) => [
+                'id' => $status->id,
+                'name' => $status->name,
+                'label' => $status->label(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function workspaceStatusById(int $tenantId, string $scope, mixed $id)
+    {
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($tenantId);
+
+        return $tenant ? TenantStatuses::findWorkspaceStatusById($tenant, $scope, $id) : null;
     }
 
     private function eventTypes(): array
@@ -1342,10 +1394,10 @@ class BookingController extends Controller
             'discount_type' => $discount->discount_type,
             'discount_type_label' => $discount->discount_type === 'percentage' ? 'Percentage' : 'Specific Amount',
             'discount_value' => number_format((float) $discount->discount_value, 2, '.', ''),
-            'starts_at' => $discount->starts_at?->format('Y-m-d'),
-            'ends_at' => $discount->ends_at?->format('Y-m-d'),
-            'starts_at_label' => $discount->starts_at?->format('d M Y'),
-            'ends_at_label' => $discount->ends_at?->format('d M Y'),
+            'starts_at' => DateFormatter::inputDate($discount->starts_at),
+            'ends_at' => DateFormatter::inputDate($discount->ends_at),
+            'starts_at_label' => DateFormatter::date($discount->starts_at),
+            'ends_at_label' => DateFormatter::date($discount->ends_at),
             'package_ids' => $discount->packages->pluck('id')->values()->all(),
         ])->values()->all();
     }
@@ -1440,10 +1492,10 @@ class BookingController extends Controller
                 'id' => $installment->id,
                 'label' => $installment->label,
                 'amount' => number_format((float) $installment->amount, 2, '.', ''),
-                'due_date' => $installment->due_date?->format('Y-m-d'),
-                'due_date_label' => $installment->due_date?->format('d M Y'),
+                'due_date' => DateFormatter::inputDate($installment->due_date),
+                'due_date_label' => DateFormatter::date($installment->due_date),
                 'status' => $installment->status,
-                'paid_at_label' => $installment->paid_at?->format('d M Y g:i A'),
+                'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
             ])->values()->all(),
         ];
     }
@@ -1459,6 +1511,6 @@ class BookingController extends Controller
             return null;
         }
 
-        return Carbon::createFromFormat('H:i:s', strlen($time) === 5 ? $time.':00' : $time)->format('g:i A');
+        return DateFormatter::time($time);
     }
 }

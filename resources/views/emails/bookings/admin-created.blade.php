@@ -1,4 +1,5 @@
 @php
+    use App\Support\DateFormatter;
     $selectedAddOns = $booking->relationLoaded('addOns') && $booking->addOns->isNotEmpty()
         ? $booking->addOns->pluck('name')->join(', ')
         : 'None selected';
@@ -9,13 +10,7 @@
     $discountAmount = (float) ($booking->discount_amount ?? 0);
     $bookingTotal = max(0, $packagePrice + $addOnTotal + $travelFee - $discountAmount);
 
-    $formatTime = function (?string $time): string {
-        if (! $time) {
-            return 'N/A';
-        }
-
-        return \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($time) === 5 ? $time.':00' : $time)->format('g:i A');
-    };
+    $formatTime = fn (?string $time): string => DateFormatter::time($time, 'N/A');
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -66,7 +61,7 @@
                                                         {{ $booking->package?->name ?? 'No package selected' }}
                                                     </p>
                                                     <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #7c2d12;">
-                                                        {{ $booking->customer_name }} requested pricing for {{ $booking->event_date?->format('d M Y') ?? 'an unconfirmed date' }}.
+                                                        {{ $booking->customer_name }} requested pricing for {{ DateFormatter::date($booking->event_date, 'an unconfirmed date') }}.
                                                     </p>
                                                 </td>
                                             </tr>
@@ -102,7 +97,7 @@
                                                                     Booking Details
                                                                 </h2>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
-                                                                    <strong>Event date:</strong> {{ $booking->event_date?->format('d M Y') ?? 'Not provided' }}
+                                                                    <strong>Event date:</strong> {{ DateFormatter::date($booking->event_date, 'Not provided') }}
                                                                 </p>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
                                                                     <strong>Start hour:</strong> {{ $formatTime($booking->start_time) }}

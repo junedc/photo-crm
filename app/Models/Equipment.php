@@ -21,6 +21,7 @@ class Equipment extends Model
         'serial_number',
         'description',
         'daily_rate',
+        'maintenance_status_id',
         'maintenance_status',
         'last_maintained_at',
         'maintenance_notes',
@@ -38,6 +39,11 @@ class Equipment extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class, 'package_id');
+    }
+
+    public function maintenanceStatusRecord(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'maintenance_status_id');
     }
 
     public function bookings(): BelongsToMany

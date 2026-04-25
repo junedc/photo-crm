@@ -16,10 +16,23 @@ class WorkspaceStatus extends Model
         'tenant_id',
         'scope',
         'name',
+        'system',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'system' => 'boolean',
+        ];
+    }
 
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function label(): string
+    {
+        return str($this->name)->replace('_', ' ')->title()->toString();
     }
 }

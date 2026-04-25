@@ -9,6 +9,7 @@ use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
 use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Contracts\Support\Arrayable;
@@ -56,7 +57,7 @@ class CatalogAdminController extends Controller
                 'id' => $booking->id,
                 'customer_name' => $booking->customer_name,
                 'status' => $booking->status,
-                'event_date_label' => $booking->event_date?->format('d M Y'),
+                'event_date_label' => DateFormatter::date($booking->event_date),
                 'start_time_label' => $booking->start_time ? substr($booking->start_time, 0, 5) : null,
                 'package_name' => $booking->package?->name,
                 'show_url' => route('admin.bookings.show', $booking),
@@ -86,6 +87,7 @@ class CatalogAdminController extends Controller
             'equipmentOptions' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipmentOption($asset)),
             'addOnOptions' => $this->serializeCollection($addOns, fn (InventoryItem $addon) => $this->serializeAddOnOption($addon)),
             'packageStatuses' => $this->packageStatuses(),
+            'packageStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_PACKAGE) : [],
         ]);
     }
 
@@ -477,11 +479,15 @@ class CatalogAdminController extends Controller
 
     private function validatePackage(Request $request): array
     {
+        $tenant = app(CurrentTenant::class)->get();
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'base_price' => ['required', 'numeric', 'min:0'],
-            'status' => ['required', Rule::in($this->packageStatuses())],
+            'package_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                ->where('tenant_id', $tenant?->id)
+                ->where('scope', TenantStatuses::SCOPE_PACKAGE))],
             'hourly_prices' => ['nullable', 'array'],
             'hourly_prices.*.hours' => ['nullable', 'numeric', 'min:0.25'],
             'hourly_prices.*.price' => ['nullable', 'numeric', 'min:0'],
@@ -492,7 +498,9 @@ class CatalogAdminController extends Controller
             'add_on_ids.*' => ['integer', 'exists:inventory_items,id'],
         ]);
 
-        $data['status'] = (string) ($data['status'] ?? 'inactive');
+        $status = $tenant ? TenantStatuses::findWorkspaceStatusById($tenant, TenantStatuses::SCOPE_PACKAGE, $data['package_status_id']) : null;
+        $data['package_status_id'] = $status?->id;
+        $data['status'] = $status?->name ?? 'inactive';
         $data['is_active'] = $data['status'] === 'active';
 
         return $data;
@@ -500,21 +508,34 @@ class CatalogAdminController extends Controller
 
     private function validateEquipment(Request $request): array
     {
-        return $request->validate([
+        $tenant = app(CurrentTenant::class)->get();
+
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'daily_rate' => ['required', 'numeric', 'min:0'],
-            'maintenance_status' => ['required', Rule::in($this->equipmentStatuses())],
+            'maintenance_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                ->where('tenant_id', $tenant?->id)
+                ->where('scope', TenantStatuses::SCOPE_EQUIPMENT))],
             'last_maintained_at' => ['nullable', 'date'],
             'maintenance_notes' => ['nullable', 'string'],
             'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        $status = $tenant ? TenantStatuses::findWorkspaceStatusById($tenant, TenantStatuses::SCOPE_EQUIPMENT, $data['maintenance_status_id']) : null;
+        $data['maintenance_status_id'] = $status?->id;
+        $data['maintenance_status'] = $status?->name ?? 'ready';
+
+        return $data;
     }
 
     private function validateAddOn(Request $request): array
     {
+        $tenant = app(CurrentTenant::class)->get();
+        $defaultMaintenanceStatus = $this->equipmentStatuses()[0] ?? 'ready';
+
         $data = $request->validate([
             'sku' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
@@ -529,7 +550,10 @@ class CatalogAdminController extends Controller
             'category' => 'add-on',
             'is_publicly_displayed' => $request->boolean('is_publicly_displayed'),
             'quantity' => 1,
-            'maintenance_status' => $this->equipmentStatuses()[0] ?? 'ready',
+            'maintenance_status' => $defaultMaintenanceStatus,
+            'maintenance_status_id' => $tenant
+                ? TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_EQUIPMENT, $defaultMaintenanceStatus)?->id
+                : null,
             'last_maintained_at' => null,
             'maintenance_notes' => null,
         ];
@@ -586,6 +610,18 @@ class CatalogAdminController extends Controller
         return TenantStatuses::names(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_PACKAGE);
     }
 
+    private function workspaceStatusOptions($tenant, string $scope): array
+    {
+        return TenantStatuses::ensureWorkspaceRecords($tenant, $scope)
+            ->map(fn ($status) => [
+                'id' => $status->id,
+                'name' => $status->name,
+                'label' => $status->label(),
+            ])
+            ->values()
+            ->all();
+    }
+
     private function leadStatuses(): array
     {
         return ['draft', 'new', 'contacted', 'qualified', 'quoted', 'campaign', 'booked', 'lost'];
@@ -625,6 +661,7 @@ class CatalogAdminController extends Controller
                 'create' => route('equipment.create'),
             ],
             'maintenanceStatuses' => $this->equipmentStatuses(),
+            'maintenanceStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_EQUIPMENT) : [],
             'equipment' => $this->serializeCollection($equipment, fn (Equipment $asset) => $this->serializeEquipment($asset)),
         ]);
     }
@@ -782,9 +819,11 @@ class CatalogAdminController extends Controller
             'base_price' => number_format((float) $package->base_price, 2, '.', ''),
             'display_price' => number_format((float) $displayPrice, 2, '.', ''),
             'photo_url' => $package->photo_path ? $this->publicStorageUrl($package->photo_path) : null,
+            'status_id' => $package->package_status_id,
             'status' => $package->status ?: ($package->is_active ? 'active' : 'inactive'),
+            'status_label' => $package->packageStatus?->label() ?? str($package->status ?: ($package->is_active ? 'active' : 'inactive'))->replace('_', ' ')->title()->toString(),
             'is_active' => $package->is_active,
-            'created_at' => $package->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($package->created_at),
             'equipment_ids' => $package->relationLoaded('equipment')
                 ? $package->equipment->pluck('id')->values()->all()
                 : $package->equipment()->pluck('id')->values()->all(),
@@ -833,9 +872,11 @@ class CatalogAdminController extends Controller
             'serial_number' => $asset->serial_number,
             'description' => $asset->description,
             'daily_rate' => number_format((float) $asset->daily_rate, 2, '.', ''),
+            'maintenance_status_id' => $asset->maintenance_status_id,
             'maintenance_status' => $asset->maintenance_status,
-            'last_maintained_at' => $asset->last_maintained_at?->format('Y-m-d'),
-            'last_maintained_label' => $asset->last_maintained_at?->format('d M Y'),
+            'maintenance_status_label' => $asset->maintenanceStatusRecord?->label() ?? str($asset->maintenance_status)->replace('_', ' ')->title()->toString(),
+            'last_maintained_at' => DateFormatter::inputDate($asset->last_maintained_at),
+            'last_maintained_label' => DateFormatter::date($asset->last_maintained_at),
             'maintenance_notes' => $asset->maintenance_notes,
             'photo_url' => $asset->photo_path ? $this->publicStorageUrl($asset->photo_path) : null,
             'package_id' => $asset->package_id,
@@ -859,7 +900,7 @@ class CatalogAdminController extends Controller
             'duration' => $addon->duration,
             'due_days_before_event' => $addon->due_days_before_event,
             'photo_url' => $addon->photo_path ? $this->publicStorageUrl($addon->photo_path) : null,
-            'created_at' => $addon->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($addon->created_at),
             'show_url' => route('addons.show', $addon),
             'update_url' => route('addons.update', $addon),
             'delete_url' => route('addons.destroy', $addon),
@@ -873,17 +914,17 @@ class CatalogAdminController extends Controller
             'customer_name' => $lead->customer_name,
             'customer_email' => $lead->customer_email,
             'customer_phone' => $lead->customer_phone,
-            'event_date' => $lead->event_date?->format('Y-m-d'),
-            'event_date_label' => $lead->event_date?->format('d M Y'),
+            'event_date' => DateFormatter::inputDate($lead->event_date),
+            'event_date_label' => DateFormatter::date($lead->event_date),
             'event_location' => $lead->event_location,
             'notes' => $lead->notes,
             'status' => $lead->status,
             'booking_id' => $lead->booking_id,
             'booking_show_url' => $lead->booking_id ? route('admin.bookings.show', $lead->booking_id) : null,
             'booking_package_name' => $lead->relationLoaded('booking') ? $lead->booking?->package?->name : null,
-            'created_at' => $lead->created_at?->format('d M Y'),
-            'last_activity_at' => $lead->last_activity_at?->format('Y-m-d H:i:s'),
-            'last_activity_label' => $lead->last_activity_at?->format('d M Y g:i A'),
+            'created_at' => DateFormatter::date($lead->created_at),
+            'last_activity_at' => DateFormatter::iso($lead->last_activity_at),
+            'last_activity_label' => DateFormatter::dateTime($lead->last_activity_at),
             'show_url' => route('leads.show', $lead),
             'update_url' => route('leads.update', $lead),
             'delete_url' => route('leads.destroy', $lead),

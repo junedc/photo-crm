@@ -19,7 +19,7 @@ const form = ref({
     serial_number: '',
     description: '',
     daily_rate: '',
-    maintenance_status: props.data.maintenanceStatuses?.[0] ?? 'ready',
+    maintenance_status_id: String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
     last_maintained_at: '',
     maintenance_notes: '',
 });
@@ -59,7 +59,7 @@ const createEquipment = async () => {
 
     const formData = new FormData();
 
-    ['name', 'category', 'serial_number', 'description', 'daily_rate', 'maintenance_status', 'last_maintained_at', 'maintenance_notes'].forEach((key) => {
+    ['name', 'category', 'serial_number', 'description', 'daily_rate', 'maintenance_status_id', 'last_maintained_at', 'maintenance_notes'].forEach((key) => {
         formData.append(key, form.value[key] ?? '');
     });
 
@@ -123,8 +123,8 @@ const createEquipment = async () => {
                 </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Maintenance Status</label>
-                    <select v-model="form.maintenance_status" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                        <option v-for="status in data.maintenanceStatuses" :key="status" :value="status">{{ statusLabel(status) }}</option>
+                    <select v-model="form.maintenance_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                        <option v-for="status in data.maintenanceStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                     </select>
                 </div>
                 <div>

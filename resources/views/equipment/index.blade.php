@@ -171,7 +171,7 @@
                                     </div>
                                     <div class="rounded-2xl border border-white/10 bg-stone-950/40 p-4">
                                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Last Maintained</p>
-                                        <p class="mt-2 text-lg font-semibold">{{ $selectedEquipment->last_maintained_at?->format('d M Y') ?: 'Not set' }}</p>
+                                        <p class="mt-2 text-lg font-semibold">{{ \App\Support\DateFormatter::date($selectedEquipment->last_maintained_at, 'Not set') }}</p>
                                     </div>
                                 </div>
 
@@ -198,7 +198,7 @@
                                             <option value="{{ $status }}" @selected(old('maintenance_status', $selectedEquipment->maintenance_status) === $status)>{{ str($status)->replace('_', ' ')->title() }}</option>
                                         @endforeach
                                     </select>
-                                    <input name="last_maintained_at" type="date" value="{{ old('last_maintained_at', optional($selectedEquipment->last_maintained_at)->format('Y-m-d')) }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" onkeydown="return false">
+                                    <input name="last_maintained_at" type="date" value="{{ old('last_maintained_at', \App\Support\DateFormatter::inputDate($selectedEquipment->last_maintained_at)) }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" onkeydown="return false">
                                     <textarea name="maintenance_notes" rows="4" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50">{{ old('maintenance_notes', $selectedEquipment->maintenance_notes) }}</textarea>
                                     <input name="photo" type="file" accept="image/*" class="block w-full rounded-2xl border border-dashed border-white/15 bg-stone-950/70 px-4 py-3 text-sm text-stone-300 file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-stone-950">
                                     <button type="submit" class="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-white/5">

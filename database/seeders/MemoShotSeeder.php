@@ -6,11 +6,9 @@ use App\Models\Equipment;
 use App\Models\InventoryItem;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
-use App\Models\TaskStatus;
 use App\Models\Tenant;
 use App\Models\Template;
 use App\Models\User;
-use App\Models\WorkspaceStatus;
 use App\Support\TenantStatuses;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -77,38 +75,12 @@ class MemoShotSeeder extends Seeder
             );
         });
 
-        $seedStatuses = [
-            TenantStatuses::SCOPE_INVOICE => ['draft', 'issued', 'partially_paid', 'paid', 'cancelled'],
-            TenantStatuses::SCOPE_TASK => ['pending', 'in_progress', 'completed'],
-            TenantStatuses::SCOPE_BOOKING => ['pending', 'confirmed', 'completed', 'cancelled'],
-            TenantStatuses::SCOPE_PACKAGE => ['active', 'inactive'],
-            TenantStatuses::SCOPE_EQUIPMENT => ['ready', 'maintenance', 'retired'],
-        ];
+        TenantStatusSeeder::seedTenant($tenant);
 
-        foreach ($seedStatuses as $scope => $statuses) {
-            foreach ($statuses as $name) {
-                if ($scope === TenantStatuses::SCOPE_TASK) {
-                    TaskStatus::query()->updateOrCreate(
-                        [
-                            'tenant_id' => $tenant->id,
-                            'name' => $name,
-                        ],
-                        []
-                    );
-
-                    continue;
-                }
-
-                WorkspaceStatus::query()->updateOrCreate(
-                    [
-                        'tenant_id' => $tenant->id,
-                        'scope' => $scope,
-                        'name' => $name,
-                    ],
-                    []
-                );
-            }
-        }
+        $packageStatusIds = collect(TenantStatuses::records($tenant, TenantStatuses::SCOPE_PACKAGE))
+            ->mapWithKeys(fn (array $status): array => [$status['name'] => $status['id']]);
+        $equipmentStatusIds = collect(TenantStatuses::records($tenant, TenantStatuses::SCOPE_EQUIPMENT))
+            ->mapWithKeys(fn (array $status): array => [$status['name'] => $status['id']]);
 
         $packages = collect([
             [
@@ -153,7 +125,7 @@ class MemoShotSeeder extends Seeder
                 'photo_path' => null,
                 'is_active' => true,
             ],
-        ])->mapWithKeys(function (array $attributes) use ($tenant): array {
+        ])->mapWithKeys(function (array $attributes) use ($tenant, $packageStatusIds): array {
             $package = Package::query()->updateOrCreate(
                 [
                     'tenant_id' => $tenant->id,
@@ -163,6 +135,7 @@ class MemoShotSeeder extends Seeder
                     'description' => $attributes['description'],
                     'base_price' => $attributes['base_price'],
                     'photo_path' => $attributes['photo_path'],
+                    'package_status_id' => $packageStatusIds[$attributes['is_active'] ? 'active' : 'inactive'] ?? null,
                     'status' => $attributes['is_active'] ? 'active' : 'inactive',
                     'is_active' => $attributes['is_active'],
                 ]
@@ -268,6 +241,7 @@ class MemoShotSeeder extends Seeder
                     'serial_number' => $attributes['serial_number'],
                     'description' => $attributes['description'],
                     'daily_rate' => $attributes['daily_rate'],
+                    'maintenance_status_id' => $equipmentStatusIds[$attributes['maintenance_status']] ?? null,
                     'maintenance_status' => $attributes['maintenance_status'],
                     'last_maintained_at' => $attributes['last_maintained_at'],
                     'maintenance_notes' => $attributes['maintenance_notes'],

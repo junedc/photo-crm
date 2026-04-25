@@ -24,6 +24,7 @@ class EmailLog extends Model
         'mailable_class',
         'context_type',
         'context_id',
+        'email_tracking_status_id',
         'status',
         'error_message',
         'related_email_log_id',
@@ -46,5 +47,10 @@ class EmailLog extends Model
     public function sourceLog(): BelongsTo
     {
         return $this->belongsTo(self::class, 'related_email_log_id');
+    }
+
+    public function emailTrackingStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'email_tracking_status_id');
     }
 }

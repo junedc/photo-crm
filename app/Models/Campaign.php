@@ -20,6 +20,7 @@ class Campaign extends Model
         'body',
         'button_text',
         'button_url',
+        'campaign_status_id',
         'status',
         'sent_count',
         'sent_at',
@@ -35,6 +36,11 @@ class Campaign extends Model
     public function template(): BelongsTo
     {
         return $this->belongsTo(Template::class);
+    }
+
+    public function campaignStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'campaign_status_id');
     }
 
     public function results(): HasMany

@@ -10,6 +10,7 @@ use App\Models\TenantFont;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Services\ClientPortalService;
+use App\Support\DateFormatter;
 use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
@@ -365,7 +366,7 @@ class ClientPortalController extends Controller
             'design' => [
                 'id' => $design->id,
                 'title' => $design->title,
-                'last_saved_at_label' => $design->last_saved_at?->format('d M Y g:i A'),
+                'last_saved_at_label' => DateFormatter::dateTime($design->last_saved_at),
                 'design_data' => $this->normalizeDesignData($design->design_data),
             ],
             'fonts' => $tenant->fonts()
@@ -413,7 +414,7 @@ class ClientPortalController extends Controller
             'record' => [
                 'id' => $design->id,
                 'title' => $design->title,
-                'last_saved_at_label' => $design->last_saved_at?->format('d M Y g:i A'),
+                'last_saved_at_label' => DateFormatter::dateTime($design->last_saved_at),
                 'design_data' => $this->normalizeDesignData($design->design_data),
             ],
         ]);
@@ -547,7 +548,10 @@ class ClientPortalController extends Controller
         }
 
         foreach (TenantStatuses::defaults(TenantStatuses::SCOPE_TASK) as $name) {
-            $tenant->taskStatuses()->firstOrCreate(['name' => $name]);
+            $tenant->taskStatuses()->firstOrCreate(
+                ['name' => $name],
+                ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
+            );
         }
 
         return $tenant->taskStatuses()->orderBy('name')->get();

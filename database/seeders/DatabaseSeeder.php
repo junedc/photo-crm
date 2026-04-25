@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             MemoShotSeeder::class,
             DemoSeeder::class,
+            TenantStatusSeeder::class,
         ]);
     }
 }

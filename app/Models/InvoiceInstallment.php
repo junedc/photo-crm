@@ -13,6 +13,7 @@ class InvoiceInstallment extends Model
         'label',
         'due_date',
         'amount',
+        'invoice_installment_status_id',
         'status',
         'paid_at',
     ];
@@ -29,5 +30,10 @@ class InvoiceInstallment extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function installmentStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'invoice_installment_status_id');
     }
 }

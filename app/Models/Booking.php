@@ -37,9 +37,11 @@ class Booking extends Model
         'travel_distance_km',
         'travel_fee',
         'notes',
+        'booking_status_id',
         'status',
         'quote_token',
         'quote_number',
+        'quote_response_status_id',
         'customer_response_status',
         'customer_responded_at',
     ];
@@ -94,6 +96,16 @@ class Booking extends Model
     public function discount(): BelongsTo
     {
         return $this->belongsTo(Discount::class);
+    }
+
+    public function bookingStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'booking_status_id');
+    }
+
+    public function quoteResponseStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'quote_response_status_id');
     }
 
     public function addOns(): BelongsToMany

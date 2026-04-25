@@ -11,9 +11,11 @@ use App\Models\Subscription;
 use App\Models\TenantSubscriptionCharge;
 use App\Models\WorkspaceStatus;
 use App\Services\PlatformSubscriptionBillingService;
+use App\Support\DateFormatter;
 use App\Support\PlatformSubscriptionCheckoutLinkGenerator;
 use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
+use DateTimeZone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,6 +56,7 @@ class SettingsController extends Controller
                     'name' => $user?->name,
                     'email' => $user?->email,
                 ],
+                'timezoneOptions' => $this->timezoneOptions(),
                 'routes' => [
                     'dashboard' => route('dashboard'),
                     'calendar' => route('admin.calendar.index'),
@@ -84,10 +87,16 @@ class SettingsController extends Controller
                 ],
                 'maintenance' => [
                     TenantStatuses::SCOPE_INVOICE => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_INVOICE),
+                    TenantStatuses::SCOPE_INVOICE_INSTALLMENT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_INVOICE_INSTALLMENT),
                     TenantStatuses::SCOPE_TASK => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_TASK),
                     TenantStatuses::SCOPE_BOOKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_BOOKING),
+                    TenantStatuses::SCOPE_QUOTE_RESPONSE => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE),
                     TenantStatuses::SCOPE_PACKAGE => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_PACKAGE),
                     TenantStatuses::SCOPE_EQUIPMENT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EQUIPMENT),
+                    TenantStatuses::SCOPE_CAMPAIGN => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_CAMPAIGN),
+                    TenantStatuses::SCOPE_SUPPORT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_SUPPORT),
+                    TenantStatuses::SCOPE_REFERRAL => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_REFERRAL),
+                    TenantStatuses::SCOPE_EMAIL_TRACKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EMAIL_TRACKING),
                 ],
                 'maintenanceLabels' => TenantStatuses::scopes(),
                 'vendors' => $tenant?->vendors()
@@ -110,6 +119,7 @@ class SettingsController extends Controller
             'contact_phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:255'],
             'theme' => ['nullable', Rule::in(['dark', 'light'])],
+            'timezone' => ['required', 'timezone'],
             'subscription_id' => ['nullable', 'integer'],
             'invoice_deposit_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'travel_free_kilometers' => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
@@ -132,6 +142,7 @@ class SettingsController extends Controller
             'contact_phone' => $data['contact_phone'] ?? null,
             'address' => $data['address'] ?? null,
             'theme' => $data['theme'] ?? $tenant->theme ?? 'dark',
+            'timezone' => $data['timezone'] ?? $tenant->timezone ?? config('app.timezone', 'UTC'),
             'subscription_id' => $subscription?->id,
             'invoice_deposit_percentage' => $data['invoice_deposit_percentage'] ?? null,
             'travel_free_kilometers' => $data['travel_free_kilometers'] ?? null,
@@ -332,8 +343,14 @@ class SettingsController extends Controller
             'scope' => ['required', Rule::in([
                 TenantStatuses::SCOPE_BOOKING,
                 TenantStatuses::SCOPE_INVOICE,
+                TenantStatuses::SCOPE_INVOICE_INSTALLMENT,
+                TenantStatuses::SCOPE_QUOTE_RESPONSE,
                 TenantStatuses::SCOPE_PACKAGE,
                 TenantStatuses::SCOPE_EQUIPMENT,
+                TenantStatuses::SCOPE_CAMPAIGN,
+                TenantStatuses::SCOPE_SUPPORT,
+                TenantStatuses::SCOPE_REFERRAL,
+                TenantStatuses::SCOPE_EMAIL_TRACKING,
             ])],
             'name' => ['required', 'string', 'max:255'],
         ]);
@@ -342,6 +359,8 @@ class SettingsController extends Controller
             'tenant_id' => $tenant->id,
             'scope' => $data['scope'],
             'name' => trim((string) $data['name']),
+        ], [
+            'system' => false,
         ]);
 
         return response()->json([
@@ -354,6 +373,7 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        abort_if($status->system, 422, 'System statuses cannot be renamed.');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -373,6 +393,7 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        abort_if($status->system, 422, 'System statuses cannot be deleted.');
         $status->delete();
 
         return response()->json([
@@ -392,6 +413,8 @@ class SettingsController extends Controller
         $status = TaskStatus::query()->firstOrCreate([
             'tenant_id' => $tenant->id,
             'name' => trim((string) $data['name']),
+        ], [
+            'system' => false,
         ]);
 
         return response()->json([
@@ -404,6 +427,7 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        abort_if($status->system, 422, 'System statuses cannot be renamed.');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -423,6 +447,7 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
+        abort_if($status->system, 422, 'System statuses cannot be deleted.');
         $status->delete();
 
         return response()->json([
@@ -484,6 +509,7 @@ class SettingsController extends Controller
             'slug' => $tenant->slug,
             'logo_url' => $tenant->logo_path ? Storage::disk('public')->url($tenant->logo_path) : null,
             'theme' => $tenant->theme ?: 'dark',
+            'timezone' => $tenant->timezone ?: config('app.timezone', 'UTC'),
             'subscription_id' => $tenant->subscription_id,
             'subscription_enabled' => (bool) $tenant->subscription_enabled,
             'subscription_disabled_at' => $tenant->subscription_disabled_at?->toIso8601String(),
@@ -592,12 +618,12 @@ class SettingsController extends Controller
             'id' => $charge->id,
             'subscription_name' => $charge->subscription_name,
             'billing_period' => $charge->billing_period,
-            'period_starts_at' => $charge->period_starts_at?->format('d M Y'),
-            'period_ends_at' => $charge->period_ends_at?->format('d M Y'),
+            'period_starts_at' => DateFormatter::date($charge->period_starts_at),
+            'period_ends_at' => DateFormatter::date($charge->period_ends_at),
             'amount' => number_format((float) $charge->amount, 2, '.', ''),
             'currency' => strtoupper($charge->currency ?: 'USD'),
             'status' => $charge->status,
-            'paid_at' => $charge->paid_at?->format('d M Y g:i A'),
+            'paid_at' => DateFormatter::dateTime($charge->paid_at),
         ];
     }
 
@@ -620,10 +646,23 @@ class SettingsController extends Controller
 
                 return [
                     ...$status,
+                    'label' => str($status['name'])->replace('_', ' ')->title()->toString(),
+                    'system' => (bool) ($status['system'] ?? false),
                     'update_url' => $updateUrl,
                     'delete_url' => $deleteUrl,
                 ];
             })
+            ->values()
+            ->all();
+    }
+
+    private function timezoneOptions(): array
+    {
+        return collect(DateTimeZone::listIdentifiers())
+            ->map(fn (string $timezone): array => [
+                'value' => $timezone,
+                'label' => str($timezone)->replace('_', ' ')->toString(),
+            ])
             ->values()
             ->all();
     }
@@ -634,6 +673,8 @@ class SettingsController extends Controller
             'id' => $status->id,
             'scope' => $status->scope,
             'name' => $status->name,
+            'label' => $status->label(),
+            'system' => (bool) $status->system,
             'update_url' => route('settings.maintenance.update', $status),
             'delete_url' => route('settings.maintenance.destroy', $status),
         ];
@@ -645,6 +686,8 @@ class SettingsController extends Controller
             'id' => $status->id,
             'scope' => TenantStatuses::SCOPE_TASK,
             'name' => $status->name,
+            'label' => $status->label(),
+            'system' => (bool) $status->system,
             'update_url' => route('settings.maintenance.tasks.update', $status),
             'delete_url' => route('settings.maintenance.tasks.destroy', $status),
         ];

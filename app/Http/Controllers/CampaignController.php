@@ -11,6 +11,8 @@ use App\Models\Lead;
 use App\Models\SubscriberGroup;
 use App\Models\Template;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
+use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,6 +44,7 @@ class CampaignController extends Controller
                     ...$this->campaignRoutes(),
                 ],
                 'campaigns' => $campaigns->map(fn (Campaign $campaign) => $this->serializeCampaign($campaign))->values()->all(),
+                'campaignStatuses' => ['all', ...TenantStatuses::names($tenant, TenantStatuses::SCOPE_CAMPAIGN)],
                 'templates' => $this->templateOptions(),
                 'groups' => $this->groupOptions(),
                 'recipientOptions' => $this->recipientOptions(),
@@ -95,7 +98,14 @@ class CampaignController extends Controller
         $groupIds = $data['group_ids'] ?? [];
         unset($data['group_ids']);
 
-        $campaign = Campaign::query()->create($data);
+        $tenant = app(CurrentTenant::class)->get();
+        $draftStatus = $tenant ? TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_CAMPAIGN, 'draft') : null;
+
+        $campaign = Campaign::query()->create([
+            ...$data,
+            'campaign_status_id' => $draftStatus?->id,
+            'status' => $draftStatus?->name ?? 'draft',
+        ]);
         $campaign->load(['template', 'results'])->loadCount('results');
 
         if ($request->expectsJson()) {
@@ -114,9 +124,14 @@ class CampaignController extends Controller
         $groupIds = $data['group_ids'] ?? [];
         unset($data['group_ids']);
 
+        $tenant = app(CurrentTenant::class)->get();
+        $statusName = $campaign->sent_at ? 'sent' : 'draft';
+        $status = $tenant ? TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_CAMPAIGN, $statusName) : null;
+
         $campaign->update([
             ...$data,
-            'status' => $campaign->sent_at ? 'sent' : 'draft',
+            'campaign_status_id' => $status?->id,
+            'status' => $status?->name ?? $statusName,
         ]);
         $campaign->refresh();
         $campaign->load(['template', 'results'])->loadCount('results');
@@ -175,8 +190,11 @@ class CampaignController extends Controller
             );
         }
 
+        $sentStatus = $campaign->tenant ? TenantStatuses::firstOrCreateWorkspaceStatus($campaign->tenant, TenantStatuses::SCOPE_CAMPAIGN, 'sent') : null;
+
         $campaign->update([
-            'status' => 'sent',
+            'campaign_status_id' => $sentStatus?->id,
+            'status' => $sentStatus?->name ?? 'sent',
             'sent_count' => $recipients->count(),
             'sent_at' => now(),
         ]);
@@ -566,11 +584,12 @@ class CampaignController extends Controller
             'body' => $campaign->body,
             'button_text' => $campaign->button_text,
             'button_url' => $campaign->button_url,
+            'status_id' => $campaign->campaign_status_id,
             'status' => $campaign->status,
-            'status_label' => str($campaign->status)->replace('_', ' ')->title()->toString(),
+            'status_label' => $campaign->campaignStatus?->label() ?? str($campaign->status)->replace('_', ' ')->title()->toString(),
             'sent_count' => $campaign->sent_count,
             'sent_at' => $campaign->sent_at?->format('Y-m-d H:i:s'),
-            'sent_at_label' => $campaign->sent_at?->format('d M Y g:i A'),
+            'sent_at_label' => DateFormatter::dateTime($campaign->sent_at),
             'customers_count' => $this->recipientsForGroups($groupIds)->count(),
             'recipients_count' => $campaign->results_count ?? $campaign->results->count(),
             'opened_count' => $campaign->results->whereNotNull('opened_at')->count(),
@@ -582,13 +601,13 @@ class CampaignController extends Controller
                 'name' => $result->name ?: $result->email,
                 'email' => $result->email,
                 'status' => $result->status,
-                'sent_at_label' => $result->sent_at?->format('d M Y g:i A'),
-                'opened_at_label' => $result->opened_at?->format('d M Y g:i A'),
-                'bounced_at_label' => $result->bounced_at?->format('d M Y g:i A'),
-                'unsubscribed_at_label' => $result->unsubscribed_at?->format('d M Y g:i A'),
+                'sent_at_label' => DateFormatter::dateTime($result->sent_at),
+                'opened_at_label' => DateFormatter::dateTime($result->opened_at),
+                'bounced_at_label' => DateFormatter::dateTime($result->bounced_at),
+                'unsubscribed_at_label' => DateFormatter::dateTime($result->unsubscribed_at),
                 'bounce_url' => route('campaigns.results.bounce', $result),
             ])->values()->all(),
-            'created_at_label' => $campaign->created_at?->format('d M Y'),
+            'created_at_label' => DateFormatter::date($campaign->created_at),
             'show_url' => route('campaigns.show', $campaign),
             'update_url' => route('campaigns.update', $campaign),
             'send_url' => route('campaigns.send', $campaign),

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="en">
 <body style="margin:0;padding:32px;background:#f4f1ea;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.08);">
@@ -21,11 +22,11 @@
                     </tr>
                     <tr>
                         <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#64748b;">Status</td>
-                        <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:600;color:#0f172a;text-align:right;">{{ $task->status?->name ?: 'No status' }}</td>
+                        <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:600;color:#0f172a;text-align:right;">{{ $task->status?->label() ?: 'No status' }}</td>
                     </tr>
                     <tr>
                         <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#64748b;">Due Date</td>
-                        <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:600;color:#0f172a;text-align:right;">{{ $task->due_date?->format('d M Y') ?: 'Not set' }}</td>
+                        <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:600;color:#0f172a;text-align:right;">{{ DateFormatter::date($task->due_date, 'Not set') }}</td>
                     </tr>
                     <tr>
                         <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#64748b;">Hours</td>

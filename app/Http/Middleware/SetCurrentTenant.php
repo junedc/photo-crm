@@ -5,8 +5,10 @@ namespace App\Http\Middleware;
 use App\Models\Tenant;
 use App\Tenancy\CurrentTenant;
 use Closure;
+use DateTimeZone;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetCurrentTenant
@@ -15,14 +17,36 @@ class SetCurrentTenant
     {
         $currentTenant = app(CurrentTenant::class);
         $currentTenant->clear();
+        $defaultTimezone = config('app.timezone', 'UTC');
+        Config::set('app.timezone', $defaultTimezone);
+        date_default_timezone_set($defaultTimezone);
 
         $tenant = $this->resolveTenant($request);
 
         if ($tenant !== null) {
             $currentTenant->set($tenant);
+            $timezone = $this->resolveTimezone($tenant->timezone);
+
+            Config::set('app.timezone', $timezone);
+            date_default_timezone_set($timezone);
         }
 
         return $next($request);
+    }
+
+    protected function resolveTimezone(?string $timezone): string
+    {
+        if (! is_string($timezone) || $timezone === '') {
+            return config('app.timezone', 'UTC');
+        }
+
+        try {
+            new DateTimeZone($timezone);
+
+            return $timezone;
+        } catch (\Throwable) {
+            return config('app.timezone', 'UTC');
+        }
     }
 
     protected function resolveTenant(Request $request): ?Tenant

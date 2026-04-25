@@ -174,9 +174,9 @@
                                                     Validity: {{ $subscription->validity_count }} {{ $subscription->validity_unit }}{{ $subscription->validity_count > 1 ? 's' : '' }}
                                                 @endif
                                                 @if ($latestCharge)
-                                                    · Latest: {{ strtoupper($latestCharge->currency) }} {{ number_format((float) $latestCharge->amount, 2) }} for {{ $latestCharge->period_starts_at->format('d M Y') }}
+                                                    · Latest: {{ strtoupper($latestCharge->currency) }} {{ number_format((float) $latestCharge->amount, 2) }} for {{ \App\Support\DateFormatter::date($latestCharge->period_starts_at) }}
                                                     @if ($latestCharge->period_ends_at)
-                                                        - {{ $latestCharge->period_ends_at->format('d M Y') }}
+                                                        - {{ \App\Support\DateFormatter::date($latestCharge->period_ends_at) }}
                                                     @endif
                                                     <span class="ml-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {{ in_array($latestCharge->status, ['paid', 'waived'], true) ? 'bg-emerald-300/15 text-emerald-200' : 'bg-amber-300/15 text-amber-100' }}">
                                                         {{ ucfirst($latestCharge->status) }}
@@ -192,7 +192,7 @@
                                             {{ $tenant->subscription_enabled ? 'Enabled' : 'Disabled' }}
                                         </span>
                                         @if ($tenant->subscription_disabled_at)
-                                            <p class="mt-2 text-xs text-slate-500">Disabled {{ $tenant->subscription_disabled_at->format('d M Y') }}</p>
+                                            <p class="mt-2 text-xs text-slate-500">Disabled {{ \App\Support\DateFormatter::date($tenant->subscription_disabled_at) }}</p>
                                         @endif
                                     </td>
                                     <td class="px-5 py-5 text-right">
@@ -262,7 +262,7 @@
                                 <tr>
                                     <td class="px-5 py-4">
                                         <p class="font-semibold text-sky-100">{{ $ticket->ticket_number }}</p>
-                                        <p class="mt-1 text-xs text-slate-500">{{ $ticket->created_at->format('d M Y g:i A') }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">{{ \App\Support\DateFormatter::dateTime($ticket->created_at) }}</p>
                                     </td>
                                     <td class="px-5 py-4 text-sm text-slate-300">
                                         {{ $ticket->tenant?->name ?? 'Unknown tenant' }}
@@ -360,9 +360,9 @@
                                         <p class="mt-1 text-xs text-amber-50/50">{{ $billingPeriods[$charge->billing_period] ?? $charge->billing_period }}</p>
                                     </td>
                                     <td class="px-5 py-4 text-sm text-amber-50/80">
-                                        {{ $charge->period_starts_at->format('d M Y') }}
+                                        {{ \App\Support\DateFormatter::date($charge->period_starts_at) }}
                                         @if ($charge->period_ends_at)
-                                            - {{ $charge->period_ends_at->format('d M Y') }}
+                                            - {{ \App\Support\DateFormatter::date($charge->period_ends_at) }}
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-sm text-amber-50/80">{{ strtoupper($charge->currency) }} {{ number_format((float) $charge->amount, 2) }}</td>
@@ -422,9 +422,9 @@
                                         <p class="mt-1 text-xs text-slate-500">{{ $billingPeriods[$charge->billing_period] ?? $charge->billing_period }}</p>
                                     </td>
                                     <td class="px-5 py-4 text-sm text-slate-300">
-                                        {{ $charge->period_starts_at->format('d M Y') }}
+                                        {{ \App\Support\DateFormatter::date($charge->period_starts_at) }}
                                         @if ($charge->period_ends_at)
-                                            - {{ $charge->period_ends_at->format('d M Y') }}
+                                            - {{ \App\Support\DateFormatter::date($charge->period_ends_at) }}
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-sm text-slate-300">{{ strtoupper($charge->currency) }} {{ number_format((float) $charge->amount, 2) }}</td>
@@ -433,7 +433,7 @@
                                             {{ ucfirst($charge->status) }}
                                         </span>
                                     </td>
-                                    <td class="px-5 py-4 text-sm text-slate-400">{{ $charge->paid_at?->format('d M Y g:i A') ?: '-' }}</td>
+                                    <td class="px-5 py-4 text-sm text-slate-400">{{ \App\Support\DateFormatter::dateTime($charge->paid_at, '-') }}</td>
                                 </tr>
                             @empty
                                 <tr>

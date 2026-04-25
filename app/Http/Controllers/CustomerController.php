@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -177,12 +178,12 @@ class CustomerController extends Controller
             'id' => $customer->id,
             'full_name' => $customer->full_name,
             'email' => $customer->email,
-            'date_of_birth' => $customer->date_of_birth?->format('Y-m-d'),
-            'date_of_birth_label' => $customer->date_of_birth?->format('d M Y'),
+            'date_of_birth' => DateFormatter::inputDate($customer->date_of_birth),
+            'date_of_birth_label' => DateFormatter::date($customer->date_of_birth),
             'address' => $customer->address,
             'phone' => $customer->phone,
             'bookings_count' => $customer->bookings_count ?? $customer->bookings()->count(),
-            'created_at' => $customer->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($customer->created_at),
             'show_url' => route('customers.show', $customer),
             'update_url' => route('customers.update', $customer),
             'delete_url' => route('customers.destroy', $customer),
