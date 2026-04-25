@@ -6,11 +6,16 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
 {
     use BelongsToTenant;
     use HasFactory;
+
+    public const ASSIGNEE_USER = 'user';
+    public const ASSIGNEE_VENDOR = 'vendor';
+    public const ASSIGNEE_CUSTOMER = 'customer';
 
     protected $fillable = [
         'tenant_id',
@@ -19,7 +24,8 @@ class Task extends Model
         'is_booking_action',
         'task_name',
         'task_duration_hours',
-        'assigned_to',
+        'assignee_type',
+        'assignee_id',
         'task_status_id',
         'due_date',
         'date_started',
@@ -40,7 +46,17 @@ class Task extends Model
 
     public function assignedUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'assigned_to');
+        return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function assigneeVendor(): BelongsTo
+    {
+        return $this->belongsTo(TenantVendor::class, 'assignee_id');
+    }
+
+    public function assigneeCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'assignee_id');
     }
 
     public function booking(): BelongsTo
@@ -51,5 +67,19 @@ class Task extends Model
     public function status(): BelongsTo
     {
         return $this->belongsTo(TaskStatus::class, 'task_status_id');
+    }
+
+    public function clientPortalUpdates(): HasMany
+    {
+        return $this->hasMany(ClientPortalTaskUpdate::class)->latest();
+    }
+
+    public static function assigneeTypes(): array
+    {
+        return [
+            self::ASSIGNEE_USER,
+            self::ASSIGNEE_VENDOR,
+            self::ASSIGNEE_CUSTOMER,
+        ];
     }
 }

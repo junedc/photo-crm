@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Package extends Model
 {
@@ -17,6 +18,7 @@ class Package extends Model
         'description',
         'base_price',
         'photo_path',
+        'package_status_id',
         'status',
         'is_active',
     ];
@@ -32,6 +34,11 @@ class Package extends Model
     public function equipment(): HasMany
     {
         return $this->hasMany(Equipment::class, 'package_id');
+    }
+
+    public function packageStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'package_status_id');
     }
 
     public function hourlyPrices(): HasMany

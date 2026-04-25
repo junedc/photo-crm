@@ -1,4 +1,5 @@
 @php
+    use App\Support\DateFormatter;
     $acceptUrl = route('quotes.respond', ['booking' => $booking->quote_token, 'response' => 'accept']);
     $rejectUrl = route('quotes.respond', ['booking' => $booking->quote_token, 'response' => 'reject']);
     $selectedAddOns = $booking->relationLoaded('addOns') && $booking->addOns->isNotEmpty()
@@ -70,7 +71,7 @@
                                                         {{ $booking->package?->name ?? 'No package selected' }}
                                                     </p>
                                                     <p style="margin: 8px 0 0; font-size: 14px; color: #475569;">
-                                                        Event date {{ $booking->event_date?->format('d M Y') ?? 'to be confirmed' }}
+                                                        Event date {{ DateFormatter::date($booking->event_date, 'to be confirmed') }}
                                                     </p>
                                                 </td>
                                             </tr>
@@ -92,13 +93,13 @@
                                                                     <strong>Package:</strong> {{ $booking->package?->name ?? 'No package selected' }}
                                                                 </p>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
-                                                                    <strong>Event date:</strong> {{ $booking->event_date?->format('d M Y') ?? 'Not provided' }}
+                                                                    <strong>Event date:</strong> {{ DateFormatter::date($booking->event_date, 'Not provided') }}
                                                                 </p>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
-                                                                    <strong>Start hour:</strong> {{ $booking->start_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($booking->start_time) === 5 ? $booking->start_time.':00' : $booking->start_time)->format('g:i A') : 'N/A' }}
+                                                                    <strong>Start hour:</strong> {{ DateFormatter::time($booking->start_time, 'N/A') }}
                                                                 </p>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
-                                                                    <strong>End hour:</strong> {{ $booking->end_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($booking->end_time) === 5 ? $booking->end_time.':00' : $booking->end_time)->format('g:i A') : 'N/A' }}
+                                                                    <strong>End hour:</strong> {{ DateFormatter::time($booking->end_time, 'N/A') }}
                                                                 </p>
                                                                 <p style="margin: 0 0 10px; font-size: 14px; line-height: 1.6;">
                                                                     <strong>Total hours:</strong> {{ number_format((float) ($booking->total_hours ?? 0), 2) }}

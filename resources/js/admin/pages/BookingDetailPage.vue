@@ -20,9 +20,10 @@ const invoiceErrors = ref({});
 const taskErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
+const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 
 const buildEditForm = (record) => ({
-    status: record?.status ?? 'pending',
+    booking_status_id: record?.status_id ? String(record.status_id) : String(props.data.bookingStatusOptions?.[0]?.id ?? ''),
     booking_kind: record?.booking_kind ?? (props.data.bookingKinds?.[0] ?? 'customer'),
     entry_name: record?.entry_name ?? '',
     entry_description: record?.entry_description ?? '',
@@ -48,7 +49,6 @@ const buildTaskForm = (task = null) => ({
     task_duration_hours: task?.task_duration_hours ?? '',
     assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
     task_status_id: task?.task_status_id ? String(task.task_status_id) : '',
-    status_name: task?.status_name ?? '',
     due_date: task?.due_date ?? '',
     date_started: task?.date_started ?? '',
     date_completed: task?.date_completed ?? '',
@@ -58,7 +58,6 @@ const buildTaskForm = (task = null) => ({
 const editForm = ref(buildEditForm(props.data.booking));
 const editingTask = ref(null);
 const taskForm = ref(buildTaskForm());
-const taskStatusMenuOpen = ref(false);
 const invoiceForm = ref({
     installment_count: '3',
     deposit_percentage: String(props.data.defaultDepositPercentage ?? 30),
@@ -73,7 +72,7 @@ const packages = computed(() => props.data.packages ?? []);
 const equipmentOptions = computed(() => props.data.equipmentOptions ?? []);
 const addOnOptions = computed(() => props.data.addOnOptions ?? []);
 const discountOptions = computed(() => props.data.discountOptions ?? []);
-const taskUsers = computed(() => props.data.taskUsers ?? []);
+const taskAssignees = computed(() => bookingRecord.value.task_assignees ?? props.data.taskAssignees ?? []);
 const taskStatuses = computed(() => localTaskStatuses.value);
 const isEntryBooking = computed(() => editForm.value.booking_kind === 'market_stall' || editForm.value.booking_kind === 'sponsored');
 const selectedPackage = computed(() =>
@@ -111,19 +110,12 @@ const combinedOptionalItems = computed(() => [
         tone: 'rose',
     })),
 ]);
-const taskStatusSuggestions = computed(() => {
-    const term = taskForm.value.status_name.trim().toLowerCase();
-
-    if (term.length < 2) {
-        return [];
-    }
-
-    return taskStatuses.value.filter((status) => status.name.toLowerCase().includes(term));
-});
-const hasExactTaskStatusMatch = computed(() => {
-    const term = taskForm.value.status_name.trim().toLowerCase();
-
-    return term !== '' && taskStatuses.value.some((status) => status.name.toLowerCase() === term);
+const taskAssigneeGroups = computed(() => {
+    return taskAssignees.value.reduce((groups, option) => {
+        const group = option.group ?? 'Other';
+        groups[group] = [...(groups[group] ?? []), option];
+        return groups;
+    }, {});
 });
 
 const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -242,11 +234,22 @@ onMounted(() => {
     startTaskCreate();
 });
 
+const grantClientAccess = async () => {
+    try {
+        const record = await submitForm({
+            url: bookingRecord.value.grant_client_access_url,
+            data: {},
+        });
+
+        syncBooking(record);
+    } catch {}
+};
+
 const updateBooking = async () => {
     const errors = {};
 
-    if (isBlank(editForm.value.status)) {
-        errors.status = requiredMessage('Status');
+    if (isBlank(editForm.value.booking_status_id)) {
+        errors.booking_status_id = requiredMessage('Status');
     }
 
     if (isBlank(editForm.value.package_id)) {
@@ -376,36 +379,17 @@ const sendInvoice = async () => {
 const startTaskCreate = () => {
     editingTask.value = null;
     taskErrors.value = {};
-    taskStatusMenuOpen.value = false;
     taskForm.value = buildTaskForm();
 };
 
 const startTaskEdit = (task) => {
     editingTask.value = task;
     taskErrors.value = {};
-    taskStatusMenuOpen.value = false;
     taskForm.value = buildTaskForm(task);
 };
 
 const cancelTaskEdit = () => {
     startTaskCreate();
-};
-
-const onTaskStatusInput = () => {
-    taskForm.value.task_status_id = '';
-    taskStatusMenuOpen.value = taskForm.value.status_name.trim().length >= 2;
-};
-
-const chooseTaskStatus = (status) => {
-    taskForm.value.task_status_id = String(status.id);
-    taskForm.value.status_name = status.name;
-    taskStatusMenuOpen.value = false;
-};
-
-const useNewTaskStatus = () => {
-    taskForm.value.task_status_id = '';
-    taskForm.value.status_name = taskForm.value.status_name.trim();
-    taskStatusMenuOpen.value = false;
 };
 
 const saveTask = async () => {
@@ -428,7 +412,6 @@ const saveTask = async () => {
         formData.append('assigned_to', taskForm.value.assigned_to ?? '');
         formData.append('booking_id', String(bookingRecord.value.id));
         formData.append('task_status_id', taskForm.value.task_status_id ?? '');
-        formData.append('status_name', taskForm.value.status_name ?? '');
         formData.append('due_date', taskForm.value.due_date ?? '');
         formData.append('date_started', taskForm.value.date_started ?? '');
         formData.append('date_completed', taskForm.value.date_completed ?? '');
@@ -452,12 +435,6 @@ const saveTask = async () => {
             ...bookingRecord.value,
             tasks: [...tasks.value],
         };
-        if (record.task_status_id && !taskStatuses.value.some((status) => String(status.id) === String(record.task_status_id))) {
-            localTaskStatuses.value = [
-                ...taskStatuses.value,
-                { id: record.task_status_id, name: record.status_name },
-            ];
-        }
         startTaskCreate();
     } catch {}
 };
@@ -500,6 +477,9 @@ const removeTask = async (task) => {
                 <span class="rounded-full px-2.5 py-1 text-[11px] font-medium" :class="bookingRecord.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : bookingRecord.status === 'pending' ? 'bg-amber-300/15 text-amber-200' : bookingRecord.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : 'bg-rose-400/15 text-rose-200'">
                     {{ statusLabel(bookingRecord.status) }}
                 </span>
+                <button type="button" class="rounded-lg border border-cyan-300/30 px-3 py-1.5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving" @click="grantClientAccess">
+                    {{ saving ? 'Sending...' : (bookingRecord.client_portal_access_granted ? 'Resend Access' : 'Grant Access') }}
+                </button>
                 <button type="button" class="rounded-lg border border-rose-300/30 px-3 py-1.5 text-sm font-medium text-rose-100 transition hover:bg-rose-300/10" @click="isEditing ? cancelEditing() : startEditing()">
                     {{ isEditing ? 'Cancel edit' : 'Edit Booking' }}
                 </button>
@@ -534,8 +514,8 @@ const removeTask = async (task) => {
 
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
-                        <select v-model="editForm.status" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'status') ? 'border-rose-300/60' : ''">
-                            <option v-for="status in data.bookingStatuses" :key="status" :value="status">{{ statusLabel(status) }}</option>
+                        <select v-model="editForm.booking_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'booking_status_id') ? 'border-rose-300/60' : ''">
+                            <option v-for="status in bookingStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                         </select>
                     </div>
                     <div class="sm:col-span-2">
@@ -672,6 +652,16 @@ const removeTask = async (task) => {
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Phone</p>
                         <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
                     </div>
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Client Portal Access</p>
+                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.client_portal_access_granted ? 'Granted' : 'Not granted yet' }}</p>
+                        <p v-if="bookingRecord.client_portal_access_granted_at_label" class="mt-1 text-xs text-stone-400">
+                            Last email sent {{ bookingRecord.client_portal_access_granted_at_label }}
+                        </p>
+                        <a v-if="bookingRecord.client_portal_access_url" :href="bookingRecord.client_portal_access_url" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">
+                            Open portal link
+                        </a>
+                    </div>
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Type</p>
                         <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_type_label || 'Not set' }}</p>
@@ -776,33 +766,18 @@ const removeTask = async (task) => {
                         </div>
                         <div>
                             <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
-                            <div class="relative">
-                                <input
-                                    v-model="taskForm.status_name"
-                                    type="text"
-                                    class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50"
-                                    :class="firstError(taskValidationErrors, 'task_status_id') || firstError(taskValidationErrors, 'status_name') ? 'border-rose-300/60' : ''"
-                                    placeholder="Type 2 letters to search"
-                                    @input="onTaskStatusInput"
-                                    @focus="taskStatusMenuOpen = taskForm.status_name.trim().length >= 2"
-                                >
-                                <div v-if="taskStatusMenuOpen && (taskStatusSuggestions.length || (taskForm.status_name.trim() && !hasExactTaskStatusMatch))" class="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/30">
-                                    <button v-for="status in taskStatusSuggestions" :key="status.id" type="button" class="flex w-full items-center justify-between border-b border-white/10 px-3 py-2 text-left text-sm text-white transition last:border-b-0 hover:bg-white/5" @click="chooseTaskStatus(status)">
-                                        <span>{{ status.name }}</span>
-                                        <span class="text-[11px] uppercase tracking-[0.18em] text-stone-500">Existing</span>
-                                    </button>
-                                    <button v-if="taskForm.status_name.trim() && !hasExactTaskStatusMatch" type="button" class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-emerald-200 transition hover:bg-emerald-400/10" @click="useNewTaskStatus">
-                                        <span>Create new: {{ taskForm.status_name.trim() }}</span>
-                                        <span class="text-[11px] uppercase tracking-[0.18em] text-emerald-300">New</span>
-                                    </button>
-                                </div>
-                            </div>
+                            <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
+                                <option value="">No status</option>
+                                <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
+                            </select>
                         </div>
                         <div>
                             <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Assigned To</label>
                             <select v-model="taskForm.assigned_to" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
                                 <option value="">Unassigned</option>
-                                <option v-for="user in taskUsers" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
+                                <optgroup v-for="(options, group) in taskAssigneeGroups" :key="group" :label="group">
+                                    <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div>

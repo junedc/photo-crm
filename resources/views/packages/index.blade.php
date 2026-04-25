@@ -174,7 +174,7 @@
                                     </div>
                                     <div class="rounded-2xl border border-white/10 bg-stone-950/40 p-4">
                                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Created</p>
-                                        <p class="mt-2 text-lg font-semibold">{{ $selectedPackage->created_at?->format('d M Y') }}</p>
+                                        <p class="mt-2 text-lg font-semibold">{{ \App\Support\DateFormatter::date($selectedPackage->created_at) }}</p>
                                     </div>
                                 </div>
 

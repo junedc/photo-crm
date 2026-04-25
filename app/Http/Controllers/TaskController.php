@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\TaskAssignedMail;
 use App\Models\Booking;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
-use App\Models\User;
+use App\Support\DateFormatter;
+use App\Support\TaskAssignees;
 use App\Support\TenantStatuses;
+use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class TaskController extends Controller
@@ -29,29 +33,18 @@ class TaskController extends Controller
                 'tasks' => route('tasks.index'),
             ],
             'tasks' => Task::query()
-                ->with(['assignedUser', 'booking', 'status'])
+                ->with(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status'])
                 ->latest('due_date')
                 ->latest('created_at')
                 ->get()
                 ->map(fn (Task $task) => $this->serializeTask($task))
                 ->values(),
-            'users' => $tenant->users()
-                ->wherePivot('role', '!=', 'guest')
-                ->orderBy('name')
-                ->get()
-                ->map(fn (User $user) => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ])
+            'assigneeOptions' => TaskAssignees::optionsForTenant($tenant)
                 ->values(),
-            'taskStatuses' => TenantStatuses::records($tenant, TenantStatuses::SCOPE_TASK)
-                ->map(fn (array $status) => [
-                    'id' => $status['id'],
-                    'name' => $status['name'],
-                ])
+            'taskStatuses' => $this->taskStatuses($tenant)
                 ->values(),
             'bookings' => Booking::query()
+                ->with('customer')
                 ->latest('event_date')
                 ->latest('created_at')
                 ->get()
@@ -59,27 +52,32 @@ class TaskController extends Controller
                     'id' => $booking->id,
                     'display_name' => $booking->entry_name ?: $booking->customer_name,
                     'quote_number' => $booking->quote_number,
-                    'event_date_label' => $booking->event_date?->format('d M Y'),
+                    'event_date_label' => DateFormatter::date($booking->event_date),
+                    'customer_assignee' => TaskAssignees::customerOption($tenant, $booking),
                 ])
                 ->values(),
         ]);
     }
 
-    public function store(Request $request, CurrentTenant $currentTenant): RedirectResponse|JsonResponse
+    public function store(Request $request, CurrentTenant $currentTenant, TrackedEmailSender $trackedEmailSender): RedirectResponse|JsonResponse
     {
         $tenant = $this->requireTenant($currentTenant);
         $task = Task::query()->create($this->validateTask($request, $tenant));
+        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status']);
+        $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
-        return $this->savedResponse($request, 'Task added.', $this->serializeTask($task->fresh(['assignedUser', 'booking', 'status'])), route('tasks.index'));
+        return $this->savedResponse($request, 'Task added.', $this->serializeTask($task), route('tasks.index'));
     }
 
-    public function update(Request $request, CurrentTenant $currentTenant, Task $task): RedirectResponse|JsonResponse
+    public function update(Request $request, CurrentTenant $currentTenant, Task $task, TrackedEmailSender $trackedEmailSender): RedirectResponse|JsonResponse
     {
         $tenant = $this->requireTenant($currentTenant);
         $this->assertTenantTask($tenant, $task);
         $task->update($this->validateTask($request, $tenant));
+        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status']);
+        $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
-        return $this->savedResponse($request, 'Task updated.', $this->serializeTask($task->fresh(['assignedUser', 'booking', 'status'])), route('tasks.index'));
+        return $this->savedResponse($request, 'Task updated.', $this->serializeTask($task), route('tasks.index'));
     }
 
     public function destroy(Request $request, CurrentTenant $currentTenant, Task $task): RedirectResponse|JsonResponse
@@ -93,15 +91,11 @@ class TaskController extends Controller
     private function validateTask(Request $request, Tenant $tenant): array
     {
         $bookingIds = Booking::query()->pluck('id');
-        $statusIds = $tenant->taskStatuses()->pluck('id');
+        $statusIds = $this->taskStatuses($tenant)->pluck('id');
         $validated = $request->validate([
             'task_name' => ['required', 'string', 'max:255'],
             'task_duration_hours' => ['nullable', 'numeric', 'min:0'],
-            'assigned_to' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('id', $tenant->users()->pluck('users.id'))),
-            ],
+            'assigned_to' => ['nullable', 'string', 'max:40'],
             'booking_id' => [
                 'nullable',
                 'integer',
@@ -112,24 +106,33 @@ class TaskController extends Controller
                 'integer',
                 Rule::exists('task_statuses', 'id')->where(fn ($query) => $query->whereIn('id', $statusIds)),
             ],
-            'status_name' => ['nullable', 'string', 'max:255'],
             'due_date' => ['nullable', 'date'],
             'date_started' => ['nullable', 'date'],
             'date_completed' => ['nullable', 'date'],
             'remarks' => ['nullable', 'string'],
         ]);
 
-        $statusName = trim((string) ($validated['status_name'] ?? ''));
+        $booking = ! empty($validated['booking_id'])
+            ? Booking::query()->with('customer')->find($validated['booking_id'])
+            : null;
 
-        if (! empty($validated['task_status_id'])) {
-            $validated['task_status_id'] = (int) $validated['task_status_id'];
-        } elseif ($statusName !== '') {
-            $validated['task_status_id'] = $tenant->taskStatuses()->firstOrCreate([
-                'name' => $statusName,
-            ])->id;
+        if (! empty($validated['assigned_to'])) {
+            $parsedAssignee = TaskAssignees::parse($validated['assigned_to']);
+
+            if (! $parsedAssignee || ! TaskAssignees::matchesTenant($tenant, $booking, $parsedAssignee['type'], $parsedAssignee['id'])) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => 'The selected task assignee is not valid for this tenant.',
+                ]);
+            }
+
+            $validated['assignee_type'] = $parsedAssignee['type'];
+            $validated['assignee_id'] = $parsedAssignee['id'];
+        } else {
+            $validated['assignee_type'] = null;
+            $validated['assignee_id'] = null;
         }
 
-        unset($validated['status_name']);
+        unset($validated['assigned_to']);
 
         return $validated;
     }
@@ -140,25 +143,84 @@ class TaskController extends Controller
             'id' => $task->id,
             'task_name' => $task->task_name,
             'task_duration_hours' => $task->task_duration_hours,
-            'assigned_to' => $task->assigned_to,
-            'assigned_to_name' => $task->assignedUser?->name ?? 'Unassigned',
+            'assigned_to' => $task->assignee_type && $task->assignee_id ? TaskAssignees::value($task->assignee_type, $task->assignee_id) : '',
+            'assigned_to_name' => TaskAssignees::labelForTask($task),
+            'assignee_type' => $task->assignee_type,
             'booking_id' => $task->booking_id,
             'booking_label' => $task->booking?->quote_number
                 ? sprintf('%s - %s', $task->booking->quote_number, $task->booking->entry_name ?: $task->booking->customer_name)
                 : ($task->booking?->entry_name ?: $task->booking?->customer_name),
             'task_status_id' => $task->task_status_id,
             'status_name' => $task->status?->name ?? '',
-            'due_date' => $task->due_date?->format('Y-m-d') ?? '',
-            'due_date_label' => $task->due_date?->format('d M Y') ?? 'Not set',
-            'date_started' => $task->date_started?->format('Y-m-d') ?? '',
-            'date_started_label' => $task->date_started?->format('d M Y') ?? 'Not set',
-            'date_completed' => $task->date_completed?->format('Y-m-d') ?? '',
-            'date_completed_label' => $task->date_completed?->format('d M Y') ?? 'Not set',
+            'status_label' => $task->status?->label() ?? '',
+            'due_date' => DateFormatter::inputDate($task->due_date) ?? '',
+            'due_date_label' => DateFormatter::date($task->due_date, 'Not set'),
+            'date_started' => DateFormatter::inputDate($task->date_started) ?? '',
+            'date_started_label' => DateFormatter::date($task->date_started, 'Not set'),
+            'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
+            'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
-            'created_at' => $task->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($task->created_at),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
         ];
+    }
+
+    private function taskStatuses(Tenant $tenant)
+    {
+        if ($tenant->taskStatuses()->doesntExist()) {
+            collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
+                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(
+                    ['name' => $name],
+                    ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
+                ));
+        }
+
+        return $tenant->taskStatuses()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (TaskStatus $status) => [
+                'id' => $status->id,
+                'name' => $status->name,
+                'label' => $status->label(),
+            ]);
+    }
+
+    private function notifyAssignee(TrackedEmailSender $trackedEmailSender, Tenant $tenant, Task $task): void
+    {
+        $recipient = match ($task->assignee_type) {
+            Task::ASSIGNEE_USER => $task->assignedUser ? [
+                'email' => $task->assignedUser->email,
+                'name' => $task->assignedUser->name,
+            ] : null,
+            Task::ASSIGNEE_VENDOR => $task->assigneeVendor ? [
+                'email' => $task->assigneeVendor->email,
+                'name' => $task->assigneeVendor->name,
+            ] : null,
+            Task::ASSIGNEE_CUSTOMER => $task->assigneeCustomer ? [
+                'email' => $task->assigneeCustomer->email,
+                'name' => $task->assigneeCustomer->full_name,
+            ] : null,
+            default => null,
+        };
+
+        if (! filled($recipient['email'] ?? null)) {
+            return;
+        }
+
+        $trackedEmailSender->send(
+            new TaskAssignedMail(
+                $tenant,
+                $task,
+                (string) ($recipient['name'] ?? 'there'),
+            ),
+            $recipient,
+            [],
+            [
+                'tenant' => $tenant,
+                'context' => $task,
+            ],
+        );
     }
 
     private function assertTenantTask(Tenant $tenant, Task $task): void

@@ -17,13 +17,14 @@ const { saving, fieldErrors, submitForm } = useWorkspaceCrud();
 const equipmentRecord = ref(props.data.equipmentRecord);
 const clientErrors = ref({});
 const showDeleteConfirm = ref(false);
+const maintenanceStatusOptions = computed(() => props.data.maintenanceStatusOptions ?? []);
 const form = ref({
     name: props.data.equipmentRecord?.name ?? '',
     category: props.data.equipmentRecord?.category ?? '',
     serial_number: props.data.equipmentRecord?.serial_number ?? '',
     description: props.data.equipmentRecord?.description ?? '',
     daily_rate: props.data.equipmentRecord?.daily_rate ?? '',
-    maintenance_status: props.data.equipmentRecord?.maintenance_status ?? 'ready',
+    maintenance_status_id: props.data.equipmentRecord?.maintenance_status_id ? String(props.data.equipmentRecord.maintenance_status_id) : String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
     last_maintained_at: props.data.equipmentRecord?.last_maintained_at ?? '',
     maintenance_notes: props.data.equipmentRecord?.maintenance_notes ?? '',
 });
@@ -64,7 +65,7 @@ const updateEquipment = async () => {
     const formData = new FormData();
     formData.append('_method', 'PUT');
 
-    ['name', 'category', 'serial_number', 'description', 'daily_rate', 'maintenance_status', 'last_maintained_at', 'maintenance_notes'].forEach((key) => {
+    ['name', 'category', 'serial_number', 'description', 'daily_rate', 'maintenance_status_id', 'last_maintained_at', 'maintenance_notes'].forEach((key) => {
         formData.append(key, form.value[key] ?? '');
     });
 
@@ -87,7 +88,7 @@ const updateEquipment = async () => {
             serial_number: record.serial_number ?? '',
             description: record.description ?? '',
             daily_rate: record.daily_rate ?? '',
-            maintenance_status: record.maintenance_status ?? 'ready',
+            maintenance_status_id: record.maintenance_status_id ? String(record.maintenance_status_id) : String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
             last_maintained_at: record.last_maintained_at ?? '',
             maintenance_notes: record.maintenance_notes ?? '',
         };
@@ -131,7 +132,7 @@ const confirmRemoveEquipment = () => {
             </div>
             <div class="flex items-center gap-3">
                 <span class="rounded-full px-3 py-1 text-xs font-medium" :class="equipmentRecord.maintenance_status === 'ready' ? 'bg-emerald-400/15 text-emerald-200' : equipmentRecord.maintenance_status === 'maintenance' ? 'bg-amber-300/15 text-amber-200' : 'bg-rose-400/15 text-rose-200'">
-                    {{ statusLabel(equipmentRecord.maintenance_status) }}
+                    {{ equipmentRecord.maintenance_status_label ?? statusLabel(equipmentRecord.maintenance_status) }}
                 </span>
                 <button
                     type="button"
@@ -196,8 +197,8 @@ const confirmRemoveEquipment = () => {
                 </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Maintenance Status</label>
-                    <select v-model="form.maintenance_status" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                        <option v-for="status in data.maintenanceStatuses" :key="status" :value="status">{{ statusLabel(status) }}</option>
+                    <select v-model="form.maintenance_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                        <option v-for="status in maintenanceStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                     </select>
                 </div>
                 <div>

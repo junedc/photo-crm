@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\EmailLog;
 use App\Models\Tenant;
+use App\Support\TenantStatuses;
 use Illuminate\Contracts\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Mime\Address;
@@ -134,6 +135,7 @@ class TrackedEmailSender
                 'mailable_class' => $emailLog->mailable_class,
                 'context_type' => $emailLog->context_type,
                 'context_id' => $emailLog->context_id,
+                'email_tracking_status_id' => $emailLog->email_tracking_status_id,
                 'status' => 'sent',
                 'error_message' => null,
                 'related_email_log_id' => $emailLog->id,
@@ -152,6 +154,7 @@ class TrackedEmailSender
                 'mailable_class' => $emailLog->mailable_class,
                 'context_type' => $emailLog->context_type,
                 'context_id' => $emailLog->context_id,
+                'email_tracking_status_id' => $emailLog->email_tracking_status_id,
                 'status' => 'failed',
                 'error_message' => $throwable->getMessage(),
                 'related_email_log_id' => $emailLog->id,
@@ -244,6 +247,9 @@ class TrackedEmailSender
                 'mailable_class' => $mailableClass,
                 'context_type' => $context?->getMorphClass(),
                 'context_id' => $context?->getKey(),
+                'email_tracking_status_id' => $tenant
+                    ? TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_EMAIL_TRACKING, $status)?->id
+                    : null,
                 'status' => $status,
                 'error_message' => $errorMessage,
                 'sent_at' => $status === 'sent' ? now() : null,

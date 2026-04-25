@@ -17,7 +17,7 @@ const form = ref({
     name: '',
     description: '',
     base_price: '',
-    status: props.data.packageStatuses?.[0] ?? 'active',
+    package_status_id: String(props.data.packageStatusOptions?.[0]?.id ?? ''),
     equipment_ids: [],
     add_on_ids: [],
     hourly_prices: [],
@@ -73,7 +73,7 @@ const createPackage = async () => {
     formData.append('name', form.value.name ?? '');
     formData.append('description', form.value.description ?? '');
     formData.append('base_price', form.value.base_price ?? '');
-    formData.append('status', form.value.status ?? '');
+    formData.append('package_status_id', form.value.package_status_id ?? '');
 
     (form.value.equipment_ids ?? []).forEach((id) => {
         formData.append('equipment_ids[]', String(id));
@@ -140,8 +140,8 @@ const createPackage = async () => {
                 </div>
                 <div class="sm:col-span-2">
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Package Status</label>
-                    <select v-model="form.status" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-300/50">
-                        <option v-for="status in data.packageStatuses" :key="status" :value="status">{{ status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) }}</option>
+                    <select v-model="form.package_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-300/50">
+                        <option v-for="status in data.packageStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                     </select>
                 </div>
                 <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 p-3">

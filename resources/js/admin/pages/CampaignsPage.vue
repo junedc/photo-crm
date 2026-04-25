@@ -365,9 +365,7 @@ const attachRecipients = async (group) => {
             <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
                 <input v-model="search" type="text" placeholder="Search campaigns" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-pink-300/50">
                 <select v-model="selectedStatus" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-pink-300/50">
-                    <option value="all">All statuses</option>
-                    <option value="draft">Draft</option>
-                    <option value="sent">Sent</option>
+                    <option v-for="status in data.campaignStatuses ?? ['all']" :key="status" :value="status">{{ status === 'all' ? 'All statuses' : status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) }}</option>
                 </select>
             </div>
 

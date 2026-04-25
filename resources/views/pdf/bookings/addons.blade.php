@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -17,12 +18,12 @@
 </head>
 <body>
     <h1>Booking Package and Add-ons</h1>
-    <p class="muted">Booking for {{ $booking->customer_name }} on {{ $booking->event_date?->format('d M Y') }}.</p>
+    <p class="muted">Booking for {{ $booking->customer_name }} on {{ DateFormatter::date($booking->event_date) }}.</p>
     <p class="muted">{{ $tenant?->name ?? 'MemoShot' }}</p>
     <p class="muted">
-        {{ $booking->start_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($booking->start_time) === 5 ? $booking->start_time.':00' : $booking->start_time)->format('g:i A') : 'N/A' }}
+        {{ DateFormatter::time($booking->start_time, 'N/A') }}
         to
-        {{ $booking->end_time ? \Illuminate\Support\Carbon::createFromFormat('H:i:s', strlen($booking->end_time) === 5 ? $booking->end_time.':00' : $booking->end_time)->format('g:i A') : 'N/A' }}
+        {{ DateFormatter::time($booking->end_time, 'N/A') }}
         ({{ number_format((float) ($booking->total_hours ?? 0), 2) }} hours)
     </p>
 

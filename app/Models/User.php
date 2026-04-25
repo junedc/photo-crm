@@ -60,6 +60,7 @@ class User extends Authenticatable
 
     public function assignedTasks(): HasMany
     {
-        return $this->hasMany(Task::class, 'assigned_to');
+        return $this->hasMany(Task::class, 'assignee_id')
+            ->where('assignee_type', Task::ASSIGNEE_USER);
     }
 }

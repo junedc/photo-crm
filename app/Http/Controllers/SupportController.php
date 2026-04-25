@@ -6,6 +6,8 @@ use App\Models\SupportTicket;
 use App\Models\SupportTicketReply;
 use App\Models\Tenant;
 use App\Models\TenantReferral;
+use App\Support\DateFormatter;
+use App\Support\TenantStatuses;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,8 +36,8 @@ class SupportController extends Controller
                 'tickets' => $tickets->map(fn (SupportTicket $ticket): array => $this->serializeTicket($ticket))->values()->all(),
                 'ticketTypes' => SupportTicket::types(),
                 'ticketPriorities' => SupportTicket::priorities(),
-                'ticketStatuses' => SupportTicket::statuses(),
-                'tenantTicketStatuses' => SupportTicket::tenantStatuses(),
+                'ticketStatuses' => TenantStatuses::names($tenant, TenantStatuses::SCOPE_SUPPORT),
+                'tenantTicketStatuses' => $this->supportStatusOptions($tenant, onlyTenantActions: true),
             ],
         ]);
     }
@@ -53,7 +55,7 @@ class SupportController extends Controller
                 'tenant' => $this->serializeTenant($tenant),
                 'routes' => $this->baseRoutes(),
                 'ticket' => $this->serializeTicket($ticket, includeReplies: true),
-                'tenantTicketStatuses' => SupportTicket::tenantStatuses(),
+                'tenantTicketStatuses' => $this->supportStatusOptions($tenant, onlyTenantActions: true),
             ],
         ]);
     }
@@ -105,21 +107,30 @@ class SupportController extends Controller
             'tenant_id' => $tenant->id,
             'user_id' => $request->user()?->id,
             'ticket_number' => $this->newTicketNumber(),
+            'support_status_id' => TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_SUPPORT, SupportTicket::STATUS_OPEN)?->id,
             'status' => SupportTicket::STATUS_OPEN,
         ]);
 
         return redirect()->route('support.index')->with('status', 'Support ticket submitted.');
     }
 
-    public function updateStatus(SupportTicket $ticket, Request $request): RedirectResponse
+    public function updateStatus(CurrentTenant $currentTenant, SupportTicket $ticket, Request $request): RedirectResponse
     {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $ticket->tenant_id === $tenant->id, 404);
+
         $validated = $request->validate([
-            'status' => ['required', Rule::in(array_keys(SupportTicket::tenantStatuses()))],
+            'support_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                ->where('tenant_id', $tenant->id)
+                ->where('scope', TenantStatuses::SCOPE_SUPPORT))],
         ]);
 
+        $status = TenantStatuses::findWorkspaceStatusById($tenant, TenantStatuses::SCOPE_SUPPORT, $validated['support_status_id']);
+
         $ticket->forceFill([
-            'status' => $validated['status'],
-            'resolved_at' => $validated['status'] === SupportTicket::STATUS_RESOLVED ? now() : null,
+            'support_status_id' => $status?->id,
+            'status' => $status?->name ?? $ticket->status,
+            'resolved_at' => ($status?->name ?? '') === SupportTicket::STATUS_RESOLVED ? now() : null,
         ])->save();
 
         return back()->with('status', 'Support ticket status updated.');
@@ -142,8 +153,10 @@ class SupportController extends Controller
         ]);
 
         if ($ticket->status === SupportTicket::STATUS_RESOLVED) {
+            $inProgress = TenantStatuses::firstOrCreateWorkspaceStatus($tenant, TenantStatuses::SCOPE_SUPPORT, SupportTicket::STATUS_IN_PROGRESS);
             $ticket->forceFill([
-                'status' => SupportTicket::STATUS_IN_PROGRESS,
+                'support_status_id' => $inProgress?->id,
+                'status' => $inProgress?->name ?? SupportTicket::STATUS_IN_PROGRESS,
                 'resolved_at' => null,
             ])->save();
         }
@@ -184,12 +197,13 @@ class SupportController extends Controller
             'priority_label' => SupportTicket::priorities()[$ticket->priority] ?? Str::headline($ticket->priority),
             'subject' => $ticket->subject,
             'description' => $ticket->description,
+            'status_id' => $ticket->support_status_id,
             'status' => $ticket->status,
-            'status_label' => SupportTicket::statuses()[$ticket->status] ?? Str::headline($ticket->status),
+            'status_label' => $ticket->supportStatus?->label() ?? SupportTicket::statuses()[$ticket->status] ?? Str::headline($ticket->status),
             'created_by' => $ticket->user?->name,
-            'created_at' => $ticket->created_at?->format('d M Y g:i A'),
-            'updated_at' => $ticket->updated_at?->format('d M Y g:i A'),
-            'resolved_at' => $ticket->resolved_at?->format('d M Y g:i A'),
+            'created_at' => DateFormatter::dateTime($ticket->created_at),
+            'updated_at' => DateFormatter::dateTime($ticket->updated_at),
+            'resolved_at' => DateFormatter::dateTime($ticket->resolved_at),
             'replies_count' => $ticket->replies_count ?? $ticket->replies->count(),
             'show_url' => route('support.show', $ticket),
             'status_update_url' => route('support.status.update', $ticket),
@@ -213,7 +227,7 @@ class SupportController extends Controller
             'id' => $reply->id,
             'message' => $reply->message,
             'created_by' => $reply->user?->name ?? 'Workspace user',
-            'created_at' => $reply->created_at?->format('d M Y g:i A'),
+            'created_at' => DateFormatter::dateTime($reply->created_at),
         ];
     }
 
@@ -223,10 +237,27 @@ class SupportController extends Controller
             'id' => $referral->id,
             'workspace_name' => $referral->referredTenant?->name ?? $referral->referred_workspace_name,
             'owner_email' => $referral->referred_owner_email,
+            'status_id' => $referral->referral_status_id,
             'status' => $referral->status,
-            'status_label' => TenantReferral::statuses()[$referral->status] ?? Str::headline($referral->status),
-            'created_at' => $referral->created_at?->format('d M Y'),
+            'status_label' => $referral->referralStatus?->label() ?? TenantReferral::statuses()[$referral->status] ?? Str::headline($referral->status),
+            'created_at' => DateFormatter::date($referral->created_at),
         ];
+    }
+
+    private function supportStatusOptions(Tenant $tenant, bool $onlyTenantActions = false): array
+    {
+        $records = TenantStatuses::ensureWorkspaceRecords($tenant, TenantStatuses::SCOPE_SUPPORT);
+
+        if ($onlyTenantActions) {
+            $records = $records->filter(fn ($status) => in_array($status->name, [
+                SupportTicket::STATUS_IN_PROGRESS,
+                SupportTicket::STATUS_RESOLVED,
+            ], true));
+        }
+
+        return $records
+            ->mapWithKeys(fn ($status) => [$status->id => $status->label()])
+            ->all();
     }
 
     private function serializeTenant(Tenant $tenant): array

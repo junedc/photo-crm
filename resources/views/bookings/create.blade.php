@@ -283,7 +283,7 @@
                                             @php
                                                 $timeValue = sprintf('%02d:%s', $hour, $minute);
                                             @endphp
-                                            <option value="{{ $timeValue }}" @selected(old('start_time') === $timeValue)>{{ \Illuminate\Support\Carbon::createFromFormat('H:i', $timeValue)->format('g:i A') }}</option>
+                                            <option value="{{ $timeValue }}" @selected(old('start_time') === $timeValue)>{{ \App\Support\DateFormatter::time($timeValue) }}</option>
                                         @endforeach
                                     @endfor
                                 </select>
@@ -294,7 +294,7 @@
                             </div>
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="end-time-display">End hour <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="end-time-display" type="text" value="{{ old('end_time') ? \Illuminate\Support\Carbon::createFromFormat('H:i', old('end_time'))->format('g:i A') : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
+                                <input id="end-time-display" type="text" value="{{ old('end_time') ? \App\Support\DateFormatter::time(old('end_time')) : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
                                 <input id="end-time" name="end_time" type="hidden" value="{{ old('end_time') }}" required>
                                 <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="end_time"></p>
                                 @error('end_time')

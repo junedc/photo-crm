@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Discount;
 use App\Models\Package;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -159,10 +160,10 @@ class DiscountController extends Controller
             'id' => $discount->id,
             'code' => $discount->code,
             'name' => $discount->name,
-            'starts_at' => $discount->starts_at?->format('Y-m-d'),
-            'starts_at_label' => $discount->starts_at?->format('d M Y'),
-            'ends_at' => $discount->ends_at?->format('Y-m-d'),
-            'ends_at_label' => $discount->ends_at?->format('d M Y'),
+            'starts_at' => DateFormatter::inputDate($discount->starts_at),
+            'starts_at_label' => DateFormatter::date($discount->starts_at),
+            'ends_at' => DateFormatter::inputDate($discount->ends_at),
+            'ends_at_label' => DateFormatter::date($discount->ends_at),
             'discount_type' => $discount->discount_type,
             'discount_type_label' => $this->discountTypes()[$discount->discount_type] ?? $discount->discount_type,
             'discount_value' => number_format((float) $discount->discount_value, 2, '.', ''),

@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\AdminAccess;
+use App\Support\DateFormatter;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -319,7 +320,7 @@ class UserRoleController extends Controller
             'membership_role' => $membership?->role ?? 'member',
             'role_id' => $membership?->role_id,
             'role_name' => $role?->name ?? ($membership?->role === 'owner' ? 'Owner' : ($membership?->role === 'guest' ? 'Guest' : 'Unassigned')),
-            'created_at' => $user->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($user->created_at),
             'update_url' => route('users.update', $user),
             'delete_url' => route('users.destroy', $user),
             'guest_delete_url' => route('access.guests.destroy', $user),
@@ -334,7 +335,7 @@ class UserRoleController extends Controller
             'description' => $role->description,
             'screen_access' => $role->screen_access ?? [],
             'users_count' => $role->users_count ?? DB::table('tenant_user')->where('role_id', $role->id)->count(),
-            'created_at' => $role->created_at?->format('d M Y'),
+            'created_at' => DateFormatter::date($role->created_at),
             'update_url' => route('roles.update', $role),
             'delete_url' => route('roles.destroy', $role),
         ];

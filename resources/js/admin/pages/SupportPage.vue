@@ -81,11 +81,11 @@ const priorityClass = (priority) => ({
                         </td>
                         <td class="px-3 py-4">
                             <div class="flex flex-wrap justify-end gap-2">
-                                <form v-for="(label, status) in data.tenantTicketStatuses" :key="`${ticket.id}-${status}`" :action="ticket.status_update_url" method="POST">
+                                <form v-for="(label, statusId) in data.tenantTicketStatuses" :key="`${ticket.id}-${statusId}`" :action="ticket.status_update_url" method="POST">
                                     <input type="hidden" name="_token" :value="data.csrfToken">
                                     <input type="hidden" name="_method" value="PUT">
-                                    <input type="hidden" name="status" :value="status">
-                                    <button type="submit" class="rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40" :class="status === 'resolved' ? 'border-violet-300/30 text-violet-100 hover:bg-violet-300/10' : 'border-cyan-300/30 text-cyan-100 hover:bg-cyan-300/10'" :disabled="ticket.status === status">
+                                    <input type="hidden" name="support_status_id" :value="statusId">
+                                    <button type="submit" class="rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40" :class="String(label).toLowerCase() === 'resolved' ? 'border-violet-300/30 text-violet-100 hover:bg-violet-300/10' : 'border-cyan-300/30 text-cyan-100 hover:bg-cyan-300/10'" :disabled="String(ticket.status_id) === String(statusId)">
                                         {{ label }}
                                     </button>
                                 </form>

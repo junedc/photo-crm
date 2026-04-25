@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+@php use App\Support\DateFormatter; @endphp
 <html lang="en">
     <body style="margin: 0; background: #f7f3ed; font-family: Arial, sans-serif; color: #292524;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #f7f3ed; padding: 32px 16px;">
@@ -13,7 +14,7 @@
                                 <p style="margin: 0 0 16px; line-height: 1.6;">
                                     Your {{ $charge->subscription_name }} subscription payment of
                                     <strong>{{ strtoupper($charge->currency) }} {{ number_format((float) $charge->amount, 2) }}</strong>
-                                    is scheduled for {{ $charge->period_starts_at?->format('d M Y') }}.
+                                    is scheduled for {{ DateFormatter::date($charge->period_starts_at) }}.
                                 </p>
                                 <p style="margin: 0; line-height: 1.6;">We will automatically charge the saved payment method on the due date.</p>
                             </td>

@@ -18,6 +18,7 @@ class Invoice extends Model
         'token',
         'total_amount',
         'amount_paid',
+        'invoice_status_id',
         'status',
         'issued_at',
     ];
@@ -34,6 +35,11 @@ class Invoice extends Model
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    public function invoiceStatus(): BelongsTo
+    {
+        return $this->belongsTo(WorkspaceStatus::class, 'invoice_status_id');
     }
 
     public function installments(): HasMany

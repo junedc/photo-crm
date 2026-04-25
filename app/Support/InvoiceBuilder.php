@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Booking;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
+use App\Support\TenantStatuses;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,9 @@ class InvoiceBuilder
         }
 
         $totalAmount = $this->bookingPricing->totalForBooking($booking);
+        $invoiceStatus = $booking->tenant
+            ? TenantStatuses::firstOrCreateWorkspaceStatus($booking->tenant, TenantStatuses::SCOPE_INVOICE, 'issued')
+            : null;
 
         $invoice = Invoice::query()->create([
             'booking_id' => $booking->id,
@@ -37,7 +41,8 @@ class InvoiceBuilder
             'token' => Str::random(40),
             'total_amount' => number_format($totalAmount, 2, '.', ''),
             'amount_paid' => 0,
-            'status' => 'issued',
+            'invoice_status_id' => $invoiceStatus?->id,
+            'status' => $invoiceStatus?->name ?? 'issued',
             'issued_at' => now(),
         ]);
 
@@ -71,13 +76,18 @@ class InvoiceBuilder
                 $amountInCents = $baseRemainingAmount + ($isLastRemainingInstallment ? $remainingRemainder : 0);
             }
 
+            $status = $invoice->tenant
+                ? TenantStatuses::firstOrCreateWorkspaceStatus($invoice->tenant, TenantStatuses::SCOPE_INVOICE_INSTALLMENT, 'pending')
+                : null;
+
             InvoiceInstallment::query()->create([
                 'invoice_id' => $invoice->id,
                 'sequence' => $sequence,
                 'label' => $label,
                 'due_date' => $firstDueDate->copy()->addDays(($sequence - 1) * $intervalDays)->toDateString(),
                 'amount' => number_format($amountInCents / 100, 2, '.', ''),
-                'status' => 'pending',
+                'invoice_installment_status_id' => $status?->id,
+                'status' => $status?->name ?? 'pending',
             ]);
         }
     }

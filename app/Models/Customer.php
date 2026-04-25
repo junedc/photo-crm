@@ -32,6 +32,12 @@ class Customer extends Model
         return $this->hasMany(Booking::class);
     }
 
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'assignee_id')
+            ->where('assignee_type', Task::ASSIGNEE_CUSTOMER);
+    }
+
     public function campaignRecipients(): MorphMany
     {
         return $this->morphMany(CampaignRecipient::class, 'recipient');

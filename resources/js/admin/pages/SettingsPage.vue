@@ -13,7 +13,10 @@ const props = defineProps({
 
 const activeTab = ref('workspace');
 const workspacePhotoInput = ref(null);
+const fontUploadInput = ref(null);
 const tenantRecord = ref(props.data.tenant ?? {});
+const tenantFonts = ref([...(props.data.tenant?.fonts ?? [])]);
+const vendors = ref([...(props.data.vendors ?? [])]);
 const subscriptions = ref(props.data.subscriptions ?? []);
 const csrfToken = window.adminProps?.csrfToken ?? '';
 const userRecord = ref(props.data.user ?? {});
@@ -21,24 +24,42 @@ const workspaceErrors = ref({});
 const accountErrors = ref({});
 const maintenanceRecords = ref({
     invoice: [...(props.data.maintenance?.invoice ?? [])],
+    invoice_installment: [...(props.data.maintenance?.invoice_installment ?? [])],
     task: [...(props.data.maintenance?.task ?? [])],
     booking: [...(props.data.maintenance?.booking ?? [])],
+    quote_response: [...(props.data.maintenance?.quote_response ?? [])],
     package: [...(props.data.maintenance?.package ?? [])],
     equipment: [...(props.data.maintenance?.equipment ?? [])],
+    campaign: [...(props.data.maintenance?.campaign ?? [])],
+    support: [...(props.data.maintenance?.support ?? [])],
+    referral: [...(props.data.maintenance?.referral ?? [])],
+    email_tracking: [...(props.data.maintenance?.email_tracking ?? [])],
 });
 const maintenanceDrafts = ref({
     invoice: '',
+    invoice_installment: '',
     task: '',
     booking: '',
+    quote_response: '',
     package: '',
     equipment: '',
+    campaign: '',
+    support: '',
+    referral: '',
+    email_tracking: '',
 });
 const maintenanceEditing = ref({
     invoice: null,
+    invoice_installment: null,
     task: null,
     booking: null,
+    quote_response: null,
     package: null,
     equipment: null,
+    campaign: null,
+    support: null,
+    referral: null,
+    email_tracking: null,
 });
 const {
     saving: workspaceSaving,
@@ -51,10 +72,22 @@ const {
     submitForm: submitAccountForm,
 } = useWorkspaceCrud();
 const {
+    saving: fontSaving,
+    fieldErrors: fontServerErrors,
+    submitForm: submitFontForm,
+    deleteRecord: deleteFontRecord,
+} = useWorkspaceCrud();
+const {
     saving: maintenanceSaving,
     fieldErrors: maintenanceServerErrors,
     submitForm: submitMaintenanceForm,
     deleteRecord: deleteMaintenanceRecord,
+} = useWorkspaceCrud();
+const {
+    saving: vendorSaving,
+    fieldErrors: vendorServerErrors,
+    submitForm: submitVendorForm,
+    deleteRecord: deleteVendorRecord,
 } = useWorkspaceCrud();
 
 const workspaceForm = ref({
@@ -63,6 +96,7 @@ const workspaceForm = ref({
     contact_phone: tenantRecord.value.contact_phone ?? '',
     address: tenantRecord.value.address ?? '',
     theme: tenantRecord.value.theme ?? 'dark',
+    timezone: tenantRecord.value.timezone ?? 'UTC',
     subscription_id: tenantRecord.value.subscription_id ?? '',
     invoice_deposit_percentage: tenantRecord.value.invoice_deposit_percentage ?? '30.00',
     travel_free_kilometers: tenantRecord.value.travel_free_kilometers ?? '0.00',
@@ -81,19 +115,58 @@ const accountForm = ref({
     email: userRecord.value.email ?? '',
 });
 
+const fontForm = ref({
+    family: '',
+    weight: '400',
+    style: 'normal',
+});
+const fontErrors = ref({});
+const vendorForm = ref({
+    name: '',
+    service_type: '',
+    email: '',
+    phone: '',
+});
+const vendorErrors = ref({});
+const editingVendorId = ref(null);
+
 const maintenanceSections = computed(() => [
     { key: 'invoice', label: props.data.maintenanceLabels?.invoice ?? 'Invoice Status' },
+    { key: 'invoice_installment', label: props.data.maintenanceLabels?.invoice_installment ?? 'Invoice Installment Status' },
     { key: 'task', label: props.data.maintenanceLabels?.task ?? 'Task Status' },
     { key: 'booking', label: props.data.maintenanceLabels?.booking ?? 'Booking Status' },
+    { key: 'quote_response', label: props.data.maintenanceLabels?.quote_response ?? 'Quote Response Status' },
     { key: 'package', label: props.data.maintenanceLabels?.package ?? 'Package Status' },
     { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
+    { key: 'campaign', label: props.data.maintenanceLabels?.campaign ?? 'Campaign Status' },
+    { key: 'support', label: props.data.maintenanceLabels?.support ?? 'Support Status' },
+    { key: 'referral', label: props.data.maintenanceLabels?.referral ?? 'Referral Status' },
+    { key: 'email_tracking', label: props.data.maintenanceLabels?.email_tracking ?? 'Email Tracking Status' },
 ]);
 
 const workspaceValidationErrors = computed(() => mergeFieldErrors(workspaceErrors.value, workspaceServerErrors.value));
 const accountValidationErrors = computed(() => mergeFieldErrors(accountErrors.value, accountServerErrors.value));
+const fontValidationErrors = computed(() => mergeFieldErrors(fontErrors.value, fontServerErrors.value));
 const maintenanceValidationErrors = computed(() => maintenanceServerErrors.value ?? {});
+const vendorValidationErrors = computed(() => mergeFieldErrors(vendorErrors.value, vendorServerErrors.value));
 
 const prettifyStatus = (value) => (value || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const sectionHasEditableStatuses = (key) => (maintenanceRecords.value[key] ?? []).some((record) => !record.system);
+const fontVariantLabel = (font) => {
+    if (Number(font?.weight) >= 700 && font?.style === 'italic') {
+        return 'Bold Italic';
+    }
+
+    if (Number(font?.weight) >= 700) {
+        return 'Bold';
+    }
+
+    if (font?.style === 'italic') {
+        return 'Italic';
+    }
+
+    return 'Regular';
+};
 
 const saveWorkspace = async () => {
     const errors = {};
@@ -122,6 +195,7 @@ const saveWorkspace = async () => {
     formData.append('contact_phone', workspaceForm.value.contact_phone ?? '');
     formData.append('address', workspaceForm.value.address ?? '');
     formData.append('theme', workspaceForm.value.theme ?? 'dark');
+    formData.append('timezone', workspaceForm.value.timezone ?? 'UTC');
     formData.append('subscription_id', workspaceForm.value.subscription_id ?? '');
     formData.append('invoice_deposit_percentage', workspaceForm.value.invoice_deposit_percentage ?? '');
     formData.append('travel_free_kilometers', workspaceForm.value.travel_free_kilometers ?? '');
@@ -152,6 +226,7 @@ const saveWorkspace = async () => {
             contact_phone: record.contact_phone ?? '',
             address: record.address ?? '',
             theme: record.theme ?? 'dark',
+            timezone: record.timezone ?? 'UTC',
             subscription_id: record.subscription_id ?? '',
             invoice_deposit_percentage: record.invoice_deposit_percentage ?? '30.00',
             travel_free_kilometers: record.travel_free_kilometers ?? '0.00',
@@ -167,6 +242,7 @@ const saveWorkspace = async () => {
         if (workspacePhotoInput.value) {
             workspacePhotoInput.value.value = '';
         }
+        tenantFonts.value = [...(record.fonts ?? tenantFonts.value)];
         workspaceErrors.value = {};
     } catch {}
 };
@@ -202,6 +278,169 @@ const saveAccount = async () => {
             email: record.email ?? '',
         };
         accountErrors.value = {};
+    } catch {}
+};
+
+const saveFont = async () => {
+    const errors = {};
+    const file = fontUploadInput.value?.files?.[0];
+
+    if (isBlank(fontForm.value.family)) {
+        errors.family = requiredMessage('Font family');
+    }
+
+    if (!file) {
+        errors.file = 'Choose a font file.';
+    }
+
+    fontErrors.value = errors;
+
+    if (hasFieldErrors(errors)) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('family', fontForm.value.family ?? '');
+    formData.append('weight', fontForm.value.weight ?? '400');
+    formData.append('style', fontForm.value.style ?? 'normal');
+    formData.append('file', file);
+
+    try {
+        const record = await submitFontForm({
+            url: props.data.routes.fontStore,
+            data: formData,
+        });
+
+        const index = tenantFonts.value.findIndex((entry) => entry.id === record.id);
+        tenantFonts.value = index >= 0
+            ? tenantFonts.value.map((entry) => entry.id === record.id ? record : entry)
+            : [...tenantFonts.value, record].sort((left, right) => {
+                const familyCompare = String(left.family ?? '').localeCompare(String(right.family ?? ''));
+
+                if (familyCompare !== 0) {
+                    return familyCompare;
+                }
+
+                if (Number(left.weight ?? 400) !== Number(right.weight ?? 400)) {
+                    return Number(left.weight ?? 400) - Number(right.weight ?? 400);
+                }
+
+                return String(left.style ?? '').localeCompare(String(right.style ?? ''));
+            });
+
+        tenantRecord.value = {
+            ...tenantRecord.value,
+            fonts: tenantFonts.value,
+        };
+        fontForm.value = {
+            family: '',
+            weight: '400',
+            style: 'normal',
+        };
+        fontErrors.value = {};
+
+        if (fontUploadInput.value) {
+            fontUploadInput.value.value = '';
+        }
+    } catch {}
+};
+
+const removeFont = async (font) => {
+    if (!font?.delete_url) {
+        return;
+    }
+
+    try {
+        await deleteFontRecord({ url: font.delete_url });
+        tenantFonts.value = tenantFonts.value.filter((entry) => entry.id !== font.id);
+        tenantRecord.value = {
+            ...tenantRecord.value,
+            fonts: tenantFonts.value,
+        };
+    } catch {}
+};
+
+const startVendorCreate = () => {
+    editingVendorId.value = null;
+    vendorErrors.value = {};
+    vendorForm.value = {
+        name: '',
+        service_type: '',
+        email: '',
+        phone: '',
+    };
+};
+
+const startVendorEdit = (vendor) => {
+    editingVendorId.value = vendor.id;
+    vendorErrors.value = {};
+    vendorForm.value = {
+        name: vendor.name ?? '',
+        service_type: vendor.service_type ?? '',
+        email: vendor.email ?? '',
+        phone: vendor.phone ?? '',
+    };
+};
+
+const saveVendor = async () => {
+    const errors = {};
+
+    if (isBlank(vendorForm.value.name)) {
+        errors.name = requiredMessage('Vendor name');
+    }
+
+    if (isBlank(vendorForm.value.service_type)) {
+        errors.service_type = requiredMessage('Vendor role');
+    }
+
+    if (!validEmail(vendorForm.value.email)) {
+        errors.email = 'Enter a valid vendor email.';
+    }
+
+    vendorErrors.value = errors;
+
+    if (hasFieldErrors(errors)) {
+        return;
+    }
+
+    const editingVendor = vendors.value.find((entry) => entry.id === editingVendorId.value);
+
+    try {
+        const record = await submitVendorForm({
+            url: editingVendor?.update_url ?? props.data.routes.vendorStore,
+            method: editingVendor ? 'put' : 'post',
+            data: { ...vendorForm.value },
+        });
+
+        const index = vendors.value.findIndex((entry) => entry.id === record.id);
+        vendors.value = index >= 0
+            ? vendors.value.map((entry) => entry.id === record.id ? record : entry)
+            : [...vendors.value, record].sort((left, right) => {
+                const serviceCompare = String(left.service_type ?? '').localeCompare(String(right.service_type ?? ''));
+
+                if (serviceCompare !== 0) {
+                    return serviceCompare;
+                }
+
+                return String(left.name ?? '').localeCompare(String(right.name ?? ''));
+            });
+
+        startVendorCreate();
+    } catch {}
+};
+
+const removeVendor = async (vendor) => {
+    if (!vendor?.delete_url) {
+        return;
+    }
+
+    try {
+        await deleteVendorRecord({ url: vendor.delete_url });
+        vendors.value = vendors.value.filter((entry) => entry.id !== vendor.id);
+
+        if (editingVendorId.value === vendor.id) {
+            startVendorCreate();
+        }
     } catch {}
 };
 
@@ -264,6 +503,7 @@ const removeStatus = async (scope, record) => {
 
 onMounted(() => {
     nextTick(() => autoAttachGoogleAddressInputs());
+    startVendorCreate();
 });
 </script>
 
@@ -332,6 +572,13 @@ onMounted(() => {
                             <option value="dark">Dark theme</option>
                             <option value="light">Paper light theme</option>
                         </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Timezone</label>
+                        <select v-model="workspaceForm.timezone" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'timezone') ? 'border-rose-300/60' : ''">
+                            <option v-for="timezone in (props.data.timezoneOptions ?? [])" :key="timezone.value" :value="timezone.value">{{ timezone.label }}</option>
+                        </select>
+                        <p v-if="firstError(workspaceValidationErrors, 'timezone')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'timezone') }}</p>
                     </div>
                     <div class="sm:col-span-2 rounded-2xl border border-sky-300/20 bg-sky-300/10 p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -408,6 +655,73 @@ onMounted(() => {
                     </button>
                 </div>
             </form>
+
+            <section class="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Brand Fonts</p>
+                        <h4 class="mt-1 text-sm font-semibold text-white">Client portal design fonts</h4>
+                        <p class="mt-1 text-xs leading-5 text-stone-400">Only tenant admins can upload fonts here. Clients will only see these approved families in the design editor.</p>
+                    </div>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ tenantFonts.length }}</span>
+                </div>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_10rem_10rem_minmax(0,1fr)_auto]">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Font Family</label>
+                        <input v-model="fontForm.family" type="text" placeholder="MemoShot Serif" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(fontValidationErrors, 'family') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(fontValidationErrors, 'family')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fontValidationErrors, 'family') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Weight</label>
+                        <select v-model="fontForm.weight" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                            <option value="400">Regular</option>
+                            <option value="700">Bold</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Style</label>
+                        <select v-model="fontForm.style" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                            <option value="normal">Normal</option>
+                            <option value="italic">Italic</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Font File</label>
+                        <input ref="fontUploadInput" type="file" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" class="block w-full rounded-xl border border-dashed border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-950" :class="firstError(fontValidationErrors, 'file') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(fontValidationErrors, 'file')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fontValidationErrors, 'file') }}</p>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" class="w-full rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60" :disabled="fontSaving" @click="saveFont">
+                            {{ fontSaving ? 'Uploading...' : 'Upload Font' }}
+                        </button>
+                    </div>
+                </div>
+
+                <p class="mt-3 text-xs text-stone-500">Accepted formats: `woff2`, `woff`, `ttf`, `otf`. Upload separate files for regular, bold, and italic variants if you want those buttons to render with the real font files.</p>
+
+                <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
+                    <div class="grid grid-cols-[minmax(0,1.1fr)_9rem_8rem_minmax(0,1fr)_7rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                        <span>Family</span>
+                        <span>Variant</span>
+                        <span>Format</span>
+                        <span>File</span>
+                        <span>Delete</span>
+                    </div>
+                    <div v-for="font in tenantFonts" :key="font.id" class="grid grid-cols-[minmax(0,1.1fr)_9rem_8rem_minmax(0,1fr)_7rem] items-center gap-3 border-t border-white/10 px-3 py-3">
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-semibold text-white" :style="{ fontFamily: `'${font.family}', sans-serif` }">{{ font.family }}</p>
+                        </div>
+                        <p class="text-sm text-stone-300">{{ fontVariantLabel(font) }}</p>
+                        <p class="text-sm uppercase text-stone-400">{{ font.extension }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ font.file_name }}</p>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeFont(font)">Delete</button>
+                    </div>
+                    <div v-if="!tenantFonts.length" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
+                        No brand fonts uploaded yet.
+                    </div>
+                </div>
+            </section>
         </div>
 
         <div v-if="activeTab === 'account'" class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -474,12 +788,78 @@ onMounted(() => {
                         <span>Delete</span>
                     </div>
                     <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
-                        <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
-                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="beginEditStatus(section.key, record)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="removeStatus(section.key, record)">Delete</button>
+                        <div class="min-w-0">
+                            <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
+                            <p v-if="record.system" class="mt-1 text-[11px] uppercase tracking-[0.2em] text-cyan-200">System</p>
+                        </div>
+                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="beginEditStatus(section.key, record)">Edit</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="removeStatus(section.key, record)">Delete</button>
                     </div>
                     <div v-if="!(maintenanceRecords[section.key]?.length)" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
                         No values added yet.
+                    </div>
+                </div>
+                <p v-if="!sectionHasEditableStatuses(section.key) && maintenanceRecords[section.key]?.length" class="mt-3 text-xs text-stone-500">System statuses are protected and cannot be renamed or deleted here.</p>
+            </section>
+
+            <section class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">Vendors</p>
+                        <p class="mt-1 text-xs text-stone-400">Maintain tenant-specific collaborators such as photographers, designers, or sales callers for task assignment.</p>
+                    </div>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ vendors.length }}</span>
+                </div>
+
+                <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_10rem_auto]">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Vendor Name</label>
+                        <input v-model="vendorForm.name" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'name') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(vendorValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'name') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Role</label>
+                        <input v-model="vendorForm.service_type" type="text" placeholder="Photographer" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'service_type') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(vendorValidationErrors, 'service_type')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'service_type') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Email</label>
+                        <input v-model="vendorForm.email" type="email" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'email') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(vendorValidationErrors, 'email')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'email') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Phone</label>
+                        <input v-model="vendorForm.phone" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button type="button" class="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60" :disabled="vendorSaving" @click="saveVendor">
+                            {{ vendorSaving ? 'Saving...' : editingVendorId ? 'Save vendor' : 'Add vendor' }}
+                        </button>
+                        <button v-if="editingVendorId" type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5" @click="startVendorCreate">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
+                    <div class="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)_9rem_7rem_7rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                        <span>Name</span>
+                        <span>Role</span>
+                        <span>Email</span>
+                        <span>Phone</span>
+                        <span>Edit</span>
+                        <span>Delete</span>
+                    </div>
+                    <div v-for="vendor in vendors" :key="vendor.id" class="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)_9rem_7rem_7rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                        <p class="truncate text-sm text-white">{{ vendor.name }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ vendor.service_type }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ vendor.email || 'No email' }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ vendor.phone || 'No phone' }}</p>
+                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="startVendorEdit(vendor)">Edit</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeVendor(vendor)">Delete</button>
+                    </div>
+                    <div v-if="!vendors.length" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
+                        No vendors added yet.
                     </div>
                 </div>
             </section>

@@ -16,7 +16,15 @@ class TaskStatus extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'system',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'system' => 'boolean',
+        ];
+    }
 
     public function tenant(): BelongsTo
     {
@@ -26,5 +34,10 @@ class TaskStatus extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    public function label(): string
+    {
+        return str($this->name)->replace('_', ' ')->title()->toString();
     }
 }

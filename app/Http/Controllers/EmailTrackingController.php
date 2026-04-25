@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmailLog;
 use App\Models\Tenant;
+use App\Support\DateFormatter;
 use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +19,7 @@ class EmailTrackingController extends Controller
     {
         $tenant = $this->requireTenant($currentTenant);
         $logs = EmailLog::query()
+            ->with('emailTrackingStatus')
             ->where('tenant_id', $tenant->id)
             ->latest('created_at')
             ->get();
@@ -95,11 +97,12 @@ class EmailTrackingController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'status_id' => $log->email_tracking_status_id,
             'status' => $log->status,
-            'status_label' => str($log->status)->replace('_', ' ')->title()->toString(),
+            'status_label' => $log->emailTrackingStatus?->label() ?? str($log->status)->replace('_', ' ')->title()->toString(),
             'error_message' => $log->error_message,
             'sent_at_sort' => $log->sent_at?->timestamp ?? 0,
-            'sent_at_label' => $log->sent_at?->format('d M Y g:i A') ?? 'Not sent',
+            'sent_at_label' => DateFormatter::dateTime($log->sent_at, 'Not sent'),
             'mailable_class' => $log->mailable_class,
             'resend_url' => route('email-tracking.resend', $log),
         ];

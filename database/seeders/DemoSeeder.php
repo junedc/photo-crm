@@ -16,6 +16,7 @@ use App\Models\Package;
 use App\Models\SubscriberGroup;
 use App\Models\Template;
 use App\Models\Tenant;
+use App\Support\TenantStatuses;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -31,6 +32,14 @@ class DemoSeeder extends Seeder
         if ($tenant === null) {
             return;
         }
+
+        TenantStatusSeeder::seedTenant($tenant);
+
+        $campaignStatusIds = $this->statusIds($tenant, TenantStatuses::SCOPE_CAMPAIGN);
+        $bookingStatusIds = $this->statusIds($tenant, TenantStatuses::SCOPE_BOOKING);
+        $quoteResponseStatusIds = $this->statusIds($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE);
+        $invoiceStatusIds = $this->statusIds($tenant, TenantStatuses::SCOPE_INVOICE);
+        $invoiceInstallmentStatusIds = $this->statusIds($tenant, TenantStatuses::SCOPE_INVOICE_INSTALLMENT);
 
         for ($batch = 1; $batch <= 5; $batch++) {
             $customers = collect($this->customerSeedData())
@@ -147,6 +156,7 @@ class DemoSeeder extends Seeder
                     'body' => $monthlyPromoTemplate->html_body,
                     'button_text' => $monthlyPromoTemplate->button_text,
                     'button_url' => $monthlyPromoTemplate->button_url,
+                    'campaign_status_id' => $campaignStatusIds['sent'] ?? null,
                     'status' => 'sent',
                     'sent_count' => 3,
                     'sent_at' => now()->subDays(3 + $batch),
@@ -165,6 +175,7 @@ class DemoSeeder extends Seeder
                     'body' => $leadFollowUpTemplate->html_body,
                     'button_text' => $leadFollowUpTemplate->button_text,
                     'button_url' => $leadFollowUpTemplate->button_url,
+                    'campaign_status_id' => $campaignStatusIds['draft'] ?? null,
                     'status' => 'draft',
                     'sent_count' => 0,
                     'sent_at' => null,
@@ -182,7 +193,13 @@ class DemoSeeder extends Seeder
             ]);
         }
 
-        $this->seedBookingsAndInvoices($tenant);
+        $this->seedBookingsAndInvoices(
+            $tenant,
+            $bookingStatusIds,
+            $quoteResponseStatusIds,
+            $invoiceStatusIds,
+            $invoiceInstallmentStatusIds,
+        );
     }
 
     private function upsertRecipient(SubscriberGroup $group, Model $recipient): CampaignRecipient
@@ -252,7 +269,13 @@ class DemoSeeder extends Seeder
         };
     }
 
-    private function seedBookingsAndInvoices(Tenant $tenant): void
+    private function seedBookingsAndInvoices(
+        Tenant $tenant,
+        array $bookingStatusIds,
+        array $quoteResponseStatusIds,
+        array $invoiceStatusIds,
+        array $invoiceInstallmentStatusIds,
+    ): void
     {
         $customers = Customer::query()
             ->where('tenant_id', $tenant->id)
@@ -315,8 +338,10 @@ class DemoSeeder extends Seeder
                     'travel_distance_km' => number_format((float) $attributes['travel_distance_km'], 2, '.', ''),
                     'travel_fee' => number_format($travelFee, 2, '.', ''),
                     'notes' => $attributes['notes'],
+                    'booking_status_id' => $bookingStatusIds[$attributes['status']] ?? null,
                     'status' => $attributes['status'],
                     'quote_token' => sprintf('20000000-0000-4000-8000-%012d', $sequence),
+                    'quote_response_status_id' => $quoteResponseStatusIds[$attributes['customer_response_status']] ?? null,
                     'customer_response_status' => $attributes['customer_response_status'],
                     'customer_responded_at' => $attributes['customer_responded_at'],
                 ]
@@ -353,16 +378,29 @@ class DemoSeeder extends Seeder
                     'token' => 'demo-invoice-token-'.str_pad((string) $sequence, 21, '0', STR_PAD_LEFT),
                     'total_amount' => number_format(max($totalAmount, 0), 2, '.', ''),
                     'amount_paid' => number_format($attributes['invoice_status'] === 'paid' ? max($totalAmount, 0) : 0, 2, '.', ''),
+                    'invoice_status_id' => $invoiceStatusIds[$attributes['invoice_status']] ?? null,
                     'status' => $attributes['invoice_status'],
                     'issued_at' => now()->subDays(30 - min($sequence, 29)),
                 ]
             );
 
-            $this->seedInstallments($invoice, max($totalAmount, 0), $attributes['invoice_status'], $sequence);
+            $this->seedInstallments(
+                $invoice,
+                max($totalAmount, 0),
+                $attributes['invoice_status'],
+                $sequence,
+                $invoiceInstallmentStatusIds,
+            );
         }
     }
 
-    private function seedInstallments(Invoice $invoice, float $totalAmount, string $invoiceStatus, int $sequence): void
+    private function seedInstallments(
+        Invoice $invoice,
+        float $totalAmount,
+        string $invoiceStatus,
+        int $sequence,
+        array $invoiceInstallmentStatusIds,
+    ): void
     {
         $invoice->installments()->delete();
 
@@ -374,7 +412,8 @@ class DemoSeeder extends Seeder
             ['sequence' => 1, 'label' => 'Deposit', 'amount' => $deposit],
             ['sequence' => 2, 'label' => 'Final Balance', 'amount' => $remaining],
         ] as $installment) {
-            $isPaid = $invoiceStatus === 'paid' || ($invoiceStatus === 'partial' && $installment['sequence'] === 1);
+            $isPaid = $invoiceStatus === 'paid' || ($invoiceStatus === 'partially_paid' && $installment['sequence'] === 1);
+            $installmentStatus = $isPaid ? 'paid' : 'pending';
 
             InvoiceInstallment::query()->create([
                 'invoice_id' => $invoice->id,
@@ -382,7 +421,8 @@ class DemoSeeder extends Seeder
                 'label' => $installment['label'],
                 'due_date' => Carbon::parse($firstDueDate)->addDays(($installment['sequence'] - 1) * 14)->toDateString(),
                 'amount' => number_format($installment['amount'], 2, '.', ''),
-                'status' => $isPaid ? 'paid' : 'pending',
+                'invoice_installment_status_id' => $invoiceInstallmentStatusIds[$installmentStatus] ?? null,
+                'status' => $installmentStatus,
                 'paid_at' => $isPaid ? now()->subDays(max(1, 20 - $sequence)) : null,
             ]);
         }
@@ -414,7 +454,7 @@ class DemoSeeder extends Seeder
         ];
         $eventTypes = ['Wedding', 'Birthday', 'Corporate', 'Engagement', 'School Formal', 'Anniversary'];
         $statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-        $invoiceStatuses = ['issued', 'partial', 'paid', 'issued'];
+        $invoiceStatuses = ['issued', 'partially_paid', 'paid', 'issued'];
 
         return collect(range(1, 25))->map(function (int $sequence) use ($locations, $eventTypes, $statuses, $invoiceStatuses): array {
             $kind = $sequence % 9 === 0 ? 'sponsored' : ($sequence % 7 === 0 ? 'market_stall' : 'customer');
@@ -438,6 +478,13 @@ class DemoSeeder extends Seeder
                 'invoice_status' => $invoiceStatuses[($sequence - 1) % count($invoiceStatuses)],
             ];
         })->all();
+    }
+
+    private function statusIds(Tenant $tenant, string $scope): array
+    {
+        return collect(TenantStatuses::records($tenant, $scope))
+            ->mapWithKeys(fn (array $status): array => [$status['name'] => $status['id']])
+            ->all();
     }
 
     /**

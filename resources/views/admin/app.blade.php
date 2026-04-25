@@ -34,7 +34,8 @@
                 $notifications = \App\Models\Task::query()
                     ->with(['booking', 'status'])
                     ->where('tenant_id', $tenantId)
-                    ->where('assigned_to', $user->id)
+                    ->where('assignee_type', \App\Models\Task::ASSIGNEE_USER)
+                    ->where('assignee_id', $user->id)
                     ->whereNull('date_completed')
                     ->orderByRaw('case when due_date is null then 1 else 0 end')
                     ->orderBy('due_date')
@@ -50,7 +51,7 @@
                             'id' => $task->id,
                             'title' => $task->task_name,
                             'status' => $task->status?->name ?: 'Open',
-                            'due_date_label' => $task->due_date?->format('d M Y') ?? 'No due date',
+                            'due_date_label' => \App\Support\DateFormatter::date($task->due_date, 'No due date'),
                             'booking_label' => $bookingLabel,
                             'task_url' => route('tasks.index'),
                             'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,

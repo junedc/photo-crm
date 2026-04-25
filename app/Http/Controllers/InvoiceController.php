@@ -6,6 +6,7 @@ use App\Mail\InvoiceIssuedMail;
 use App\Models\Booking;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
+use App\Support\DateFormatter;
 use App\Support\InvoiceBuilder;
 use App\Support\TenantStatuses;
 use App\Models\User;
@@ -178,7 +179,7 @@ class InvoiceController extends Controller
             'installments' => $invoice->installments->map(fn (InvoiceInstallment $installment) => [
                 'id' => $installment->id,
                 'status' => $installment->status,
-                'paid_at_label' => $installment->paid_at?->format('d M Y g:i A'),
+                'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
             ])->values()->all(),
         ]);
     }
@@ -276,24 +277,37 @@ class InvoiceController extends Controller
         }
 
         if ($installment->status !== 'paid') {
+            $paidInstallmentStatus = $invoice->tenant
+                ? TenantStatuses::firstOrCreateWorkspaceStatus($invoice->tenant, TenantStatuses::SCOPE_INVOICE_INSTALLMENT, 'paid')
+                : null;
+
             $installment->update([
-                'status' => 'paid',
+                'invoice_installment_status_id' => $paidInstallmentStatus?->id,
+                'status' => $paidInstallmentStatus?->name ?? 'paid',
                 'paid_at' => now(),
             ]);
         }
 
         $invoice->load('installments');
         $amountPaid = (float) $invoice->installments->where('status', 'paid')->sum('amount');
+        $invoiceStatusName = $amountPaid >= (float) $invoice->total_amount ? 'paid' : 'partially_paid';
+        $invoiceStatus = $invoice->tenant
+            ? TenantStatuses::firstOrCreateWorkspaceStatus($invoice->tenant, TenantStatuses::SCOPE_INVOICE, $invoiceStatusName)
+            : null;
         $invoice->update([
             'amount_paid' => number_format($amountPaid, 2, '.', ''),
-            'status' => $amountPaid >= (float) $invoice->total_amount ? 'paid' : 'partially_paid',
+            'invoice_status_id' => $invoiceStatus?->id,
+            'status' => $invoiceStatus?->name ?? $invoiceStatusName,
         ]);
 
         $booking = $invoice->booking;
 
         if ($booking !== null && in_array($booking->status, ['pending', 'confirmed'], true)) {
+            $bookingStatusName = $amountPaid >= (float) $invoice->total_amount ? 'completed' : 'confirmed';
+            $bookingStatus = TenantStatuses::firstOrCreateWorkspaceStatus($booking->tenant, TenantStatuses::SCOPE_BOOKING, $bookingStatusName);
             $booking->update([
-                'status' => $amountPaid >= (float) $invoice->total_amount ? 'completed' : 'confirmed',
+                'booking_status_id' => $bookingStatus?->id,
+                'status' => $bookingStatus?->name ?? $bookingStatusName,
             ]);
         }
     }
@@ -303,7 +317,9 @@ class InvoiceController extends Controller
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
+            'status_id' => $invoice->invoice_status_id,
             'status' => $invoice->status,
+            'status_label' => $invoice->invoiceStatus?->label() ?? str($invoice->status)->replace('_', ' ')->title()->toString(),
             'total_amount' => number_format((float) $invoice->total_amount, 2, '.', ''),
             'amount_paid' => number_format((float) $invoice->amount_paid, 2, '.', ''),
             'balance_due' => number_format((float) $invoice->total_amount - (float) $invoice->amount_paid, 2, '.', ''),
@@ -313,10 +329,12 @@ class InvoiceController extends Controller
                 'id' => $installment->id,
                 'label' => $installment->label,
                 'amount' => number_format((float) $installment->amount, 2, '.', ''),
-                'due_date' => $installment->due_date?->format('Y-m-d'),
-                'due_date_label' => $installment->due_date?->format('d M Y'),
+                'due_date' => DateFormatter::inputDate($installment->due_date),
+                'due_date_label' => DateFormatter::date($installment->due_date),
+                'status_id' => $installment->invoice_installment_status_id,
                 'status' => $installment->status,
-                'paid_at_label' => $installment->paid_at?->format('d M Y g:i A'),
+                'status_label' => $installment->installmentStatus?->label() ?? str($installment->status)->replace('_', ' ')->title()->toString(),
+                'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
             ])->values()->all(),
         ];
     }
@@ -329,17 +347,18 @@ class InvoiceController extends Controller
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
+            'status_id' => $invoice->invoice_status_id,
             'status' => $invoice->status,
-            'status_label' => str($invoice->status)->replace('_', ' ')->title()->toString(),
+            'status_label' => $invoice->invoiceStatus?->label() ?? str($invoice->status)->replace('_', ' ')->title()->toString(),
             'total_amount' => number_format((float) $invoice->total_amount, 2, '.', ''),
             'amount_paid' => number_format((float) $invoice->amount_paid, 2, '.', ''),
             'balance_due' => number_format((float) $invoice->total_amount - (float) $invoice->amount_paid, 2, '.', ''),
-            'issued_at_label' => $invoice->issued_at?->format('d M Y'),
+            'issued_at_label' => DateFormatter::date($invoice->issued_at),
             'customer_name' => $booking?->customer_name,
             'customer_email' => $booking?->customer_email,
             'package_name' => $booking?->package?->name,
-            'event_date_label' => $booking?->event_date?->format('d M Y'),
-            'next_due_label' => $nextInstallment?->due_date?->format('d M Y'),
+            'event_date_label' => DateFormatter::date($booking?->event_date),
+            'next_due_label' => DateFormatter::date($nextInstallment?->due_date),
             'public_url' => route('invoices.show', $invoice),
             'booking_show_url' => $booking ? route('admin.bookings.show', $booking) : null,
         ];
