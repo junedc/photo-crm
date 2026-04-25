@@ -11,13 +11,11 @@ class RequireSuperAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $configuredEmail = strtolower((string) config('app.super_admin'));
-        $sessionEmail = strtolower((string) $request->session()->get(SuperAdminLoginVerificationService::EMAIL_KEY));
-
         if (
-            $configuredEmail !== ''
-            && (bool) $request->session()->get(SuperAdminLoginVerificationService::AUTH_KEY, false)
-            && $sessionEmail === $configuredEmail
+            (bool) $request->session()->get(SuperAdminLoginVerificationService::AUTH_KEY, false)
+            && SuperAdminLoginVerificationService::isAllowedEmail(
+                $request->session()->get(SuperAdminLoginVerificationService::EMAIL_KEY)
+            )
         ) {
             return $next($request);
         }
