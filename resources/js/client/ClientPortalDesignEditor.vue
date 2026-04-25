@@ -45,6 +45,13 @@ const systemFontOptions = [
 ];
 
 const cloneDesign = (design) => JSON.parse(JSON.stringify(design));
+const createNodeId = () => {
+    if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+    }
+
+    return `node-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+};
 
 const normalizeNode = (node, index) => ({
     id: node.id ?? `node-${index + 1}`,
@@ -252,7 +259,7 @@ const removeNodeById = (id) => {
 };
 
 const addText = () => {
-    const id = crypto.randomUUID();
+    const id = createNodeId();
 
     replaceDesignState({
         ...designState.value,
@@ -303,7 +310,7 @@ const imageLayoutNodes = (count) => {
     const slotWidth = Math.max(designState.value.width - (outerPadding * 2), 120);
 
     return Array.from({ length: count }, (_, index) => normalizeNode({
-        id: crypto.randomUUID(),
+        id: createNodeId(),
         type: 'image',
         x: outerPadding,
         y: outerPadding + (index * (slotHeight + gap)),
@@ -365,7 +372,7 @@ const onImageSelected = async (event) => {
         });
 
         const asset = response.data.record;
-        const id = crypto.randomUUID();
+        const id = createNodeId();
 
         replaceDesignState({
             ...designState.value,
