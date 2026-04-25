@@ -5,6 +5,8 @@ use App\Mail\CampaignMail;
 use App\Mail\CustomerBookingCreatedMail;
 use App\Mail\InvoiceIssuedMail;
 use App\Mail\LoginVerificationCodeMail;
+use App\Mail\ClientPortalCodeMail;
+use App\Mail\ClientPortalInviteMail;
 use App\Mail\PlatformSubscriptionPaidMail;
 use App\Mail\PlatformSubscriptionPaymentFailedMail;
 use App\Mail\PlatformSubscriptionReminderMail;
@@ -14,6 +16,14 @@ return [
     'mailables' => [
         LoginVerificationCodeMail::class => [
             'title' => 'Login verification code',
+            'track' => false,
+        ],
+        ClientPortalInviteMail::class => [
+            'title' => 'Client portal access',
+            'track' => false,
+        ],
+        ClientPortalCodeMail::class => [
+            'title' => 'Client portal code',
             'track' => false,
         ],
         SuperAdminLoginCodeMail::class => [

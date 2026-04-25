@@ -242,6 +242,17 @@ onMounted(() => {
     startTaskCreate();
 });
 
+const grantClientAccess = async () => {
+    try {
+        const record = await submitForm({
+            url: bookingRecord.value.grant_client_access_url,
+            data: {},
+        });
+
+        syncBooking(record);
+    } catch {}
+};
+
 const updateBooking = async () => {
     const errors = {};
 
@@ -500,6 +511,9 @@ const removeTask = async (task) => {
                 <span class="rounded-full px-2.5 py-1 text-[11px] font-medium" :class="bookingRecord.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : bookingRecord.status === 'pending' ? 'bg-amber-300/15 text-amber-200' : bookingRecord.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : 'bg-rose-400/15 text-rose-200'">
                     {{ statusLabel(bookingRecord.status) }}
                 </span>
+                <button type="button" class="rounded-lg border border-cyan-300/30 px-3 py-1.5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving" @click="grantClientAccess">
+                    {{ saving ? 'Sending...' : (bookingRecord.client_portal_access_granted ? 'Resend Access' : 'Grant Access') }}
+                </button>
                 <button type="button" class="rounded-lg border border-rose-300/30 px-3 py-1.5 text-sm font-medium text-rose-100 transition hover:bg-rose-300/10" @click="isEditing ? cancelEditing() : startEditing()">
                     {{ isEditing ? 'Cancel edit' : 'Edit Booking' }}
                 </button>
@@ -671,6 +685,16 @@ const removeTask = async (task) => {
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Phone</p>
                         <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
+                    </div>
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Client Portal Access</p>
+                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.client_portal_access_granted ? 'Granted' : 'Not granted yet' }}</p>
+                        <p v-if="bookingRecord.client_portal_access_granted_at_label" class="mt-1 text-xs text-stone-400">
+                            Last email sent {{ bookingRecord.client_portal_access_granted_at_label }}
+                        </p>
+                        <a v-if="bookingRecord.client_portal_access_url" :href="bookingRecord.client_portal_access_url" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">
+                            Open portal link
+                        </a>
                     </div>
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Type</p>

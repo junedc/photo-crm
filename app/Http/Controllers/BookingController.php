@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\AdminBookingCreatedMail;
 use App\Mail\CustomerBookingCreatedMail;
 use App\Models\Booking;
+use App\Models\ClientPortalAccess;
 use App\Models\Customer;
 use App\Models\Discount;
 use App\Models\Equipment;
@@ -26,10 +27,12 @@ use App\Support\TenantStatuses;
 use App\Support\StripeCheckoutLinkGenerator;
 use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
+use App\Services\ClientPortalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -552,6 +555,24 @@ class BookingController extends Controller
         return redirect()->route('admin.bookings.show', $booking)->with('status', 'Booking updated successfully.');
     }
 
+    public function grantClientAccess(CurrentTenant $currentTenant, Booking $booking, ClientPortalService $clientPortalService): JsonResponse|RedirectResponse
+    {
+        abort_unless($currentTenant->id() === $booking->tenant_id, 404);
+
+        $booking->loadMissing(['package', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.status']);
+        $clientPortalService->grantForBooking($booking, Auth::user());
+        $booking->refresh();
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Client portal access email sent.',
+                'record' => $this->serializeBooking($booking),
+            ]);
+        }
+
+        return redirect()->route('admin.bookings.show', $booking)->with('status', 'Client portal access email sent.');
+    }
+
     private function renderAdminBookingsPage(CurrentTenant $currentTenant, ?Booking $selectedBooking = null, ?Request $request = null): View|JsonResponse
     {
         $request ??= request();
@@ -917,6 +938,10 @@ class BookingController extends Controller
     private function serializeBooking(Booking $booking): array
     {
         $booking->loadMissing(['discount', 'package.hourlyPrices', 'addOns', 'tasks.assignedUser', 'tasks.status']);
+        $clientPortalAccess = ClientPortalAccess::query()
+            ->where('tenant_id', $booking->tenant_id)
+            ->where('customer_email', strtolower((string) $booking->customer_email))
+            ->first();
         $package = $booking->package;
         $bookingTotal = app(BookingPricing::class)->totalForBooking($booking);
         $packagePrice = $booking->package_price !== null
@@ -940,6 +965,11 @@ class BookingController extends Controller
             'customer_name' => $booking->customer_name,
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
+            'client_portal_access_granted' => $clientPortalAccess !== null,
+            'client_portal_access_granted_at_label' => $clientPortalAccess?->granted_at?->format('d M Y g:i A'),
+            'client_portal_access_url' => $clientPortalAccess?->invite_token
+                ? route('client.portal.login', ['access' => $clientPortalAccess->invite_token])
+                : null,
             'package_id' => $booking->package_id,
             'package_hourly_price_id' => $packageHourlyPriceId ? (string) $packageHourlyPriceId : '',
             'discount_id' => $booking->discount_id ? (string) $booking->discount_id : '',
@@ -1009,6 +1039,7 @@ class BookingController extends Controller
             'show_url' => route('admin.bookings.show', $booking),
             'update_url' => route('admin.bookings.update', $booking),
             'invoice_create_url' => route('admin.bookings.invoice.store', $booking),
+            'grant_client_access_url' => route('admin.bookings.client-access.grant', $booking),
         ];
     }
 
