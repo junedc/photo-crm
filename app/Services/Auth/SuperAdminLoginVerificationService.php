@@ -12,6 +12,23 @@ class SuperAdminLoginVerificationService
     public const AUTH_KEY = 'super_admin.authenticated';
     public const EMAIL_KEY = 'super_admin.email';
 
+    public static function allowedEmails(): array
+    {
+        return collect(explode('|', (string) config('app.super_admin')))
+            ->map(fn (string $email): string => strtolower(trim($email)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function isAllowedEmail(?string $email): bool
+    {
+        $email = strtolower(trim((string) $email));
+
+        return $email !== '' && in_array($email, self::allowedEmails(), true);
+    }
+
     public function issueFor(string $email): SuperAdminLoginCode
     {
         SuperAdminLoginCode::query()

@@ -35,9 +35,8 @@ class SuperAdminController extends Controller
         ]);
 
         $email = strtolower($validated['email']);
-        $superAdmin = strtolower((string) config('app.super_admin'));
 
-        if ($superAdmin === '' || $email !== $superAdmin) {
+        if (! SuperAdminLoginVerificationService::isAllowedEmail($email)) {
             return back()
                 ->withInput($request->only('email'))
                 ->withErrors(['email' => 'This email is not allowed to access platform admin.']);
@@ -296,7 +295,9 @@ class SuperAdminController extends Controller
     private function isAuthenticated(Request $request): bool
     {
         return (bool) $request->session()->get(SuperAdminLoginVerificationService::AUTH_KEY, false)
-            && strtolower((string) $request->session()->get(SuperAdminLoginVerificationService::EMAIL_KEY)) === strtolower((string) config('app.super_admin'));
+            && SuperAdminLoginVerificationService::isAllowedEmail(
+                $request->session()->get(SuperAdminLoginVerificationService::EMAIL_KEY)
+            );
     }
 
     private function normalizeSubscriptionData(array $data): array
