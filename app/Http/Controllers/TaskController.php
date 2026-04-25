@@ -115,6 +115,31 @@ class TaskController extends Controller
         ]);
     }
 
+    public function notifications(Request $request, CurrentTenant $currentTenant): JsonResponse
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $user = $request->user();
+
+        abort_unless($user !== null, 401);
+
+        $notifications = Task::query()
+            ->with(['booking', 'status'])
+            ->where('tenant_id', $tenant->id)
+            ->where('assignee_type', Task::ASSIGNEE_USER)
+            ->where('assignee_id', $user->id)
+            ->whereNull('notification_dismissed_at')
+            ->orderByRaw('case when due_date is null then 1 else 0 end')
+            ->orderBy('due_date')
+            ->latest('created_at')
+            ->get()
+            ->map(fn (Task $task) => $this->serializeNotification($task))
+            ->values();
+
+        return response()->json([
+            'notifications' => $notifications,
+        ]);
+    }
+
     private function validateTask(Request $request, Tenant $tenant): array
     {
         $bookingIds = Booking::query()->pluck('id');
@@ -191,6 +216,25 @@ class TaskController extends Controller
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
             'dismiss_notification_url' => route('tasks.notifications.dismiss', $task),
+        ];
+    }
+
+    private function serializeNotification(Task $task): array
+    {
+        $booking = $task->booking;
+        $bookingLabel = $booking?->quote_number
+            ? sprintf('%s - %s', $booking->quote_number, $booking->entry_name ?: $booking->customer_name)
+            : ($booking?->entry_name ?: $booking?->customer_name);
+
+        return [
+            'id' => $task->id,
+            'title' => $task->task_name,
+            'status' => $task->status?->name ?: 'Open',
+            'due_date_label' => DateFormatter::date($task->due_date, 'No due date'),
+            'booking_label' => $bookingLabel,
+            'task_url' => route('tasks.index'),
+            'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,
+            'dismiss_url' => route('tasks.notifications.dismiss', $task),
         ];
     }
 

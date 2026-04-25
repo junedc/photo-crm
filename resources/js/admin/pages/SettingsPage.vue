@@ -16,7 +16,6 @@ const workspacePhotoInput = ref(null);
 const fontUploadInput = ref(null);
 const tenantRecord = ref(props.data.tenant ?? {});
 const tenantFonts = ref([...(props.data.tenant?.fonts ?? [])]);
-const vendors = ref([...(props.data.vendors ?? [])]);
 const subscriptions = ref(props.data.subscriptions ?? []);
 const csrfToken = window.adminProps?.csrfToken ?? '';
 const userRecord = ref(props.data.user ?? {});
@@ -30,6 +29,7 @@ const maintenanceRecords = ref({
     quote_response: [...(props.data.maintenance?.quote_response ?? [])],
     package: [...(props.data.maintenance?.package ?? [])],
     equipment: [...(props.data.maintenance?.equipment ?? [])],
+    inventory_item_category: [...(props.data.maintenance?.inventory_item_category ?? [])],
     campaign: [...(props.data.maintenance?.campaign ?? [])],
     support: [...(props.data.maintenance?.support ?? [])],
     referral: [...(props.data.maintenance?.referral ?? [])],
@@ -43,6 +43,7 @@ const maintenanceDrafts = ref({
     quote_response: '',
     package: '',
     equipment: '',
+    inventory_item_category: '',
     campaign: '',
     support: '',
     referral: '',
@@ -56,6 +57,7 @@ const maintenanceEditing = ref({
     quote_response: null,
     package: null,
     equipment: null,
+    inventory_item_category: null,
     campaign: null,
     support: null,
     referral: null,
@@ -82,12 +84,6 @@ const {
     fieldErrors: maintenanceServerErrors,
     submitForm: submitMaintenanceForm,
     deleteRecord: deleteMaintenanceRecord,
-} = useWorkspaceCrud();
-const {
-    saving: vendorSaving,
-    fieldErrors: vendorServerErrors,
-    submitForm: submitVendorForm,
-    deleteRecord: deleteVendorRecord,
 } = useWorkspaceCrud();
 
 const workspaceForm = ref({
@@ -121,15 +117,6 @@ const fontForm = ref({
     style: 'normal',
 });
 const fontErrors = ref({});
-const vendorForm = ref({
-    name: '',
-    service_type: '',
-    email: '',
-    phone: '',
-});
-const vendorErrors = ref({});
-const editingVendorId = ref(null);
-
 const maintenanceSections = computed(() => [
     { key: 'invoice', label: props.data.maintenanceLabels?.invoice ?? 'Invoice Status' },
     { key: 'invoice_installment', label: props.data.maintenanceLabels?.invoice_installment ?? 'Invoice Installment Status' },
@@ -138,6 +125,7 @@ const maintenanceSections = computed(() => [
     { key: 'quote_response', label: props.data.maintenanceLabels?.quote_response ?? 'Quote Response Status' },
     { key: 'package', label: props.data.maintenanceLabels?.package ?? 'Package Status' },
     { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
+    { key: 'inventory_item_category', label: props.data.maintenanceLabels?.inventory_item_category ?? 'Inventory Item Category' },
     { key: 'campaign', label: props.data.maintenanceLabels?.campaign ?? 'Campaign Status' },
     { key: 'support', label: props.data.maintenanceLabels?.support ?? 'Support Status' },
     { key: 'referral', label: props.data.maintenanceLabels?.referral ?? 'Referral Status' },
@@ -148,8 +136,6 @@ const workspaceValidationErrors = computed(() => mergeFieldErrors(workspaceError
 const accountValidationErrors = computed(() => mergeFieldErrors(accountErrors.value, accountServerErrors.value));
 const fontValidationErrors = computed(() => mergeFieldErrors(fontErrors.value, fontServerErrors.value));
 const maintenanceValidationErrors = computed(() => maintenanceServerErrors.value ?? {});
-const vendorValidationErrors = computed(() => mergeFieldErrors(vendorErrors.value, vendorServerErrors.value));
-
 const prettifyStatus = (value) => (value || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const sectionHasEditableStatuses = (key) => (maintenanceRecords.value[key] ?? []).some((record) => !record.system);
 const fontVariantLabel = (font) => {
@@ -360,90 +346,6 @@ const removeFont = async (font) => {
     } catch {}
 };
 
-const startVendorCreate = () => {
-    editingVendorId.value = null;
-    vendorErrors.value = {};
-    vendorForm.value = {
-        name: '',
-        service_type: '',
-        email: '',
-        phone: '',
-    };
-};
-
-const startVendorEdit = (vendor) => {
-    editingVendorId.value = vendor.id;
-    vendorErrors.value = {};
-    vendorForm.value = {
-        name: vendor.name ?? '',
-        service_type: vendor.service_type ?? '',
-        email: vendor.email ?? '',
-        phone: vendor.phone ?? '',
-    };
-};
-
-const saveVendor = async () => {
-    const errors = {};
-
-    if (isBlank(vendorForm.value.name)) {
-        errors.name = requiredMessage('Vendor name');
-    }
-
-    if (isBlank(vendorForm.value.service_type)) {
-        errors.service_type = requiredMessage('Vendor role');
-    }
-
-    if (!validEmail(vendorForm.value.email)) {
-        errors.email = 'Enter a valid vendor email.';
-    }
-
-    vendorErrors.value = errors;
-
-    if (hasFieldErrors(errors)) {
-        return;
-    }
-
-    const editingVendor = vendors.value.find((entry) => entry.id === editingVendorId.value);
-
-    try {
-        const record = await submitVendorForm({
-            url: editingVendor?.update_url ?? props.data.routes.vendorStore,
-            method: editingVendor ? 'put' : 'post',
-            data: { ...vendorForm.value },
-        });
-
-        const index = vendors.value.findIndex((entry) => entry.id === record.id);
-        vendors.value = index >= 0
-            ? vendors.value.map((entry) => entry.id === record.id ? record : entry)
-            : [...vendors.value, record].sort((left, right) => {
-                const serviceCompare = String(left.service_type ?? '').localeCompare(String(right.service_type ?? ''));
-
-                if (serviceCompare !== 0) {
-                    return serviceCompare;
-                }
-
-                return String(left.name ?? '').localeCompare(String(right.name ?? ''));
-            });
-
-        startVendorCreate();
-    } catch {}
-};
-
-const removeVendor = async (vendor) => {
-    if (!vendor?.delete_url) {
-        return;
-    }
-
-    try {
-        await deleteVendorRecord({ url: vendor.delete_url });
-        vendors.value = vendors.value.filter((entry) => entry.id !== vendor.id);
-
-        if (editingVendorId.value === vendor.id) {
-            startVendorCreate();
-        }
-    } catch {}
-};
-
 const beginEditStatus = (scope, record) => {
     maintenanceEditing.value[scope] = record.id;
     maintenanceDrafts.value[scope] = record.name ?? '';
@@ -463,15 +365,18 @@ const saveStatus = async (scope) => {
 
     const editingId = maintenanceEditing.value[scope];
     const isTask = scope === 'task';
+    const isInventoryItemCategory = scope === 'inventory_item_category';
     const existing = maintenanceRecords.value[scope].find((entry) => entry.id === editingId);
 
     try {
         const record = await submitMaintenanceForm({
             url: editingId
                 ? existing?.update_url
-                : (isTask ? props.data.routes.maintenanceTaskStore : props.data.routes.maintenanceStore),
+                : (isInventoryItemCategory
+                    ? props.data.routes.inventoryItemCategoryStore
+                    : (isTask ? props.data.routes.maintenanceTaskStore : props.data.routes.maintenanceStore)),
             method: editingId ? 'put' : 'post',
-            data: editingId ? { name } : (isTask ? { name } : { scope, name }),
+            data: editingId ? { name } : (isInventoryItemCategory ? { name } : (isTask ? { name } : { scope, name })),
         });
 
         const nextRecord = {
@@ -503,7 +408,6 @@ const removeStatus = async (scope, record) => {
 
 onMounted(() => {
     nextTick(() => autoAttachGoogleAddressInputs());
-    startVendorCreate();
 });
 </script>
 
@@ -782,12 +686,14 @@ onMounted(() => {
                 <p v-if="firstError(maintenanceValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(maintenanceValidationErrors, 'name') }}</p>
 
                 <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                    <div class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                    <div class="grid grid-cols-[5rem_minmax(0,1fr)_8rem_8rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                        <span>ID</span>
                         <span>Name</span>
                         <span>Edit</span>
                         <span>Delete</span>
                     </div>
-                    <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                    <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[5rem_minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                        <p class="text-sm text-stone-300">{{ record.id ?? '-' }}</p>
                         <div class="min-w-0">
                             <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
                             <p v-if="record.system" class="mt-1 text-[11px] uppercase tracking-[0.2em] text-cyan-200">System</p>
@@ -802,67 +708,6 @@ onMounted(() => {
                 <p v-if="!sectionHasEditableStatuses(section.key) && maintenanceRecords[section.key]?.length" class="mt-3 text-xs text-stone-500">System statuses are protected and cannot be renamed or deleted here.</p>
             </section>
 
-            <section class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">Vendors</p>
-                        <p class="mt-1 text-xs text-stone-400">Maintain tenant-specific collaborators such as photographers, designers, or sales callers for task assignment.</p>
-                    </div>
-                    <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ vendors.length }}</span>
-                </div>
-
-                <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_10rem_auto]">
-                    <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Vendor Name</label>
-                        <input v-model="vendorForm.name" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'name') ? 'border-rose-300/60' : ''">
-                        <p v-if="firstError(vendorValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'name') }}</p>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Role</label>
-                        <input v-model="vendorForm.service_type" type="text" placeholder="Photographer" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'service_type') ? 'border-rose-300/60' : ''">
-                        <p v-if="firstError(vendorValidationErrors, 'service_type')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'service_type') }}</p>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Email</label>
-                        <input v-model="vendorForm.email" type="email" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(vendorValidationErrors, 'email') ? 'border-rose-300/60' : ''">
-                        <p v-if="firstError(vendorValidationErrors, 'email')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(vendorValidationErrors, 'email') }}</p>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Phone</label>
-                        <input v-model="vendorForm.phone" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                    </div>
-                    <div class="flex items-end gap-2">
-                        <button type="button" class="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60" :disabled="vendorSaving" @click="saveVendor">
-                            {{ vendorSaving ? 'Saving...' : editingVendorId ? 'Save vendor' : 'Add vendor' }}
-                        </button>
-                        <button v-if="editingVendorId" type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5" @click="startVendorCreate">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-
-                <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                    <div class="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)_9rem_7rem_7rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
-                        <span>Name</span>
-                        <span>Role</span>
-                        <span>Email</span>
-                        <span>Phone</span>
-                        <span>Edit</span>
-                        <span>Delete</span>
-                    </div>
-                    <div v-for="vendor in vendors" :key="vendor.id" class="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)_9rem_7rem_7rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
-                        <p class="truncate text-sm text-white">{{ vendor.name }}</p>
-                        <p class="truncate text-sm text-stone-300">{{ vendor.service_type }}</p>
-                        <p class="truncate text-sm text-stone-300">{{ vendor.email || 'No email' }}</p>
-                        <p class="truncate text-sm text-stone-300">{{ vendor.phone || 'No phone' }}</p>
-                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="startVendorEdit(vendor)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeVendor(vendor)">Delete</button>
-                    </div>
-                    <div v-if="!vendors.length" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
-                        No vendors added yet.
-                    </div>
-                </div>
-            </section>
         </div>
     </section>
 </template>

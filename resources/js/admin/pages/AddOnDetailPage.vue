@@ -20,18 +20,21 @@ const showDeleteConfirm = ref(false);
 const form = ref({
     sku: props.data.addon?.product_code ?? '',
     name: props.data.addon?.name ?? '',
-    addon_category: props.data.addon?.addon_category ?? '',
+    type: props.data.addon?.type ?? 'Items',
+    inventory_item_category_id: props.data.addon?.inventory_item_category_id ? String(props.data.addon.inventory_item_category_id) : '',
     is_publicly_displayed: Boolean(props.data.addon?.is_publicly_displayed),
     description: props.data.addon?.description ?? '',
-    unit_price: props.data.addon?.price ?? '',
+    unit_price: props.data.addon?.unit_price ?? '',
+    discount_percentage: props.data.addon?.discount_percentage ?? '',
     duration: props.data.addon?.duration ?? '',
     due_days_before_event: props.data.addon?.due_days_before_event ?? '',
 });
 const validationErrors = computed(() => mergeFieldErrors(clientErrors.value, fieldErrors.value));
-const addOnCategories = computed(() => props.data.addOnCategories ?? []);
-const isActionCategory = computed(() => form.value.addon_category === 'Action');
+const addOnTypes = computed(() => props.data.addOnTypes ?? []);
+const inventoryItemCategoryOptions = computed(() => props.data.inventoryItemCategoryOptions ?? []);
+const isActionCategory = computed(() => form.value.type === 'Action');
 
-watch(() => form.value.addon_category, (value) => {
+watch(() => form.value.type, (value) => {
     if (value !== 'Action') {
         form.value.due_days_before_event = '';
     }
@@ -48,14 +51,18 @@ const validateAddOnForm = () => {
         errors.name = requiredMessage('Name');
     }
 
-    if (form.value.addon_category && !addOnCategories.value.includes(form.value.addon_category)) {
-        errors.addon_category = 'Choose Action or Items.';
+    if (!addOnTypes.value.includes(form.value.type)) {
+        errors.type = 'Choose Action or Items.';
     }
 
     if (isBlank(form.value.unit_price)) {
         errors.unit_price = requiredMessage('Price');
     } else if (Number(form.value.unit_price) < 0) {
         errors.unit_price = 'Price must be zero or greater.';
+    }
+
+    if (!isBlank(form.value.discount_percentage) && (Number(form.value.discount_percentage) < 0 || Number(form.value.discount_percentage) > 100)) {
+        errors.discount_percentage = 'Discount must be between 0 and 100.';
     }
 
     clientErrors.value = errors;
@@ -71,7 +78,7 @@ const updateAddOn = async () => {
     const formData = new FormData();
     formData.append('_method', 'PUT');
 
-    ['sku', 'name', 'addon_category', 'description', 'unit_price', 'duration', 'due_days_before_event'].forEach((key) => {
+    ['sku', 'name', 'type', 'inventory_item_category_id', 'description', 'unit_price', 'discount_percentage', 'duration', 'due_days_before_event'].forEach((key) => {
         formData.append(key, form.value[key] ?? '');
     });
     formData.append('is_publicly_displayed', form.value.is_publicly_displayed ? '1' : '0');
@@ -92,10 +99,12 @@ const updateAddOn = async () => {
         form.value = {
             sku: record.product_code ?? '',
             name: record.name ?? '',
-            addon_category: record.addon_category ?? '',
+            type: record.type ?? 'Items',
+            inventory_item_category_id: record.inventory_item_category_id ? String(record.inventory_item_category_id) : '',
             is_publicly_displayed: Boolean(record.is_publicly_displayed),
             description: record.description ?? '',
-            unit_price: record.price ?? '',
+            unit_price: record.unit_price ?? '',
+            discount_percentage: record.discount_percentage ?? '',
             duration: record.duration ?? '',
             due_days_before_event: record.due_days_before_event ?? '',
         };
@@ -171,22 +180,36 @@ const confirmRemoveAddOn = () => {
                     <p v-if="firstError(validationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'name') }}</p>
                 </div>
                 <div>
-                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Add-on Category</label>
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Type</label>
                     <select
-                        v-model="form.addon_category"
+                        v-model="form.type"
                         class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50"
-                        :class="firstError(validationErrors, 'addon_category') ? 'border-rose-300/60' : ''"
+                        :class="firstError(validationErrors, 'type') ? 'border-rose-300/60' : ''"
                     >
-                        <option value="">Select category</option>
-                        <option v-for="category in addOnCategories" :key="category" :value="category">{{ category }}</option>
+                        <option value="">Select type</option>
+                        <option v-for="type in addOnTypes" :key="type" :value="type">{{ type }}</option>
                     </select>
-                    <p v-if="firstError(validationErrors, 'addon_category')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'addon_category') }}</p>
-                    <p v-else class="mt-1 text-xs text-stone-500">Used for customer-facing grouping in the booking wizard.</p>
+                    <p v-if="firstError(validationErrors, 'type')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'type') }}</p>
+                    <p v-else class="mt-1 text-xs text-stone-500">Controls whether this add-on behaves like an action item or a normal item.</p>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Add-On Category</label>
+                    <select v-model="form.inventory_item_category_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50">
+                        <option value="">Select category</option>
+                        <option v-for="category in inventoryItemCategoryOptions" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
+                    </select>
+                    <p class="mt-1 text-xs text-stone-500">Managed from Settings > Maintenance > Inventory Item Category.</p>
                 </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Price</label>
                     <input v-model="form.unit_price" type="number" min="0" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50" :class="firstError(validationErrors, 'unit_price') ? 'border-rose-300/60' : ''">
                     <p v-if="firstError(validationErrors, 'unit_price')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'unit_price') }}</p>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Discount %</label>
+                    <input v-model="form.discount_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-300/50" :class="firstError(validationErrors, 'discount_percentage') ? 'border-rose-300/60' : ''" placeholder="0.00">
+                    <p v-if="firstError(validationErrors, 'discount_percentage')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'discount_percentage') }}</p>
+                    <p v-else class="mt-1 text-xs text-stone-500">Applied to this add-on price during booking.</p>
                 </div>
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Duration</label>

@@ -49,7 +49,28 @@ class Equipment extends Model
     public function bookings(): BelongsToMany
     {
         return $this->belongsToMany(Booking::class, 'booking_equipment')
+            ->withPivot('discount_percentage', 'discount_type', 'discount_value')
             ->withTimestamps();
+    }
+
+    public function discountedDailyRate(?float $discountPercentage = null): float
+    {
+        $rate = (float) ($this->daily_rate ?? 0);
+        $discountPercentage = max(0, min(100, (float) ($discountPercentage ?? 0)));
+
+        return round($rate * (1 - ($discountPercentage / 100)), 2);
+    }
+
+    public function discountedDailyRateForBooking(?string $discountType = null, mixed $discountValue = null, ?float $legacyPercentage = null): float
+    {
+        $rate = (float) ($this->daily_rate ?? 0);
+        $normalizedType = $discountType === 'amount' ? 'amount' : 'percentage';
+
+        if ($normalizedType === 'amount') {
+            return round(max(0, $rate - max(0, (float) ($discountValue ?? 0))), 2);
+        }
+
+        return $this->discountedDailyRate($legacyPercentage ?? (float) ($discountValue ?? 0));
     }
 
     public function discounts(): BelongsToMany

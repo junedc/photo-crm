@@ -476,7 +476,12 @@
                                                                     · {{ $packageAddOn->duration }}
                                                                 @endif
                                                             </p>
-                                                            <p class="mt-2 text-sm text-emerald-100">${{ number_format((float) $packageAddOn->unit_price, 2) }}</p>
+                                                            <div class="mt-2 flex items-center gap-2">
+                                                                <p class="text-sm text-emerald-100">${{ number_format($packageAddOn->discountedUnitPrice(), 2) }}</p>
+                                                                @if ((float) ($packageAddOn->discount_percentage ?? 0) > 0)
+                                                                    <span class="text-xs text-stone-500 line-through">${{ number_format((float) $packageAddOn->unit_price, 2) }}</span>
+                                                                @endif
+                                                            </div>
                                                             <p class="mt-3 text-sm leading-6 text-stone-300">{{ $packageAddOn->description ?: 'No add-on description provided.' }}</p>
                                                         </div>
                                                     @endforeach
@@ -556,22 +561,22 @@
                             <div class="hidden grid-cols-[3rem_minmax(0,1.6fr)_8rem_8rem_7rem_8rem] gap-3 border-b border-white/10 bg-stone-950/70 px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
                                 <span>Select</span>
                                 <span>Add-on</span>
-                                <span>Category</span>
+                                <span>Type</span>
                                 <span>Duration</span>
                                 <span class="text-right">Price</span>
                                 <span class="text-right">Details</span>
                             </div>
                             @forelse ($addOns as $addOn)
-                                <label class="block cursor-pointer border-b border-white/10 last:border-b-0" data-addon-card data-addon-id="{{ $addOn->id }}" data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}">
+                                <label class="block cursor-pointer border-b border-white/10 last:border-b-0" data-addon-card data-addon-id="{{ $addOn->id }}" data-addon-category="{{ $addOn->type ?: 'Items' }}">
                                     <input
                                         type="checkbox"
                                         name="add_on_ids[]"
                                         value="{{ $addOn->id }}"
                                         class="peer sr-only"
                                         data-addon-name="{{ $addOn->name }}"
-                                        data-addon-price="{{ number_format((float) $addOn->unit_price, 2, '.', '') }}"
+                                        data-addon-price="{{ number_format($addOn->discountedUnitPrice(), 2, '.', '') }}"
                                         data-addon-id="{{ $addOn->id }}"
-                                        data-addon-category="{{ $addOn->addon_category ?: 'Uncategorized' }}"
+                                        data-addon-category="{{ $addOn->type ?: 'Items' }}"
                                         data-addon-description="{{ Str::limit($addOn->description ?: 'No add-on description provided yet.', 120) }}"
                                         data-addon-photo-url="{{ $addOn->photo_path ? Storage::disk('public')->url($addOn->photo_path) : '' }}"
                                         @checked(collect(old('add_on_ids', []))->map(fn ($id) => (int) $id)->contains($addOn->id))
@@ -591,8 +596,8 @@
                                             <p class="mt-1 line-clamp-2 text-xs leading-5 text-stone-400 lg:hidden">{{ Str::limit($addOn->description ?: 'No description provided.', 90) }}</p>
                                         </div>
                                         <div>
-                                            <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Category</p>
-                                            <span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">{{ $addOn->addon_category ?: 'Uncategorized' }}</span>
+                                            <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Type</p>
+                                            <span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">{{ $addOn->type ?: 'Items' }}</span>
                                         </div>
                                         <div>
                                             <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Duration</p>
@@ -600,7 +605,12 @@
                                         </div>
                                         <div>
                                             <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Price</p>
-                                            <p class="text-sm font-semibold text-emerald-100 lg:text-right">${{ number_format((float) $addOn->unit_price, 2) }}</p>
+                                            <div class="text-left lg:text-right">
+                                                <p class="text-sm font-semibold text-emerald-100">${{ number_format($addOn->discountedUnitPrice(), 2) }}</p>
+                                                @if ((float) ($addOn->discount_percentage ?? 0) > 0)
+                                                    <p class="text-xs text-stone-500 line-through">${{ number_format((float) $addOn->unit_price, 2) }}</p>
+                                                @endif
+                                            </div>
                                         </div>
                                         <div class="flex lg:justify-end">
                                             <button
@@ -632,7 +642,12 @@
                                                     <p class="text-sm uppercase tracking-[0.3em] text-emerald-200">Add-On</p>
                                                     <h3 class="mt-2 text-2xl font-semibold">{{ $addOn->name }}</h3>
                                                 </div>
-                                                <p class="text-lg font-semibold text-emerald-100">${{ number_format((float) $addOn->unit_price, 2) }}</p>
+                                                <div class="text-right">
+                                                    <p class="text-lg font-semibold text-emerald-100">${{ number_format($addOn->discountedUnitPrice(), 2) }}</p>
+                                                    @if ((float) ($addOn->discount_percentage ?? 0) > 0)
+                                                        <p class="text-xs text-stone-500 line-through">${{ number_format((float) $addOn->unit_price, 2) }}</p>
+                                                    @endif
+                                                </div>
                                             </div>
                                             <div class="mt-4 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-stone-400">
                                                 <span>{{ $addOn->sku ?: 'Add-On' }}</span>

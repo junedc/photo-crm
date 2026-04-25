@@ -14,10 +14,22 @@ class TenantVendor extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'address',
+        'mobile_number',
         'service_type',
+        'services_offered',
+        'is_active',
         'email',
         'phone',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'services_offered' => 'array',
+            'is_active' => 'boolean',
+        ];
+    }
 
     public function tenant(): BelongsTo
     {

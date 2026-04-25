@@ -21,7 +21,11 @@ class BookingAddonsPdfGenerator
         }
 
         $packagePrice = (float) ($booking->package_price ?? $package->base_price);
-        $addOnTotal = (float) $addons->sum('unit_price');
+        $addOnTotal = (float) $addons->sum(fn ($addon) => $addon->discountedUnitPriceForBookingSelection(
+            $addon->pivot?->discount_type,
+            $addon->pivot?->discount_value,
+            (float) ($addon->pivot?->discount_percentage ?? 0),
+        ));
         $travelFee = (float) ($booking->travel_fee ?? 0);
         $discountAmount = (float) ($booking->discount_amount ?? 0);
         $bookingTotal = max(0, $packagePrice + $addOnTotal + $travelFee - $discountAmount);
@@ -48,9 +52,13 @@ class BookingAddonsPdfGenerator
             'addons' => $addons->map(fn ($addon) => [
                 'product_code' => $addon->sku,
                 'name' => $addon->name,
-                'category' => $addon->addon_category,
+                'category' => $addon->type ?: $addon->addon_category,
                 'description' => $addon->description,
-                'price' => $addon->unit_price,
+                'price' => $addon->discountedUnitPriceForBookingSelection(
+                    $addon->pivot?->discount_type,
+                    $addon->pivot?->discount_value,
+                    (float) ($addon->pivot?->discount_percentage ?? 0),
+                ),
                 'duration' => $addon->duration,
                 'image_data_uri' => $this->imageDataUri($addon->photo_path),
             ])->values(),
