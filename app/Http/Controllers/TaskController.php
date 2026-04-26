@@ -33,7 +33,7 @@ class TaskController extends Controller
                 'tasks' => route('tasks.index'),
             ],
             'tasks' => Task::query()
-                ->with(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status'])
+                ->with(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates'])
                 ->latest('due_date')
                 ->latest('created_at')
                 ->get()
@@ -63,7 +63,7 @@ class TaskController extends Controller
     {
         $tenant = $this->requireTenant($currentTenant);
         $task = Task::query()->create($this->validateTask($request, $tenant));
-        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status']);
+        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates']);
         $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
         return $this->savedResponse($request, 'Task added.', $this->serializeTask($task), route('tasks.index'));
@@ -82,7 +82,7 @@ class TaskController extends Controller
         }
 
         $task->update($validated);
-        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status']);
+        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates']);
         $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
         return $this->savedResponse($request, 'Task updated.', $this->serializeTask($task), route('tasks.index'));
@@ -196,6 +196,8 @@ class TaskController extends Controller
 
     private function serializeTask(Task $task): array
     {
+        $latestPortalUpdate = $task->clientPortalUpdates->first();
+
         return [
             'id' => $task->id,
             'task_name' => $task->task_name,
@@ -217,6 +219,17 @@ class TaskController extends Controller
             'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
             'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
+            'customer_response_note' => $latestPortalUpdate?->note ?? '',
+            'customer_response_at_label' => DateFormatter::dateTime($latestPortalUpdate?->created_at, 'No reply yet'),
+            'customer_response_attachments' => collect($latestPortalUpdate?->attachments ?? [])
+                ->map(fn ($attachment) => [
+                    'name' => $attachment['name'] ?? 'Attachment',
+                    'url' => $attachment['url'] ?? null,
+                ])
+                ->filter(fn (array $attachment) => filled($attachment['url']))
+                ->values()
+                ->all(),
+            'customer_response_count' => $task->clientPortalUpdates->count(),
             'created_at' => DateFormatter::date($task->created_at),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),

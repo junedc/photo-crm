@@ -19,6 +19,7 @@ const editErrors = ref({});
 const invoiceErrors = ref({});
 const taskErrors = ref({});
 const expenseErrors = ref({});
+const documentErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
@@ -83,6 +84,8 @@ const showExpenseEditor = ref(false);
 const showExpenseDetails = ref(false);
 const selectedExpense = ref(null);
 const expenseReceiptInput = ref(null);
+const showDocumentEditor = ref(false);
+const documentFileInput = ref(null);
 const buildExpenseForm = () => ({
     expense_name: '',
     expense_date: new Date().toISOString().slice(0, 10),
@@ -94,6 +97,13 @@ const buildExpenseForm = () => ({
     receipt: null,
 });
 const expenseForm = ref(buildExpenseForm());
+const buildDocumentForm = () => ({
+    document_type: 'user_file',
+    title: '',
+    notes: '',
+    file: null,
+});
+const documentForm = ref(buildDocumentForm());
 const invoiceForm = ref({
     installment_count: '3',
     deposit_percentage: String(props.data.defaultDepositPercentage ?? 30),
@@ -105,6 +115,7 @@ const editValidationErrors = computed(() => mergeFieldErrors(editErrors.value, f
 const invoiceValidationErrors = computed(() => mergeFieldErrors(invoiceErrors.value, fieldErrors.value));
 const taskValidationErrors = computed(() => mergeFieldErrors(taskErrors.value, fieldErrors.value));
 const expenseValidationErrors = computed(() => mergeFieldErrors(expenseErrors.value, fieldErrors.value));
+const documentValidationErrors = computed(() => mergeFieldErrors(documentErrors.value, fieldErrors.value));
 const packages = computed(() => props.data.packages ?? []);
 const equipmentOptions = computed(() => props.data.equipmentOptions ?? []);
 const addOnOptions = computed(() => props.data.addOnOptions ?? []);
@@ -222,6 +233,15 @@ const itemDiscountLabel = (selectionKey, id) => {
     return type === 'amount' ? `$${formatMoney(value)}` : `${formatMoney(value)}%`;
 };
 const selectedExpenseReceiptName = computed(() => expenseForm.value.receipt?.name ?? '');
+const selectedDocumentFileName = computed(() => documentForm.value.file?.name ?? '');
+const documentTypeOptions = [
+    { value: 'quote', label: 'Quote' },
+    { value: 'invoice', label: 'Invoice' },
+    { value: 'receipt', label: 'Receipt' },
+    { value: 'client_file', label: 'Client File' },
+    { value: 'user_file', label: 'User File' },
+    { value: 'other', label: 'Other' },
+];
 const taskAssigneeGroups = computed(() => {
     return taskAssignees.value.reduce((groups, option) => {
         const group = option.group ?? 'Other';
@@ -505,14 +525,18 @@ const createInvoice = async () => {
     }
 
     try {
-        const record = await submitForm({
+        const invoice = await submitForm({
             url: bookingRecord.value.invoice_create_url,
             method: 'post',
             data: { ...invoiceForm.value },
         });
 
         invoiceErrors.value = {};
-        syncBooking(record);
+        bookingRecord.value = {
+            ...bookingRecord.value,
+            invoice,
+        };
+        activeTab.value = 'invoice';
     } catch {}
 };
 
@@ -704,6 +728,90 @@ const saveExpense = async () => {
         cancelExpenseCreate();
         openExpenseDetails(record);
     } catch {}
+};
+
+const startDocumentCreate = () => {
+    showDocumentEditor.value = true;
+    documentErrors.value = {};
+    documentForm.value = buildDocumentForm();
+};
+
+const cancelDocumentCreate = () => {
+    showDocumentEditor.value = false;
+    documentErrors.value = {};
+    documentForm.value = buildDocumentForm();
+
+    if (documentFileInput.value) {
+        documentFileInput.value.value = '';
+    }
+};
+
+const triggerDocumentFileUpload = () => {
+    documentFileInput.value?.click();
+};
+
+const handleDocumentFileSelected = (event) => {
+    const [file] = event.target?.files ?? [];
+    documentForm.value.file = file ?? null;
+
+    if (file && isBlank(documentForm.value.title)) {
+        documentForm.value.title = file.name.replace(/\.[^/.]+$/, '');
+    }
+};
+
+const saveDocument = async () => {
+    const errors = {};
+
+    if (isBlank(documentForm.value.document_type)) {
+        errors.document_type = requiredMessage('Document type');
+    }
+
+    if (isBlank(documentForm.value.title)) {
+        errors.title = requiredMessage('Document title');
+    }
+
+    if (!documentForm.value.file) {
+        errors.file = requiredMessage('File');
+    }
+
+    documentErrors.value = errors;
+
+    if (hasFieldErrors(errors)) {
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('document_type', documentForm.value.document_type ?? '');
+        formData.append('title', documentForm.value.title ?? '');
+        formData.append('notes', documentForm.value.notes ?? '');
+        formData.append('file', documentForm.value.file);
+
+        const record = await submitForm({
+            url: props.data.routes.documentStore,
+            method: 'post',
+            data: formData,
+        });
+
+        bookingRecord.value = {
+            ...bookingRecord.value,
+            documents: [record, ...(bookingRecord.value.documents ?? [])],
+        };
+        cancelDocumentCreate();
+        activeTab.value = 'documents';
+    } catch {}
+};
+
+const removeDocument = async (document) => {
+    if (!document?.delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: document.delete_url });
+    bookingRecord.value = {
+        ...bookingRecord.value,
+        documents: (bookingRecord.value.documents ?? []).filter((entry) => entry.id !== document.id),
+    };
 };
 </script>
 
@@ -899,6 +1007,7 @@ const saveExpense = async () => {
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'tasks' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'tasks'">Task List</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'invoice' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'invoice'">Invoice</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'expenses' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'expenses'">Expense</button>
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'documents' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'documents'">Document</button>
             </div>
 
             <div v-if="!isEditing && activeTab === 'overview'" class="space-y-3">
@@ -1029,8 +1138,8 @@ const saveExpense = async () => {
                         </div>
                     </div>
                     <div v-if="tasks.length" class="overflow-x-auto border-t border-white/10">
-                        <div class="min-w-[980px]">
-                            <div class="grid grid-cols-[minmax(0,1.2fr)_10rem_10rem_8rem_8rem_8rem_minmax(0,1fr)_8rem] gap-2 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                        <div class="min-w-[1180px]">
+                            <div class="grid grid-cols-[minmax(0,1.15fr)_10rem_10rem_8rem_8rem_8rem_minmax(0,1fr)_minmax(0,1.2fr)_8rem] gap-2 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
                                 <span>Task</span>
                                 <span>Status</span>
                                 <span>Assigned To</span>
@@ -1038,9 +1147,10 @@ const saveExpense = async () => {
                                 <span>Due Date</span>
                                 <span>Started</span>
                                 <span>Remarks</span>
+                                <span>Customer Reply</span>
                                 <span>Actions</span>
                             </div>
-                            <div v-for="task in tasks" :key="task.id" class="grid grid-cols-[minmax(0,1.2fr)_10rem_10rem_8rem_8rem_8rem_minmax(0,1fr)_8rem] items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0">
+                            <div v-for="task in tasks" :key="task.id" class="grid grid-cols-[minmax(0,1.15fr)_10rem_10rem_8rem_8rem_8rem_minmax(0,1fr)_minmax(0,1.2fr)_8rem] items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0">
                                 <p class="truncate text-sm font-medium text-white">{{ task.task_name }}</p>
                                 <p class="truncate text-sm text-cyan-100">{{ task.status_name || 'No status' }}</p>
                                 <p class="truncate text-sm text-stone-300">{{ task.assigned_to_name }}</p>
@@ -1048,6 +1158,22 @@ const saveExpense = async () => {
                                 <p class="text-sm text-stone-300">{{ task.due_date_label }}</p>
                                 <p class="text-sm text-stone-300">{{ task.date_started_label }}</p>
                                 <p class="truncate text-sm text-stone-400">{{ task.remarks || 'No remarks' }}</p>
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm text-stone-300">{{ task.customer_response_note || 'No reply yet' }}</p>
+                                    <div v-if="task.customer_response_attachments?.length" class="mt-1 flex flex-wrap gap-1">
+                                        <a
+                                            v-for="attachment in task.customer_response_attachments"
+                                            :key="`${task.id}-${attachment.url}`"
+                                            :href="attachment.url"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            class="inline-flex max-w-full truncate rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100 hover:bg-cyan-300/15"
+                                        >
+                                            {{ attachment.name }}
+                                        </a>
+                                    </div>
+                                    <p class="mt-1 text-[11px] text-stone-500">{{ task.customer_response_at_label }}</p>
+                                </div>
                                 <div class="flex items-center gap-2">
                                     <button type="button" class="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-white/5" @click="startTaskEdit(task)">Edit Task</button>
                                     <button type="button" class="rounded-lg border border-rose-400/30 px-2.5 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeTask(task)">Delete</button>
@@ -1108,6 +1234,35 @@ const saveExpense = async () => {
                                 <div class="xl:col-span-4">
                                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Remarks</label>
                                     <textarea v-model="taskForm.remarks" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                                <div v-if="editingTask" class="xl:col-span-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Customer Response</p>
+                                            <p class="mt-1 text-sm text-stone-300">Latest reply and attachments from the customer portal.</p>
+                                        </div>
+                                        <span class="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-stone-300">
+                                            {{ editingTask.customer_response_at_label || 'No reply yet' }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-4 rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+                                        <p class="text-sm leading-6 text-white">{{ editingTask.customer_response_note || 'No customer reply yet.' }}</p>
+                                    </div>
+                                    <div v-if="editingTask.customer_response_attachments?.length" class="mt-4">
+                                        <p class="text-[11px] uppercase tracking-[0.24em] text-stone-400">Attachments</p>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            <a
+                                                v-for="attachment in editingTask.customer_response_attachments"
+                                                :key="`${editingTask.id}-${attachment.url}`"
+                                                :href="attachment.url"
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                class="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100 transition hover:bg-cyan-300/15"
+                                            >
+                                                {{ attachment.name }}
+                                            </a>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4">
@@ -1276,6 +1431,103 @@ const saveExpense = async () => {
                                 <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelExpenseCreate">Cancel</button>
                                 <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
                                     {{ saving ? 'Saving...' : 'Add expense' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="!isEditing && activeTab === 'documents'" class="space-y-3">
+                <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
+                    <div class="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <div>
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Document List</p>
+                            <p class="mt-1 text-sm text-stone-300">Quote, invoice, receipts, client uploads, and booking files in one place.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ bookingRecord.documents?.length ?? 0 }}</span>
+                            <button type="button" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" @click="startDocumentCreate">
+                                Add Document
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="bookingRecord.documents?.length" class="overflow-x-auto border-t border-white/10">
+                        <div class="min-w-[1100px]">
+                            <div class="grid grid-cols-[10rem_9rem_minmax(0,1.1fr)_11rem_11rem_minmax(0,1fr)_8rem] gap-2 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                                <span>Added</span>
+                                <span>Type</span>
+                                <span>Document</span>
+                                <span>Source</span>
+                                <span>Uploaded By</span>
+                                <span>Notes</span>
+                                <span>Actions</span>
+                            </div>
+                            <div v-for="document in bookingRecord.documents" :key="document.id" class="grid grid-cols-[10rem_9rem_minmax(0,1.1fr)_11rem_11rem_minmax(0,1fr)_8rem] items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0">
+                                <p class="text-sm text-stone-300">{{ document.created_at_label }}</p>
+                                <p class="text-sm text-cyan-100">{{ document.document_type_label }}</p>
+                                <div class="min-w-0">
+                                    <a :href="document.url" target="_blank" rel="noreferrer" class="block truncate text-sm font-medium text-white hover:text-cyan-100">
+                                        {{ document.title }}
+                                    </a>
+                                    <p class="truncate text-xs text-stone-500">{{ document.file_name }}</p>
+                                </div>
+                                <p class="truncate text-sm text-stone-300">{{ document.source_label }}</p>
+                                <p class="truncate text-sm text-stone-300">{{ document.uploaded_by_label }}</p>
+                                <p class="truncate text-sm text-stone-400">{{ document.notes || 'No notes' }}</p>
+                                <div class="flex items-center gap-2">
+                                    <a :href="document.url" target="_blank" rel="noreferrer" class="rounded-lg border border-cyan-300/20 px-2.5 py-1 text-xs font-medium text-cyan-100 transition hover:bg-cyan-300/10">
+                                        Open
+                                    </a>
+                                    <button v-if="document.can_delete" type="button" class="rounded-lg border border-rose-300/20 px-2.5 py-1 text-xs font-medium text-rose-200 transition hover:bg-rose-300/10" @click="removeDocument(document)">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p v-else class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">No documents have been collected for this booking yet.</p>
+                </div>
+
+                <div v-if="showDocumentEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="cancelDocumentCreate">
+                    <div class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#132035] shadow-2xl shadow-black/40">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Add Document</p>
+                                <p class="mt-1 text-sm text-stone-300">Upload a file directly onto this booking record.</p>
+                            </div>
+                            <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelDocumentCreate">Close</button>
+                        </div>
+                        <form class="max-h-[80vh] overflow-y-auto p-4" novalidate @submit.prevent="saveDocument">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Document Type</label>
+                                    <select v-model="documentForm.document_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(documentValidationErrors, 'document_type') ? 'border-rose-300/60' : ''">
+                                        <option v-for="option in documentTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Title</label>
+                                    <input v-model="documentForm.title" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(documentValidationErrors, 'title') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">File</label>
+                                    <div class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-white/10 bg-slate-950/40 px-3 py-3" :class="firstError(documentValidationErrors, 'file') ? 'border-rose-300/60' : ''">
+                                        <input ref="documentFileInput" type="file" class="hidden" @change="handleDocumentFileSelected">
+                                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-200 transition hover:bg-white/5" @click="triggerDocumentFileUpload">Choose file</button>
+                                        <span class="text-sm text-stone-400">{{ selectedDocumentFileName || 'No file selected' }}</span>
+                                    </div>
+                                    <p v-if="firstError(documentValidationErrors, 'file')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(documentValidationErrors, 'file') }}</p>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
+                                    <textarea v-model="documentForm.notes" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4">
+                                <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelDocumentCreate">Cancel</button>
+                                <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
+                                    {{ saving ? 'Saving...' : 'Add document' }}
                                 </button>
                             </div>
                         </form>

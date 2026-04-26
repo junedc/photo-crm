@@ -1,100 +1,164 @@
 <!DOCTYPE html>
-@php use App\Support\DateFormatter; @endphp
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Booking details for {{ $package['name'] ?? 'package' }}</title>
+    <title>Quote {{ $booking->quote_number ?: 'Draft' }}</title>
     <style>
-        body { font-family: DejaVu Sans, sans-serif; color: #222; font-size: 12px; margin: 24px; }
-        h1 { font-size: 22px; margin-bottom: 4px; }
-        h2 { font-size: 16px; margin: 0 0 6px; }
-        p { margin: 0 0 8px; }
-        .muted { color: #666; }
-        .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 18px; page-break-inside: avoid; }
-        .image { margin-bottom: 12px; text-align: center; }
-        .image img { display: block; width: auto; height: auto; max-width: 100%; max-height: 260px; margin: 0 auto; border-radius: 8px; }
-        .meta { font-size: 11px; color: #555; margin-bottom: 10px; }
+        @page { margin: 28px 32px; }
+        body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 11px; line-height: 1.45; }
+        .header-table, .meta-table, .items-table, .summary-table, .right-meta-table { width: 100%; border-collapse: collapse; }
+        .header-title { font-size: 24px; font-weight: 700; letter-spacing: 0.2em; color: #111827; }
+        .business-block { text-align: right; font-size: 10.5px; line-height: 1.6; }
+        .logo-wrap { margin-bottom: 12px; }
+        .logo-wrap img { max-width: 170px; max-height: 68px; width: auto; height: auto; }
+        .section-gap { height: 18px; }
+        .meta-table td { vertical-align: top; padding: 0; }
+        .right-meta-table td { padding: 0 0 8px; vertical-align: top; }
+        .right-meta-table .meta-label { width: 42%; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b7280; }
+        .right-meta-table .meta-value { font-size: 11px; color: #111827; font-weight: 600; text-align: right; }
+        .label { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #6b7280; padding-bottom: 3px; }
+        .value { font-size: 11px; color: #111827; padding-bottom: 10px; }
+        .items-table { margin-top: 10px; border: 1px solid #d1d5db; }
+        .items-table thead th {
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 9px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid #d1d5db;
+        }
+        .items-table tbody td {
+            padding: 12px;
+            vertical-align: top;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .items-table tbody tr:last-child td { border-bottom: none; }
+        .text-right { text-align: right; }
+        .desc-title { font-size: 11px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+        .desc-line { font-size: 10px; color: #4b5563; margin-bottom: 2px; }
+        .summary-wrap { width: 100%; margin-top: 16px; }
+        .summary-table { width: 38%; margin-left: auto; }
+        .summary-table td { padding: 6px 0; font-size: 11px; }
+        .summary-table .summary-label { color: #4b5563; }
+        .summary-table .summary-value { text-align: right; color: #111827; }
+        .summary-table .grand-total td {
+            border-top: 1px solid #111827;
+            padding-top: 8px;
+            font-weight: 700;
+        }
+        .note-block {
+            margin-top: 22px;
+            padding-top: 12px;
+            border-top: 1px solid #d1d5db;
+            font-size: 10px;
+            color: #4b5563;
+        }
+        .muted { color: #6b7280; }
     </style>
 </head>
 <body>
-    <h1>Booking Package and Add-ons</h1>
-    <p class="muted">Booking for {{ $booking->customer_name }} on {{ DateFormatter::date($booking->event_date) }}.</p>
-    <p class="muted">{{ $tenant?->name ?? 'MemoShot' }}</p>
-    <p class="muted">
-        {{ DateFormatter::time($booking->start_time, 'N/A') }}
-        to
-        {{ DateFormatter::time($booking->end_time, 'N/A') }}
-        ({{ number_format((float) ($booking->total_hours ?? 0), 2) }} hours)
-    </p>
-
-    <section class="card">
-        <h2>Selected Package: {{ $package['name'] }}</h2>
-        <p class="meta">Base price: ${{ number_format((float) $package['price'], 2) }}</p>
-
-        @if ($package['image_data_uri'])
-            <div class="image">
-                <img src="{{ $package['image_data_uri'] }}" alt="{{ $package['name'] }}">
-            </div>
-        @endif
-
-        <p>{{ $package['description'] ?: 'No package description provided.' }}</p>
-        <p class="meta" style="margin-top: 12px;">
-            Travel distance: {{ number_format((float) ($travel['distance_km'] ?? 0), 2) }} km |
-            Travel fee: ${{ number_format((float) ($travel['fee'] ?? 0), 2) }}
-        </p>
-        @if (($discount['amount'] ?? 0) > 0)
-            <p class="meta">
-                Discount: {{ ($discount['code'] ?? null) ? $discount['code'].' - '.($discount['name'] ?? '') : ($discount['name'] ?? 'Applied discount') }} |
-                Savings: -${{ number_format((float) ($discount['amount'] ?? 0), 2) }}
-            </p>
-        @endif
-        <p class="meta" style="font-weight: bold;">
-            Booking total: ${{ number_format((float) ($booking_total ?? 0), 2) }}
-        </p>
-    </section>
-
-    @if ($addons->isNotEmpty())
-        @foreach ($addons as $addon)
-            <section class="card">
-                <h2>{{ $addon['name'] }}</h2>
-                <p class="meta">
-                    @if ($addon['product_code'])
-                        Code: {{ $addon['product_code'] }}
-                    @endif
-                    @if ($addon['category'])
-                        @if ($addon['product_code'])
-                            |
-                        @endif
-                        Category: {{ $addon['category'] }}
-                    @endif
-                    @if ($addon['price'] !== null)
-                        @if ($addon['product_code'] || $addon['category'])
-                            |
-                        @endif
-                        Price: ${{ number_format((float) $addon['price'], 2) }}
-                    @endif
-                    @if ($addon['duration'])
-                        @if ($addon['product_code'] || $addon['category'] || $addon['price'] !== null)
-                            |
-                        @endif
-                        Duration: {{ $addon['duration'] }}
-                    @endif
-                </p>
-
-                @if ($addon['image_data_uri'])
-                    <div class="image">
-                        <img src="{{ $addon['image_data_uri'] }}" alt="{{ $addon['name'] }}">
+    <table class="header-table">
+        <tr>
+            <td style="width: 56%; vertical-align: top;">
+                @if ($logo_data_uri)
+                    <div class="logo-wrap">
+                        <img src="{{ $logo_data_uri }}" alt="{{ $tenant?->name ?: 'Logo' }}">
                     </div>
                 @endif
+                <div class="header-title">QUOTE</div>
+            </td>
+            <td style="width: 44%; vertical-align: top;">
+                <table class="right-meta-table">
+                    <tr>
+                        <td class="meta-label">Date</td>
+                        <td class="meta-value">{{ $quote_date?->format('d M Y') }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">Expiry</td>
+                        <td class="meta-value">{{ $expiry_date?->format('d M Y') }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">Quote Number</td>
+                        <td class="meta-value">{{ $booking->quote_number ?: 'Draft' }}</td>
+                    </tr>
+                </table>
+                <div class="business-block" style="margin-top: 8px;">
+                    @foreach ($business_lines as $line)
+                        <div>{{ $line }}</div>
+                    @endforeach
+                </div>
+            </td>
+        </tr>
+    </table>
 
-                <p>{{ $addon['description'] ?: 'No description provided.' }}</p>
-            </section>
-        @endforeach
-    @else
-        <section class="card">
-            <h2>No Add-ons Selected</h2>
-            <p>No optional add-ons were selected for this booking.</p>
-        </section>
-    @endif
+    <div class="section-gap"></div>
+
+    <table class="meta-table">
+        <tr>
+            <td style="width: 100%;">
+                <div class="label">Customer</div>
+                <div class="value">{{ $customer_name ?: 'Not provided' }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 58%;">Description</th>
+                <th style="width: 12%;" class="text-right">Quantity</th>
+                <th style="width: 15%;" class="text-right">Unit Price</th>
+                <th style="width: 15%;" class="text-right">Amount {{ $currency_code }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($line_items as $item)
+                <tr>
+                    <td>
+                        <div class="desc-title">{{ $item['description_title'] }}</div>
+                        @foreach (($item['description_lines'] ?? []) as $line)
+                            <div class="desc-line">{{ $line }}</div>
+                        @endforeach
+                    </td>
+                    <td class="text-right">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
+                    <td class="text-right">{{ number_format((float) ($item['unit_price'] ?? 0), 2) }}</td>
+                    <td class="text-right">{{ number_format((float) ($item['amount'] ?? 0), 2) }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+
+    <div class="summary-wrap">
+        <table class="summary-table">
+            <tr>
+                <td class="summary-label">Subtotal</td>
+                <td class="summary-value">{{ number_format((float) ($subtotal ?? 0), 2) }}</td>
+            </tr>
+            @if ((float) ($discount['amount'] ?? 0) > 0)
+                <tr>
+                    <td class="summary-label">
+                        Discount
+                        @if (filled($discount['code'] ?? null))
+                            <span class="muted">({{ $discount['code'] }})</span>
+                        @endif
+                    </td>
+                    <td class="summary-value">-{{ number_format((float) ($discount['amount'] ?? 0), 2) }}</td>
+                </tr>
+            @endif
+            <tr class="grand-total">
+                <td class="summary-label">TOTAL {{ $currency_code }}</td>
+                <td class="summary-value">{{ number_format((float) ($booking_total ?? 0), 2) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="note-block">
+        <div>Please review the attached booking terms and conditions before confirming this quote.</div>
+        @if (filled($booking->notes))
+            <div style="margin-top: 8px;"><strong>Notes:</strong> {{ $booking->notes }}</div>
+        @endif
+    </div>
 </body>
 </html>

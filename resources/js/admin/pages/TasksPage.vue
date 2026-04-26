@@ -243,6 +243,35 @@ onMounted(() => {
                         <textarea v-model="form.remarks" rows="3" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'remarks') ? 'border-rose-300/60' : ''" />
                         <p v-if="firstError(fieldErrors, 'remarks')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'remarks') }}</p>
                     </div>
+                    <div v-if="editingTask" class="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Customer Response</p>
+                                <p class="mt-1 text-sm text-stone-300">Latest reply and attachments from the customer portal.</p>
+                            </div>
+                            <span class="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-stone-300">
+                                {{ editingTask.customer_response_at_label || 'No reply yet' }}
+                            </span>
+                        </div>
+                        <div class="mt-4 rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+                            <p class="text-sm leading-6 text-white">{{ editingTask.customer_response_note || 'No customer reply yet.' }}</p>
+                        </div>
+                        <div v-if="editingTask.customer_response_attachments?.length" class="mt-4">
+                            <p class="text-[11px] uppercase tracking-[0.24em] text-stone-400">Attachments</p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <a
+                                    v-for="attachment in editingTask.customer_response_attachments"
+                                    :key="`${editingTask.id}-${attachment.url}`"
+                                    :href="attachment.url"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    class="inline-flex items-center rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs font-medium text-sky-100 transition hover:bg-sky-300/15"
+                                >
+                                    {{ attachment.name }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex justify-end gap-3 border-t border-white/10 px-5 py-4">
                     <button type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5" @click="closeModal">Cancel</button>

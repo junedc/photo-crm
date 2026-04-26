@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\AdminBookingCreatedMail;
 use App\Mail\CustomerBookingCreatedMail;
 use App\Models\Booking;
+use App\Models\BookingDocument;
 use App\Models\ClientPortalAccess;
 use App\Models\Customer;
 use App\Models\Discount;
@@ -36,6 +37,7 @@ use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +74,20 @@ class BookingController extends Controller
     public function adminCreate(CurrentTenant $currentTenant): View
     {
         return $this->renderAdminBookingCreatePage($currentTenant);
+    }
+
+    public function quotePdf(CurrentTenant $currentTenant, Booking $booking)
+    {
+        abort_unless($booking->tenant_id === $currentTenant->id(), 404);
+
+        $attachment = app(BookingAddonsPdfGenerator::class)->makeForBooking($booking);
+
+        abort_if($attachment === null, 404);
+
+        return response($attachment->content, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$attachment->name.'"',
+        ]);
     }
 
     public function quotes(CurrentTenant $currentTenant): View
@@ -646,6 +662,64 @@ class BookingController extends Controller
         return redirect()->route('admin.bookings.show', $booking)->with('status', 'Booking updated successfully.');
     }
 
+    public function storeDocument(CurrentTenant $currentTenant, Request $request, Booking $booking): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'document_type' => ['required', Rule::in(array_keys($this->bookingDocumentTypeLabels()))],
+            'title' => ['required', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+            'file' => ['required', 'file', 'max:20480'],
+        ]);
+
+        $file = $request->file('file');
+        abort_unless($file instanceof UploadedFile, 422);
+
+        $document = BookingDocument::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'uploaded_by_user_id' => Auth::id(),
+            'document_type' => $data['document_type'],
+            'title' => trim((string) $data['title']),
+            'file_path' => $file->store('booking-documents', 'public'),
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+            'file_size' => $file->getSize(),
+            'notes' => filled($data['notes'] ?? null) ? trim((string) $data['notes']) : null,
+        ]);
+
+        $document->load('uploader');
+
+        return response()->json([
+            'message' => 'Document added.',
+            'record' => $this->serializeBookingDocument($document),
+        ]);
+    }
+
+    public function destroyDocument(CurrentTenant $currentTenant, Booking $booking, BookingDocument $document): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless(
+            $tenant
+            && $booking->tenant_id === $tenant->id
+            && $document->tenant_id === $tenant->id
+            && $document->booking_id === $booking->id,
+            404
+        );
+
+        if ($document->file_path) {
+            Storage::disk('public')->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return response()->json([
+            'message' => 'Document deleted.',
+        ]);
+    }
+
     public function grantClientAccess(CurrentTenant $currentTenant, Booking $booking, ClientPortalService $clientPortalService): JsonResponse|RedirectResponse
     {
         abort_unless($currentTenant->id() === $booking->tenant_id, 404);
@@ -741,7 +815,7 @@ class BookingController extends Controller
     private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
     {
         $tenant = $currentTenant->get();
-        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status']);
+        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'clientPortalTaskUpdates.task', 'documents.uploader']);
         $taskStatuses = $tenant ? $this->taskStatuses($tenant) : collect();
 
         return view('admin.app', [
@@ -778,6 +852,7 @@ class BookingController extends Controller
                     'invoices' => route('admin.invoices.index'),
                     'expenses' => route('expenses.index'),
                     'expenseStore' => route('expenses.store'),
+                    'documentStore' => route('admin.bookings.documents.store', $booking),
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
@@ -1069,7 +1144,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user', 'clientPortalTaskUpdates.task', 'documents.uploader']);
         $clientPortalAccess = ClientPortalAccess::query()
             ->where('tenant_id', $booking->tenant_id)
             ->where('customer_email', strtolower((string) $booking->customer_email))
@@ -1222,6 +1297,7 @@ class BookingController extends Controller
                     'receipt_name' => $expense->receipt_original_name ?: ($expense->receipt_path ? basename($expense->receipt_path) : ''),
                 ])
                 ->all(),
+            'documents' => $this->serializeBookingDocuments($booking),
             'task_assignees' => $booking->tenant ? TaskAssignees::optionsForTenant($booking->tenant, $booking)->values()->all() : [],
             'invoice' => $booking->invoice ? $this->serializeInvoice($booking->invoice) : null,
             'show_url' => route('admin.bookings.show', $booking),
@@ -1233,6 +1309,8 @@ class BookingController extends Controller
 
     private function serializeTaskRecord(Task $task): array
     {
+        $latestPortalUpdate = $task->clientPortalUpdates->first();
+
         return [
             'id' => $task->id,
             'task_name' => $task->task_name,
@@ -1253,6 +1331,17 @@ class BookingController extends Controller
             'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
             'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
+            'customer_response_note' => $latestPortalUpdate?->note ?? '',
+            'customer_response_at_label' => DateFormatter::dateTime($latestPortalUpdate?->created_at, 'No reply yet'),
+            'customer_response_attachments' => collect($latestPortalUpdate?->attachments ?? [])
+                ->map(fn ($attachment) => [
+                    'name' => $attachment['name'] ?? 'Attachment',
+                    'url' => $attachment['url'] ?? null,
+                ])
+                ->filter(fn (array $attachment) => filled($attachment['url']))
+                ->values()
+                ->all(),
+            'customer_response_count' => $task->clientPortalUpdates->count(),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
         ];
@@ -1758,6 +1847,161 @@ class BookingController extends Controller
                 'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
             ])->values()->all(),
         ];
+    }
+
+    private function serializeBookingDocuments(Booking $booking): array
+    {
+        $documents = collect();
+
+        $quoteAttachment = app(BookingAddonsPdfGenerator::class)->makeForBooking($booking);
+        if ($quoteAttachment !== null) {
+            $documents->push([
+                'id' => 'quote-'.$booking->id,
+                'title' => $booking->quote_number ?: 'Quote',
+                'document_type' => 'quote',
+                'document_type_label' => $this->bookingDocumentTypeLabels()['quote'],
+                'source_label' => 'Generated quote',
+                'uploaded_by_label' => 'System',
+                'notes' => 'Quote PDF attached to the booking email.',
+                'created_at_label' => DateFormatter::dateTime($booking->created_at),
+                'created_at_sort' => optional($booking->created_at)->toIso8601String(),
+                'file_name' => $quoteAttachment->name,
+                'file_size_label' => null,
+                'url' => route('admin.bookings.quote-pdf', $booking),
+                'delete_url' => null,
+                'can_delete' => false,
+            ]);
+        }
+
+        if ($booking->invoice) {
+            $documents->push([
+                'id' => 'invoice-'.$booking->invoice->id,
+                'title' => $booking->invoice->invoice_number ?: 'Invoice',
+                'document_type' => 'invoice',
+                'document_type_label' => $this->bookingDocumentTypeLabels()['invoice'],
+                'source_label' => 'Generated invoice',
+                'uploaded_by_label' => 'System',
+                'notes' => 'Customer invoice page for this booking.',
+                'created_at_label' => DateFormatter::dateTime($booking->invoice->issued_at ?: $booking->invoice->created_at),
+                'created_at_sort' => optional($booking->invoice->issued_at ?: $booking->invoice->created_at)->toIso8601String(),
+                'file_name' => ($booking->invoice->invoice_number ?: 'invoice').'.pdf',
+                'file_size_label' => null,
+                'url' => route('invoices.show', $booking->invoice),
+                'delete_url' => null,
+                'can_delete' => false,
+            ]);
+        }
+
+        foreach ($booking->expenses as $expense) {
+            if (! $expense->receipt_path) {
+                continue;
+            }
+
+            $documents->push([
+                'id' => 'expense-receipt-'.$expense->id,
+                'title' => ($expense->expense_name ?: 'Expense').' receipt',
+                'document_type' => 'receipt',
+                'document_type_label' => $this->bookingDocumentTypeLabels()['receipt'],
+                'source_label' => 'Expense receipt',
+                'uploaded_by_label' => $expense->user?->name ?: 'User',
+                'notes' => $expense->notes ?: 'Receipt attached to a booking expense.',
+                'created_at_label' => DateFormatter::dateTime($expense->created_at),
+                'created_at_sort' => optional($expense->created_at)->toIso8601String(),
+                'file_name' => $expense->receipt_original_name ?: basename($expense->receipt_path),
+                'file_size_label' => null,
+                'url' => Storage::disk('public')->url($expense->receipt_path),
+                'delete_url' => null,
+                'can_delete' => false,
+            ]);
+        }
+
+        foreach ($booking->clientPortalTaskUpdates as $update) {
+            foreach ((array) ($update->attachments ?? []) as $index => $attachment) {
+                if (! filled($attachment['url'] ?? null)) {
+                    continue;
+                }
+
+                $documents->push([
+                    'id' => 'client-update-'.$update->id.'-'.$index,
+                    'title' => ($update->task?->task_name ?: 'Client file').' attachment',
+                    'document_type' => 'client_file',
+                    'document_type_label' => $this->bookingDocumentTypeLabels()['client_file'],
+                    'source_label' => 'Client portal upload',
+                    'uploaded_by_label' => $update->customer_email ?: 'Client',
+                    'notes' => $update->note ?: 'File uploaded from the client portal.',
+                    'created_at_label' => DateFormatter::dateTime($update->created_at),
+                    'created_at_sort' => optional($update->created_at)->toIso8601String(),
+                    'file_name' => $attachment['name'] ?? 'Attachment',
+                    'file_size_label' => null,
+                    'url' => $attachment['url'],
+                    'delete_url' => null,
+                    'can_delete' => false,
+                ]);
+            }
+        }
+
+        foreach ($booking->documents as $document) {
+            $documents->push($this->serializeBookingDocument($document));
+        }
+
+        return $documents
+            ->sortByDesc(fn (array $document) => strtotime((string) ($document['created_at_sort'] ?? '')) ?: 0)
+            ->values()
+            ->map(function (array $document): array {
+                unset($document['created_at_sort']);
+
+                return $document;
+            })
+            ->all();
+    }
+
+    private function serializeBookingDocument(BookingDocument $document): array
+    {
+        return [
+            'id' => $document->id,
+            'title' => $document->title,
+            'document_type' => $document->document_type,
+            'document_type_label' => $this->bookingDocumentTypeLabels()[$document->document_type] ?? str($document->document_type)->replace('_', ' ')->title()->toString(),
+            'source_label' => 'Booking upload',
+            'uploaded_by_label' => $document->uploader?->name ?: 'User',
+            'notes' => $document->notes ?: '',
+            'created_at_label' => DateFormatter::dateTime($document->created_at),
+            'created_at_sort' => optional($document->created_at)->toIso8601String(),
+            'file_name' => $document->original_name,
+            'file_size_label' => $this->humanFileSize($document->file_size),
+            'url' => Storage::disk('public')->url($document->file_path),
+            'delete_url' => route('admin.bookings.documents.destroy', [$document->booking_id, $document]),
+            'can_delete' => true,
+        ];
+    }
+
+    private function bookingDocumentTypeLabels(): array
+    {
+        return [
+            'quote' => 'Quote',
+            'invoice' => 'Invoice',
+            'receipt' => 'Receipt',
+            'client_file' => 'Client File',
+            'user_file' => 'User File',
+            'other' => 'Other',
+        ];
+    }
+
+    private function humanFileSize(?int $bytes): ?string
+    {
+        if (! $bytes || $bytes < 1) {
+            return null;
+        }
+
+        if ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 2).' MB';
+        }
+
+        if ($bytes >= 1024) {
+            return number_format($bytes / 1024, 1).' KB';
+        }
+
+        return $bytes.' B';
     }
 
     private function timeValue(?string $time): ?string

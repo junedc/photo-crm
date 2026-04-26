@@ -10,6 +10,7 @@ use App\Http\Controllers\DiscountController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ClientPortalController;
 use App\Http\Controllers\PublicCatalogController;
@@ -170,6 +171,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::get('/tasks/notifications', [TaskController::class, 'notifications'])->name('tasks.notifications.index');
         Route::post('/tasks/{task}/dismiss-notification', [TaskController::class, 'dismissNotification'])->name('tasks.notifications.dismiss');
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::post('/notifications/{notification}/dismiss', [NotificationController::class, 'dismiss'])->name('notifications.dismiss');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
         Route::post('/discounts', [DiscountController::class, 'store'])->name('discounts.store');
@@ -208,6 +211,9 @@ Route::post('/settings/task-statuses', [SettingsController::class, 'storeTaskSta
         Route::post('/access-control/guests', [UserRoleController::class, 'storeGuestAccess'])->name('access.guests.store');
         Route::delete('/access-control/guests/{user}', [UserRoleController::class, 'destroyGuestAccess'])->name('access.guests.destroy');
         Route::put('/admin/bookings/{booking}', [BookingController::class, 'update'])->name('admin.bookings.update');
+        Route::get('/admin/bookings/{booking}/quote-pdf', [BookingController::class, 'quotePdf'])->name('admin.bookings.quote-pdf');
+        Route::post('/admin/bookings/{booking}/documents', [BookingController::class, 'storeDocument'])->name('admin.bookings.documents.store');
+        Route::delete('/admin/bookings/{booking}/documents/{document}', [BookingController::class, 'destroyDocument'])->name('admin.bookings.documents.destroy');
         Route::post('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'store'])->name('admin.bookings.invoice.store');
         Route::post('/admin/bookings/{booking}/invoice/send', [InvoiceController::class, 'send'])->name('admin.bookings.invoice.send');
         Route::post('/admin/bookings/{booking}/grant-client-access', [BookingController::class, 'grantClientAccess'])->name('admin.bookings.client-access.grant');

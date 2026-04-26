@@ -147,4 +147,9 @@ class Booking extends Model
     {
         return $this->hasMany(Expense::class);
     }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(BookingDocument::class)->latest();
+    }
 }
