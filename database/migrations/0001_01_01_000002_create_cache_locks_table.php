@@ -8,16 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('cache', function (Blueprint $table): void {
+        Schema::create('cache_locks', function (Blueprint $table): void {
             $table->string('key')->primary();
-            $table->mediumText('value');
+            $table->string('owner');
             $table->bigInteger('expiration');
-            $table->index('expiration', 'cache_expiration_index');
+            $table->index('expiration', 'cache_locks_expiration_index');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('cache');
+        Schema::dropIfExists('cache_locks');
     }
 };
