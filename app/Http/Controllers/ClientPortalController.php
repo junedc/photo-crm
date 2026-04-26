@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\TaskResponseReceivedMail;
 use App\Models\Booking;
 use App\Models\ClientPortalCode;
 use App\Models\ClientPortalDesign;
 use App\Models\ClientPortalTaskUpdate;
+use App\Models\Tenant;
+use App\Models\TenantNotification;
 use App\Models\TenantFont;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Services\ClientPortalService;
 use App\Support\DateFormatter;
 use App\Support\TenantStatuses;
+use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -226,7 +230,7 @@ class ClientPortalController extends Controller
         ]);
     }
 
-    public function respondToTask(Request $request, CurrentTenant $currentTenant, Booking $booking, Task $task): RedirectResponse
+    public function respondToTask(Request $request, CurrentTenant $currentTenant, Booking $booking, Task $task, TrackedEmailSender $trackedEmailSender): RedirectResponse
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
@@ -250,6 +254,10 @@ class ClientPortalController extends Controller
                 'max:20480',
                 'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/quicktime,video/x-msvideo,video/webm,application/pdf',
             ],
+        ], [
+            'attachments.*.uploaded' => 'One of the selected files could not be uploaded. Please keep each file under 20 MB and try again.',
+            'attachments.*.max' => 'Each attachment must be 20 MB or smaller.',
+            'attachments.max' => 'You can upload up to 6 files at a time.',
         ]);
 
         abort_unless((int) $data['form_task_id'] === $task->id, 404);
@@ -309,6 +317,9 @@ class ClientPortalController extends Controller
             'note' => $note !== '' ? $note : null,
             'attachments' => $attachments === [] ? null : $attachments,
         ]);
+
+        $this->createAdminNotificationsForTaskResponse($tenant, $booking, $task->fresh(['status']), $note, $attachments);
+        $this->notifyTenantAdminsOfTaskResponse($trackedEmailSender, $tenant, $booking, $task->fresh(['status']), $note, $attachments);
 
         return redirect()
             ->route('client.portal.index')
@@ -447,6 +458,97 @@ class ClientPortalController extends Controller
     private function clientAuth(Request $request): ?array
     {
         return $request->session()->get(ClientPortalService::AUTH_SESSION_KEY);
+    }
+
+    private function notifyTenantAdminsOfTaskResponse(
+        TrackedEmailSender $trackedEmailSender,
+        Tenant $tenant,
+        Booking $booking,
+        Task $task,
+        string $note,
+        array $attachments,
+    ): void {
+        $recipients = $tenant->users()
+            ->wherePivot('role', 'owner')
+            ->get()
+            ->map(fn ($user) => [
+                'email' => $user->email,
+                'name' => $user->name,
+            ])
+            ->filter(fn (array $recipient) => filled($recipient['email']))
+            ->values()
+            ->all();
+
+        if ($recipients === []) {
+            return;
+        }
+
+        $trackedEmailSender->send(
+            new TaskResponseReceivedMail(
+                $tenant,
+                $booking,
+                $task,
+                $note !== '' ? $note : null,
+                $attachments,
+                route('admin.bookings.show', $booking),
+            ),
+            $recipients,
+            [],
+            ['tenant' => $tenant, 'context' => $task]
+        );
+    }
+
+    private function createAdminNotificationsForTaskResponse(
+        Tenant $tenant,
+        Booking $booking,
+        Task $task,
+        string $note,
+        array $attachments,
+    ): void {
+        $attachmentCount = count($attachments);
+        $hasNote = $note !== '';
+        $displayName = $booking->customer_name ?: $booking->entry_name ?: 'Client';
+        $messageParts = [];
+
+        if ($hasNote) {
+            $messageParts[] = $displayName.' replied to the task.';
+        }
+
+        if ($attachmentCount > 0) {
+            $messageParts[] = $attachmentCount === 1
+                ? '1 file was attached.'
+                : $attachmentCount.' files were attached.';
+        }
+
+        if ($messageParts === []) {
+            $messageParts[] = $displayName.' updated the task in the client portal.';
+        }
+
+        $title = $attachmentCount > 0 && $hasNote
+            ? 'Client replied and uploaded files'
+            : ($attachmentCount > 0 ? 'Client uploaded files' : 'Client replied to task');
+
+        $recipients = $tenant->users()
+            ->wherePivot('role', '!=', 'guest')
+            ->get(['users.id']);
+
+        foreach ($recipients as $recipient) {
+            TenantNotification::query()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $recipient->id,
+                'booking_id' => $booking->id,
+                'task_id' => $task->id,
+                'type' => 'client_portal_task_update',
+                'title' => $title,
+                'message' => implode(' ', $messageParts),
+                'payload' => [
+                    'task_name' => $task->task_name,
+                    'customer_email' => $booking->customer_email,
+                    'attachment_count' => $attachmentCount,
+                    'has_note' => $hasNote,
+                ],
+            ]);
+        }
     }
 
     private function normalizeDesignData(?array $designData): ?array

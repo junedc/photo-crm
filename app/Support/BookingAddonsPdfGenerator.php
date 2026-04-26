@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Booking;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 
@@ -11,7 +12,7 @@ class BookingAddonsPdfGenerator
 {
     public function makeForBooking(Booking $booking): ?BookingAddonsPdfAttachment
     {
-        $booking->loadMissing('package', 'tenant', 'addOns');
+        $booking->loadMissing('package', 'tenant', 'addOns', 'discount');
 
         $package = $booking->package;
         $addons = $booking->addOns;
@@ -28,48 +29,120 @@ class BookingAddonsPdfGenerator
         ));
         $travelFee = (float) ($booking->travel_fee ?? 0);
         $discountAmount = (float) ($booking->discount_amount ?? 0);
-        $bookingTotal = max(0, $packagePrice + $addOnTotal + $travelFee - $discountAmount);
+        $subtotal = max(0, $packagePrice + $addOnTotal + $travelFee);
+        $bookingTotal = max(0, $subtotal - $discountAmount);
+        $quoteDate = $booking->created_at instanceof Carbon ? $booking->created_at->copy() : now();
+        $expiryDate = $quoteDate->copy()->addDays(7);
+        $currencyCode = strtoupper((string) ($booking->tenant?->stripe_currency ?: config('services.platform_stripe.currency', 'AUD')));
+
+        $items = collect([
+            [
+                'description_title' => trim(($package->name ?? 'Package').($booking->total_hours ? ' · '.number_format((float) $booking->total_hours, 2).' hrs' : '')),
+                'description_lines' => $this->packageDescriptionLines($booking),
+                'quantity' => 1,
+                'unit_price' => $packagePrice,
+                'amount' => $packagePrice,
+            ],
+        ]);
+
+        foreach ($addons as $addon) {
+            $addonPrice = (float) $addon->discountedUnitPriceForBookingSelection(
+                $addon->pivot?->discount_type,
+                $addon->pivot?->discount_value,
+                (float) ($addon->pivot?->discount_percentage ?? 0),
+            );
+
+            $items->push([
+                'description_title' => $addon->name,
+                'description_lines' => array_values(array_filter([
+                    $addon->duration ? 'Duration: '.$addon->duration : null,
+                    filled($addon->description) ? trim((string) $addon->description) : null,
+                ])),
+                'quantity' => 1,
+                'unit_price' => $addonPrice,
+                'amount' => $addonPrice,
+            ]);
+        }
+
+        if ($travelFee > 0) {
+            $items->push([
+                'description_title' => 'Travel Fee',
+                'description_lines' => array_values(array_filter([
+                    $booking->travel_distance_km !== null ? 'Distance: '.number_format((float) $booking->travel_distance_km, 2).' km' : null,
+                    filled($booking->event_location) ? 'Location: '.trim((string) $booking->event_location) : null,
+                ])),
+                'quantity' => 1,
+                'unit_price' => $travelFee,
+                'amount' => $travelFee,
+            ]);
+        }
 
         $pdf = Pdf::loadView('pdf.bookings.addons', [
             'booking' => $booking,
             'tenant' => $booking->tenant,
-            'package' => [
-                'name' => $package->name,
-                'description' => $package->description,
-                'price' => $packagePrice,
-                'image_data_uri' => $this->imageDataUri($package->photo_path),
-            ],
-            'travel' => [
-                'distance_km' => $booking->travel_distance_km,
-                'fee' => $travelFee,
-            ],
+            'quote_date' => $quoteDate,
+            'expiry_date' => $expiryDate,
+            'customer_name' => $booking->customer_name ?: $booking->entry_name,
+            'currency_code' => $currencyCode,
+            'logo_data_uri' => $this->imageDataUri($booking->tenant?->logo_path),
+            'line_items' => $items->values(),
+            'subtotal' => $subtotal,
             'discount' => [
                 'code' => $booking->discount?->code,
                 'name' => $booking->discount?->name,
                 'amount' => $discountAmount,
             ],
+            'business_lines' => $this->businessLines($booking),
             'booking_total' => $bookingTotal,
-            'addons' => $addons->map(fn ($addon) => [
-                'product_code' => $addon->sku,
-                'name' => $addon->name,
-                'category' => $addon->type ?: $addon->addon_category,
-                'description' => $addon->description,
-                'price' => $addon->discountedUnitPriceForBookingSelection(
-                    $addon->pivot?->discount_type,
-                    $addon->pivot?->discount_value,
-                    (float) ($addon->pivot?->discount_percentage ?? 0),
-                ),
-                'duration' => $addon->duration,
-                'image_data_uri' => $this->imageDataUri($addon->photo_path),
-            ])->values(),
         ]);
 
-        $slug = Str::slug($package->name ?: 'package');
+        $slug = Str::slug($booking->quote_number ?: $package->name ?: 'quote');
 
         return new BookingAddonsPdfAttachment(
-            name: $slug.'-booking-details.pdf',
+            name: $slug.'.pdf',
             content: $pdf->output(),
         );
+    }
+
+    private function packageDescriptionLines(Booking $booking): array
+    {
+        $lines = [];
+
+        if (filled($booking->package?->description)) {
+            foreach (preg_split('/\r\n|\r|\n/', (string) $booking->package->description) ?: [] as $line) {
+                $line = trim($line);
+
+                if ($line !== '') {
+                    $lines[] = ltrim($line, "- \t");
+                }
+            }
+        }
+
+        if (filled($booking->venue)) {
+            $lines[] = 'Venue: '.trim((string) $booking->venue);
+        }
+
+        if ($booking->event_date) {
+            $lines[] = 'Event date: '.Carbon::parse($booking->event_date)->format('d M Y');
+        }
+
+        if ($booking->start_time && $booking->end_time) {
+            $lines[] = 'Time: '.Carbon::parse($booking->start_time)->format('g:i A').' - '.Carbon::parse($booking->end_time)->format('g:i A');
+        }
+
+        return $lines;
+    }
+
+    private function businessLines(Booking $booking): array
+    {
+        $tenant = $booking->tenant;
+
+        return array_values(array_filter([
+            $tenant?->name ?: 'MemoShot',
+            filled($tenant?->address) ? trim((string) $tenant->address) : null,
+            filled($tenant?->contact_phone) ? trim((string) $tenant->contact_phone) : null,
+            filled($tenant?->contact_email) ? trim((string) $tenant->contact_email) : null,
+        ]));
     }
 
     private function imageDataUri(?string $path): ?string

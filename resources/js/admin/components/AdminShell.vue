@@ -20,6 +20,8 @@ const notifications = ref([...(props.data.notifications ?? [])]);
 const dismissingNotifications = ref(new Set());
 const notificationCount = computed(() => notifications.value.length);
 let notificationRefreshTimeout = null;
+let notificationPollInterval = null;
+const liveNotification = ref(null);
 
 const navItems = computed(() => [
     { key: 'overview', label: 'Overview', href: props.data.routes.dashboard, accent: 'amber', icon: 'dashboard' },
@@ -212,6 +214,7 @@ const flashStatus = ref(props.data.flash?.status ?? '');
 const flashErrors = ref(props.data.flash?.errors ?? []);
 let statusTimeout = null;
 let errorTimeout = null;
+let liveNotificationTimeout = null;
 
 const clearStatusLater = () => {
     window.clearTimeout(statusTimeout);
@@ -258,7 +261,23 @@ const refreshNotifications = async () => {
             },
         });
 
-        notifications.value = [...(response.data?.notifications ?? [])];
+        const nextNotifications = [...(response.data?.notifications ?? [])];
+        const previousIds = new Set(notifications.value.map((entry) => entry.id));
+        const newestIncoming = nextNotifications.find((entry) => !previousIds.has(entry.id));
+
+        notifications.value = nextNotifications;
+
+        if (previousIds.size > 0 && newestIncoming) {
+            liveNotification.value = {
+                title: newestIncoming.title,
+                message: newestIncoming.message || newestIncoming.booking_label || 'New activity needs your attention.',
+            };
+
+            window.clearTimeout(liveNotificationTimeout);
+            liveNotificationTimeout = window.setTimeout(() => {
+                liveNotification.value = null;
+            }, 4500);
+        }
     } catch {
         // Keep the current bell state if refresh fails.
     }
@@ -363,6 +382,9 @@ onMounted(() => {
     document.addEventListener('click', onDocumentClick);
     document.addEventListener('keydown', onEscape);
     refreshNotifications();
+    notificationPollInterval = window.setInterval(() => {
+        refreshNotifications();
+    }, 20000);
 });
 
 onBeforeUnmount(() => {
@@ -372,12 +394,21 @@ onBeforeUnmount(() => {
     window.clearTimeout(statusTimeout);
     window.clearTimeout(errorTimeout);
     window.clearTimeout(notificationRefreshTimeout);
+    window.clearTimeout(liveNotificationTimeout);
+    window.clearInterval(notificationPollInterval);
 });
 </script>
 
 <template>
     <div class="min-h-screen bg-[#0f172a] text-stone-50">
         <div class="fixed right-4 top-20 z-[60] flex w-full max-w-sm flex-col gap-3 sm:right-6">
+            <transition name="toast">
+                <div v-if="liveNotification" class="rounded-2xl border border-cyan-400/30 bg-cyan-500/95 px-5 py-4 text-sm text-white shadow-2xl shadow-cyan-950/40 backdrop-blur">
+                    <p class="font-semibold">{{ liveNotification.title }}</p>
+                    <p class="mt-1 text-cyan-50/95">{{ liveNotification.message }}</p>
+                </div>
+            </transition>
+
             <transition name="toast">
                 <div v-if="flashStatus" class="rounded-2xl border border-emerald-400/30 bg-emerald-500/95 px-5 py-4 text-sm text-white shadow-2xl shadow-emerald-950/40 backdrop-blur">
                     {{ flashStatus }}
@@ -462,7 +493,9 @@ onBeforeUnmount(() => {
                                                 {{ notification.status }}
                                             </span>
                                         </div>
-                                        <p class="mt-1 text-xs text-stone-400">Due {{ notification.due_date_label }}</p>
+                                        <p v-if="notification.message" class="mt-1 text-xs text-stone-300">{{ notification.message }}</p>
+                                        <p v-if="notification.due_date_label" class="mt-1 text-xs text-stone-400">Due {{ notification.due_date_label }}</p>
+                                        <p v-if="notification.created_at_label" class="mt-1 text-xs text-stone-500">{{ notification.created_at_label }}</p>
                                         <p v-if="notification.booking_label" class="mt-1 truncate text-xs text-stone-300">{{ notification.booking_label }}</p>
                                     </a>
                                     <button

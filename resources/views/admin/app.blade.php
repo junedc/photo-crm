@@ -31,34 +31,12 @@
                     }
                 }
 
-                $notifications = \App\Models\Task::query()
-                    ->with(['booking', 'status'])
-                    ->where('tenant_id', $tenantId)
-                    ->where('assignee_type', \App\Models\Task::ASSIGNEE_USER)
-                    ->where('assignee_id', $user->id)
-                    ->whereNull('notification_dismissed_at')
-                    ->orderByRaw('case when due_date is null then 1 else 0 end')
-                    ->orderBy('due_date')
-                    ->latest('created_at')
-                    ->get()
-                    ->map(function (\App\Models\Task $task) {
-                        $booking = $task->booking;
-                        $bookingLabel = $booking?->quote_number
-                            ? sprintf('%s - %s', $booking->quote_number, $booking->entry_name ?: $booking->customer_name)
-                            : ($booking?->entry_name ?: $booking?->customer_name);
+                $tenant = \App\Models\Tenant::query()->find($tenantId);
 
-                        return [
-                            'id' => $task->id,
-                            'title' => $task->task_name,
-                            'status' => $task->status?->name ?: 'Open',
-                            'due_date_label' => \App\Support\DateFormatter::date($task->due_date, 'No due date'),
-                            'booking_label' => $bookingLabel,
-                            'task_url' => route('tasks.index'),
-                            'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,
-                            'dismiss_url' => route('tasks.notifications.dismiss', $task),
-                        ];
-                    })
-                    ->values();
+                if ($tenant !== null) {
+                    $notifications = app(\App\Support\AdminNotificationFeed::class)
+                        ->forUser($tenant, $user);
+                }
             }
         @endphp
         <script>
@@ -74,7 +52,7 @@
                 ] : null,
                 'notifications' => $notifications,
                 'notificationRoutes' => $user && $tenantId ? [
-                    'index' => route('tasks.notifications.index'),
+                    'index' => route('notifications.index'),
                 ] : null,
                 'flash' => [
                     'status' => session('status'),
