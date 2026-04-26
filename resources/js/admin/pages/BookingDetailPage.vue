@@ -21,6 +21,7 @@ const taskErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
+const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 
 const buildEditForm = (record) => ({
     booking_status_id: record?.status_id ? String(record.status_id) : String(props.data.bookingStatusOptions?.[0]?.id ?? ''),
@@ -42,13 +43,17 @@ const buildEditForm = (record) => ({
     discount_id: record?.discount_id ? String(record.discount_id) : '',
     equipment_ids: [...(record?.equipment_ids ?? [])],
     add_on_ids: [...(record?.add_on_ids ?? [])],
+    equipment_discount_types: { ...(record?.equipment_discount_types ?? {}) },
+    equipment_discount_values: { ...(record?.equipment_discount_values ?? {}) },
+    add_on_discount_types: { ...(record?.add_on_discount_types ?? {}) },
+    add_on_discount_values: { ...(record?.add_on_discount_values ?? {}) },
 });
 
 const buildTaskForm = (task = null) => ({
     task_name: task?.task_name ?? '',
     task_duration_hours: task?.task_duration_hours ?? '',
     assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
-    task_status_id: task?.task_status_id ? String(task.task_status_id) : '',
+    task_status_id: task?.task_status_id ? String(task.task_status_id) : defaultTaskStatusId.value,
     due_date: task?.due_date ?? '',
     date_started: task?.date_started ?? '',
     date_completed: task?.date_completed ?? '',
@@ -75,6 +80,15 @@ const discountOptions = computed(() => props.data.discountOptions ?? []);
 const taskAssignees = computed(() => bookingRecord.value.task_assignees ?? props.data.taskAssignees ?? []);
 const taskStatuses = computed(() => localTaskStatuses.value);
 const isEntryBooking = computed(() => editForm.value.booking_kind === 'market_stall' || editForm.value.booking_kind === 'sponsored');
+const invoiceAmountLocked = computed(() => {
+    const invoice = bookingRecord.value.invoice;
+
+    if (!invoice) {
+        return false;
+    }
+
+    return ['partially_paid', 'paid'].includes(invoice.status) || Number(invoice.amount_paid || 0) > 0;
+});
 const selectedPackage = computed(() =>
     packages.value.find((entry) => String(entry.id) === String(editForm.value.package_id ?? '')) ?? null,
 );
@@ -110,6 +124,68 @@ const combinedOptionalItems = computed(() => [
         tone: 'rose',
     })),
 ]);
+const clampDiscountPercentage = (value) => Math.min(100, Math.max(0, Number(value) || 0));
+const clampDiscountAmount = (value) => Math.max(0, Number(value) || 0);
+const formatMoney = (value) => Number(value || 0).toFixed(2);
+const itemDiscountTypeMapKey = (selectionKey) => (
+    selectionKey === 'equipment_ids' ? 'equipment_discount_types' : 'add_on_discount_types'
+);
+const itemDiscountValueMapKey = (selectionKey) => (
+    selectionKey === 'equipment_ids' ? 'equipment_discount_values' : 'add_on_discount_values'
+);
+const itemDiscountType = (item) => (
+    editForm.value[itemDiscountTypeMapKey(item.selection_key)]?.[String(item.id)] ?? 'percentage'
+);
+const itemDiscountValue = (item) => (
+    editForm.value[itemDiscountValueMapKey(item.selection_key)]?.[String(item.id)] ?? '0'
+);
+const applyDiscount = (amount, discountType, discountValue) => {
+    const numericAmount = Number(amount || 0);
+
+    if (discountType === 'amount') {
+        return Math.max(0, numericAmount - clampDiscountAmount(discountValue));
+    }
+
+    return numericAmount * (1 - (clampDiscountPercentage(discountValue) / 100));
+};
+const itemFinalPrice = (item) => formatMoney(applyDiscount(item.price_label, itemDiscountType(item), itemDiscountValue(item)));
+const setItemDiscountType = (item, value) => {
+    const key = itemDiscountTypeMapKey(item.selection_key);
+    const normalizedValue = value === 'amount' ? 'amount' : 'percentage';
+
+    editForm.value[key] = {
+        ...(editForm.value[key] ?? {}),
+        [String(item.id)]: normalizedValue,
+    };
+};
+const setItemDiscountValue = (item, value) => {
+    const key = itemDiscountValueMapKey(item.selection_key);
+    const normalizedValue = itemDiscountType(item) === 'amount'
+        ? String(clampDiscountAmount(value).toFixed(2))
+        : String(clampDiscountPercentage(value).toFixed(2));
+
+    editForm.value[key] = {
+        ...(editForm.value[key] ?? {}),
+        [String(item.id)]: normalizedValue,
+    };
+};
+const clearItemDiscountValue = (selectionKey, id) => {
+    const valueKey = itemDiscountValueMapKey(selectionKey);
+    const typeKey = itemDiscountTypeMapKey(selectionKey);
+    const currentValues = { ...(editForm.value[valueKey] ?? {}) };
+    const currentTypes = { ...(editForm.value[typeKey] ?? {}) };
+
+    delete currentValues[String(id)];
+    delete currentTypes[String(id)];
+    editForm.value[valueKey] = currentValues;
+    editForm.value[typeKey] = currentTypes;
+};
+const itemDiscountLabel = (selectionKey, id) => {
+    const type = editForm.value[itemDiscountTypeMapKey(selectionKey)]?.[String(id)] ?? 'percentage';
+    const value = editForm.value[itemDiscountValueMapKey(selectionKey)]?.[String(id)] ?? '0';
+
+    return type === 'amount' ? `$${formatMoney(value)}` : `${formatMoney(value)}%`;
+};
 const taskAssigneeGroups = computed(() => {
     return taskAssignees.value.reduce((groups, option) => {
         const group = option.group ?? 'Other';
@@ -126,6 +202,44 @@ const bookingKindLabel = (kind) => ({
 }[kind] ?? 'Customer Booking');
 const equipmentSummary = (item) => [item.category, `$${item.price ?? item.daily_rate}`].filter(Boolean).join(' - ');
 const addOnSummary = (addOn) => [addOn.product_code, addOn.duration].filter(Boolean).join(' - ');
+const overviewSelectedItems = computed(() => {
+    const rows = [];
+
+    if (bookingRecord.value.package) {
+        rows.push({
+            id: `package-${bookingRecord.value.package.id ?? 'selected'}`,
+            type_label: 'Package',
+            name: bookingRecord.value.package.name ?? bookingRecord.value.package_name ?? 'No package selected',
+            details: bookingRecord.value.total_hours ? `${bookingRecord.value.total_hours} hrs` : 'Package',
+            price: bookingRecord.value.package.price ?? bookingRecord.value.package_price ?? '0.00',
+            description: bookingRecord.value.package.description || 'Selected package',
+        });
+    }
+
+    (bookingRecord.value.equipment ?? []).forEach((item) => {
+        rows.push({
+            id: `equipment-${item.id}`,
+            type_label: 'Equipment',
+            name: item.name,
+            details: equipmentSummary(item) || 'Equipment',
+            price: item.price ?? item.original_price ?? '0.00',
+            description: item.description || 'Assigned equipment',
+        });
+    });
+
+    (bookingRecord.value.addons ?? []).forEach((item) => {
+        rows.push({
+            id: `addon-${item.id}`,
+            type_label: 'Add-On',
+            name: item.name,
+            details: addOnSummary(item) || 'Add-On',
+            price: item.price ?? item.original_price ?? '0.00',
+            description: item.description || 'Assigned add-on',
+        });
+    });
+
+    return rows;
+});
 
 const openDatePicker = (event) => {
     try {
@@ -193,6 +307,7 @@ const toggleMultiSelect = (key, id) => {
 
     if (values.has(id)) {
         values.delete(id);
+        clearItemDiscountValue(key, id);
     } else {
         values.add(id);
     }
@@ -538,20 +653,20 @@ const removeTask = async (task) => {
 
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Package</label>
-                        <select v-model="editForm.package_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'package_id') ? 'border-rose-300/60' : ''">
+                        <select v-model="editForm.package_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :class="firstError(editValidationErrors, 'package_id') ? 'border-rose-300/60' : ''" :disabled="invoiceAmountLocked">
                             <option disabled value="">Select a package</option>
                             <option v-for="entry in packages" :key="entry.id" :value="String(entry.id)">{{ entry.name }} - ${{ entry.display_price }}</option>
                         </select>
                     </div>
                     <div v-if="selectedPackageHourlyPrices.length">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Package Timing</label>
-                        <select v-model="editForm.package_hourly_price_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                        <select v-model="editForm.package_hourly_price_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
                             <option v-for="option in selectedPackageHourlyPrices" :key="option.id" :value="String(option.id)">{{ Number(option.hours).toFixed(2) }} hrs - ${{ option.price }}</option>
                         </select>
                     </div>
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Discount</label>
-                        <select v-model="editForm.discount_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                        <select v-model="editForm.discount_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
                             <option value="">No discount</option>
                             <option v-for="discount in availableDiscountOptions" :key="discount.id" :value="String(discount.id)">{{ discount.code }} - {{ discount.name }}</option>
                         </select>
@@ -577,7 +692,7 @@ const removeTask = async (task) => {
                     </div>
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Duration</label>
-                        <input v-model="editForm.total_hours" type="number" min="0.25" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'total_hours') ? 'border-rose-300/60' : ''">
+                        <input v-model="editForm.total_hours" type="number" min="0.25" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :class="firstError(editValidationErrors, 'total_hours') ? 'border-rose-300/60' : ''" :disabled="invoiceAmountLocked">
                     </div>
                     <div class="xl:col-span-4">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Location</label>
@@ -585,15 +700,18 @@ const removeTask = async (task) => {
                     </div>
                     <div class="xl:col-span-4">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Items</label>
+                        <p v-if="invoiceAmountLocked" class="mb-2 text-xs text-amber-200">Invoice amounts are locked because this invoice is already partially or fully paid.</p>
                         <div class="overflow-hidden rounded-xl border border-white/10">
-                            <div class="grid grid-cols-[2rem_6rem_minmax(0,1fr)_8rem_5.5rem] gap-2 bg-white/[0.04] px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                            <div class="grid grid-cols-[2rem_6rem_minmax(0,1fr)_8rem_5.5rem_9.5rem_6rem] gap-2 bg-white/[0.04] px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
                                 <span></span>
                                 <span>Type</span>
                                 <span>Item</span>
                                 <span>Details</span>
                                 <span>Price</span>
+                                <span>Discount</span>
+                                <span>Final</span>
                             </div>
-                            <button v-for="item in combinedOptionalItems" :key="`${item.selection_key}-${item.id}`" type="button" class="grid w-full grid-cols-[2rem_6rem_minmax(0,1fr)_8rem_5.5rem] gap-2 border-t border-white/10 px-2.5 py-2 text-left text-sm transition" :class="item.selected ? (item.tone === 'cyan' ? 'bg-cyan-300/10 text-white' : 'bg-rose-300/10 text-white') : 'text-stone-300 hover:bg-white/[0.03]'" @click="toggleMultiSelect(item.selection_key, item.id)">
+                            <button v-for="item in combinedOptionalItems" :key="`${item.selection_key}-${item.id}`" type="button" class="grid w-full grid-cols-[2rem_6rem_minmax(0,1fr)_8rem_5.5rem_9.5rem_6rem] gap-2 border-t border-white/10 px-2.5 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-70" :class="item.selected ? (item.tone === 'cyan' ? 'bg-cyan-300/10 text-white' : 'bg-rose-300/10 text-white') : 'text-stone-300 hover:bg-white/[0.03]'" :disabled="invoiceAmountLocked" @click="toggleMultiSelect(item.selection_key, item.id)">
                                 <span class="flex items-center justify-center">
                                     <span class="flex h-5 w-5 items-center justify-center rounded-md border text-[11px] font-semibold" :class="item.selected ? (item.tone === 'cyan' ? 'border-cyan-300/40 bg-cyan-300/20 text-cyan-100' : 'border-rose-300/40 bg-rose-300/20 text-rose-100') : 'border-white/10 text-stone-500'">{{ item.selected ? '✓' : '' }}</span>
                                 </span>
@@ -601,6 +719,32 @@ const removeTask = async (task) => {
                                 <span class="truncate font-medium">{{ item.name }}</span>
                                 <span>{{ item.details_label }}</span>
                                 <span>${{ item.price_label }}</span>
+                                <span class="flex gap-1">
+                                    <select
+                                        :value="itemDiscountType(item)"
+                                        class="w-[4.2rem] rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1 text-xs text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="invoiceAmountLocked || !item.selected"
+                                        @click.stop
+                                        @keydown.stop
+                                        @change="setItemDiscountType(item, $event.target.value)"
+                                    >
+                                        <option value="percentage">%</option>
+                                        <option value="amount">$</option>
+                                    </select>
+                                    <input
+                                        :value="itemDiscountValue(item)"
+                                        type="number"
+                                        min="0"
+                                        :max="itemDiscountType(item) === 'percentage' ? 100 : undefined"
+                                        step="0.01"
+                                        class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1 text-right text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="invoiceAmountLocked || !item.selected"
+                                        @click.stop
+                                        @keydown.stop
+                                        @input="setItemDiscountValue(item, $event.target.value)"
+                                    >
+                                </span>
+                                <span>${{ itemFinalPrice(item) }}</span>
                             </button>
                         </div>
                     </div>
@@ -619,18 +763,6 @@ const removeTask = async (task) => {
 
             <div v-if="!isEditing && activeTab === 'overview'" class="space-y-3">
                 <div class="grid gap-2.5 sm:grid-cols-2">
-                    <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50 sm:col-span-2">
-                        <div class="flex flex-col gap-3 p-2.5 sm:flex-row sm:items-start">
-                            <div v-if="bookingRecord.package?.photo_url" class="h-20 w-full shrink-0 overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 sm:w-24">
-                                <img :src="bookingRecord.package.photo_url" :alt="bookingRecord.package.name" class="h-full w-full object-cover">
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Selected Package</p>
-                                <p class="mt-1.5 text-sm font-semibold">{{ bookingRecord.package?.name ?? bookingRecord.package_name ?? 'No package selected' }}</p>
-                                <p v-if="bookingRecord.package?.price ?? bookingRecord.package_price" class="mt-1 text-xs text-stone-400">${{ bookingRecord.package?.price ?? bookingRecord.package_price }}</p>
-                            </div>
-                        </div>
-                    </div>
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Quote Number</p>
                         <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.quote_number || 'Not assigned' }}</p>
@@ -704,48 +836,28 @@ const removeTask = async (task) => {
 
                 <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
                     <div class="flex items-center justify-between gap-3">
-                        <p class="px-2.5 py-2.5 text-[11px] uppercase tracking-[0.3em] text-stone-500">Selected Equipment</p>
-                        <span class="mr-3 rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ bookingRecord.equipment?.length ?? 0 }}</span>
+                        <p class="px-2.5 py-2.5 text-[11px] uppercase tracking-[0.3em] text-stone-500">Selected Items</p>
+                        <span class="mr-3 rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ overviewSelectedItems.length }}</span>
                     </div>
-                    <div v-if="bookingRecord.equipment?.length" class="overflow-x-auto border-t border-white/10">
-                        <div class="min-w-[680px]">
-                            <div class="grid grid-cols-[minmax(0,1fr)_12rem_8rem] gap-2 border-b border-white/10 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
-                                <span>Equipment</span>
-                                <span>Category</span>
-                                <span>Price</span>
-                            </div>
-                            <div v-for="item in bookingRecord.equipment" :key="item.id" class="grid grid-cols-[minmax(0,1fr)_12rem_8rem] items-center gap-2 border-b border-white/10 px-2.5 py-2 last:border-b-0">
-                                <p class="truncate text-sm font-medium text-white">{{ item.name }}</p>
-                                <p class="truncate text-sm text-stone-300">{{ equipmentSummary(item) || 'Equipment' }}</p>
-                                <p class="text-sm font-semibold text-cyan-100">${{ item.price }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <p v-else class="border-t border-white/10 px-2.5 py-2.5 text-sm leading-5 text-stone-400">No equipment was selected for this booking.</p>
-                </div>
-
-                <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="px-2.5 py-2.5 text-[11px] uppercase tracking-[0.3em] text-stone-500">Selected Add-Ons</p>
-                        <span class="mr-3 rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ bookingRecord.addons?.length ?? 0 }}</span>
-                    </div>
-                    <div v-if="bookingRecord.addons?.length" class="overflow-x-auto border-t border-white/10">
-                        <div class="min-w-[860px]">
-                            <div class="grid grid-cols-[minmax(0,1fr)_12rem_8rem_minmax(0,1.2fr)] gap-2 border-b border-white/10 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
-                                <span>Add-On</span>
+                    <div v-if="overviewSelectedItems.length" class="overflow-x-auto border-t border-white/10">
+                        <div class="min-w-[920px]">
+                            <div class="grid grid-cols-[8rem_minmax(0,1fr)_12rem_8rem_minmax(0,1.2fr)] gap-2 border-b border-white/10 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
                                 <span>Type</span>
+                                <span>Item</span>
+                                <span>Details</span>
                                 <span>Price</span>
                                 <span>Description</span>
                             </div>
-                            <div v-for="addOn in bookingRecord.addons" :key="addOn.id" class="grid grid-cols-[minmax(0,1fr)_12rem_8rem_minmax(0,1.2fr)] items-center gap-2 border-b border-white/10 px-2.5 py-2 last:border-b-0">
-                                <p class="truncate text-sm font-medium text-white">{{ addOn.name }}</p>
-                                <p class="truncate text-sm text-stone-300">{{ addOnSummary(addOn) || 'Add-On' }}</p>
-                                <p class="text-sm font-semibold text-cyan-100">${{ addOn.price }}</p>
-                                <p class="truncate text-sm text-stone-400">{{ addOn.description || 'No add-on description provided.' }}</p>
+                            <div v-for="item in overviewSelectedItems" :key="item.id" class="grid grid-cols-[8rem_minmax(0,1fr)_12rem_8rem_minmax(0,1.2fr)] items-center gap-2 border-b border-white/10 px-2.5 py-2 last:border-b-0">
+                                <p class="text-sm font-medium text-cyan-100">{{ item.type_label }}</p>
+                                <p class="truncate text-sm font-medium text-white">{{ item.name }}</p>
+                                <p class="truncate text-sm text-stone-300">{{ item.details }}</p>
+                                <p class="text-sm font-semibold text-cyan-100">${{ item.price }}</p>
+                                <p class="truncate text-sm text-stone-400">{{ item.description }}</p>
                             </div>
                         </div>
                     </div>
-                    <p v-else class="border-t border-white/10 px-2.5 py-2.5 text-sm leading-5 text-stone-400">No add-ons were selected for this booking.</p>
+                    <p v-else class="border-t border-white/10 px-2.5 py-2.5 text-sm leading-5 text-stone-400">No package, equipment, or add-ons were selected for this booking.</p>
                 </div>
             </div>
 
@@ -767,7 +879,6 @@ const removeTask = async (task) => {
                         <div>
                             <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
                             <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
-                                <option value="">No status</option>
                                 <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
                             </select>
                         </div>

@@ -115,10 +115,36 @@ class TaskController extends Controller
         ]);
     }
 
+    public function notifications(Request $request, CurrentTenant $currentTenant): JsonResponse
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $user = $request->user();
+
+        abort_unless($user !== null, 401);
+
+        $notifications = Task::query()
+            ->with(['booking', 'status'])
+            ->where('tenant_id', $tenant->id)
+            ->where('assignee_type', Task::ASSIGNEE_USER)
+            ->where('assignee_id', $user->id)
+            ->whereNull('notification_dismissed_at')
+            ->orderByRaw('case when due_date is null then 1 else 0 end')
+            ->orderBy('due_date')
+            ->latest('created_at')
+            ->get()
+            ->map(fn (Task $task) => $this->serializeNotification($task))
+            ->values();
+
+        return response()->json([
+            'notifications' => $notifications,
+        ]);
+    }
+
     private function validateTask(Request $request, Tenant $tenant): array
     {
         $bookingIds = Booking::query()->pluck('id');
-        $statusIds = $this->taskStatuses($tenant)->pluck('id');
+        $taskStatuses = $this->taskStatuses($tenant);
+        $statusIds = $taskStatuses->pluck('id');
         $validated = $request->validate([
             'task_name' => ['required', 'string', 'max:255'],
             'task_duration_hours' => ['nullable', 'numeric', 'min:0'],
@@ -161,6 +187,10 @@ class TaskController extends Controller
 
         unset($validated['assigned_to']);
 
+        if (blank($validated['task_status_id'] ?? null)) {
+            $validated['task_status_id'] = $taskStatuses->firstWhere('name', 'new')['id'] ?? null;
+        }
+
         return $validated;
     }
 
@@ -194,6 +224,25 @@ class TaskController extends Controller
         ];
     }
 
+    private function serializeNotification(Task $task): array
+    {
+        $booking = $task->booking;
+        $bookingLabel = $booking?->quote_number
+            ? sprintf('%s - %s', $booking->quote_number, $booking->entry_name ?: $booking->customer_name)
+            : ($booking?->entry_name ?: $booking?->customer_name);
+
+        return [
+            'id' => $task->id,
+            'title' => $task->task_name,
+            'status' => $task->status?->name ?: 'Open',
+            'due_date_label' => DateFormatter::date($task->due_date, 'No due date'),
+            'booking_label' => $bookingLabel,
+            'task_url' => route('tasks.index'),
+            'booking_url' => $booking ? route('admin.bookings.show', $booking) : null,
+            'dismiss_url' => route('tasks.notifications.dismiss', $task),
+        ];
+    }
+
     private function taskStatuses(Tenant $tenant)
     {
         if ($tenant->taskStatuses()->doesntExist()) {
@@ -203,6 +252,11 @@ class TaskController extends Controller
                     ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
                 ));
         }
+
+        $tenant->taskStatuses()->firstOrCreate(
+            ['name' => 'new'],
+            ['system' => false],
+        );
 
         return $tenant->taskStatuses()
             ->orderBy('name')
@@ -241,6 +295,10 @@ class TaskController extends Controller
                 $tenant,
                 $task,
                 (string) ($recipient['name'] ?? 'there'),
+                $task->booking_id
+                    ? route('admin.bookings.show', $task->booking_id)
+                    : route('tasks.index', ['task' => $task->id]),
+                $task->booking_id ? 'View booking' : 'View task',
             ),
             $recipient,
             [],

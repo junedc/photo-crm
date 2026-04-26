@@ -74,9 +74,12 @@ class PublicCatalogController extends Controller
             'add_ons' => $package->addOns->map(fn ($item) => [
                 'id' => $item->id,
                 'name' => $item->name,
+                'type' => $item->type,
                 'addon_category' => $item->addon_category,
                 'description' => $item->description,
-                'price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'price' => number_format($item->discountedUnitPrice(), 2, '.', ''),
+                'original_price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'discount_percentage' => number_format((float) ($item->discount_percentage ?? 0), 2, '.', ''),
             ])->values()->all(),
             'hourly_prices' => $package->hourlyPrices->map(fn ($tier) => [
                 'id' => $tier->id,

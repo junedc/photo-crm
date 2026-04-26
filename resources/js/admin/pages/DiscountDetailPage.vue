@@ -16,6 +16,7 @@ const deleteForm = ref(null);
 const discountRecord = ref(props.data.discount);
 const clientErrors = ref({});
 const showDeleteConfirm = ref(false);
+const isEditing = ref(false);
 const form = ref({
     code: props.data.discount?.code ?? '',
     name: props.data.discount?.name ?? '',
@@ -88,9 +89,29 @@ const updateDiscount = async () => {
             package_ids: [...(record.package_ids ?? [])],
         };
         clientErrors.value = {};
+        isEditing.value = false;
 
         window.history.replaceState({}, '', record.show_url);
     } catch {}
+};
+
+const startEditing = () => {
+    clientErrors.value = {};
+    form.value = {
+        code: discountRecord.value?.code ?? '',
+        name: discountRecord.value?.name ?? '',
+        starts_at: discountRecord.value?.starts_at ?? '',
+        ends_at: discountRecord.value?.ends_at ?? '',
+        discount_type: discountRecord.value?.discount_type ?? 'percentage',
+        discount_value: discountRecord.value?.discount_value ?? '',
+        package_ids: [...(discountRecord.value?.package_ids ?? [])],
+    };
+    isEditing.value = true;
+};
+
+const cancelEditing = () => {
+    clientErrors.value = {};
+    isEditing.value = false;
 };
 
 const removeDiscount = async () => {
@@ -126,6 +147,13 @@ const assignedPackages = computed(() => discountRecord.value?.packages ?? []);
             <div class="flex items-center gap-3">
                 <button
                     type="button"
+                    class="rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-400/10"
+                    @click="startEditing"
+                >
+                    Edit discount
+                </button>
+                <button
+                    type="button"
                     class="rounded-xl border border-rose-400/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10"
                     @click="removeDiscount"
                 >
@@ -142,7 +170,7 @@ const assignedPackages = computed(() => discountRecord.value?.packages ?? []);
             <input type="hidden" name="_method" value="DELETE">
         </form>
 
-        <div class="mb-4 grid gap-3 lg:grid-cols-4">
+        <div v-if="!isEditing" class="mb-4 grid gap-3 lg:grid-cols-4">
             <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Code</p>
                 <p class="mt-2 text-base font-semibold">{{ discountRecord.code }}</p>
@@ -161,7 +189,7 @@ const assignedPackages = computed(() => discountRecord.value?.packages ?? []);
             </div>
         </div>
 
-        <div class="mb-4 grid gap-4">
+        <div v-if="!isEditing" class="mb-4 grid gap-4">
             <div class="rounded-xl border border-white/10 bg-slate-950/50 p-4">
                 <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Assigned Packages</p>
                 <div class="mt-3 flex flex-wrap gap-2">
@@ -173,7 +201,40 @@ const assignedPackages = computed(() => discountRecord.value?.packages ?? []);
             </div>
         </div>
 
-        <form class="space-y-5" novalidate @submit.prevent="updateDiscount">
+        <section v-if="!isEditing" class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Discount Overview</p>
+                    <h4 class="mt-1 text-sm font-semibold italic">Read-only details</h4>
+                </div>
+                <button type="button" class="rounded-xl bg-violet-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-violet-200" @click="startEditing">
+                    Edit Discount
+                </button>
+            </div>
+
+            <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Name</p>
+                    <p class="mt-2 text-sm font-semibold text-white">{{ discountRecord.name }}</p>
+                </div>
+                <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Discount Type</p>
+                    <p class="mt-2 text-sm font-semibold text-white">{{ discountRecord.discount_type_label }}</p>
+                </div>
+            </div>
+        </section>
+
+        <form v-if="isEditing" class="space-y-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4" novalidate @submit.prevent="updateDiscount">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Edit Discount</p>
+                    <h4 class="mt-1 text-sm font-semibold italic">Update discount details and package assignments</h4>
+                </div>
+                <button type="button" class="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5" @click="cancelEditing">
+                    Cancel
+                </button>
+            </div>
+
             <div class="grid gap-4 lg:grid-cols-2">
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Code</label>

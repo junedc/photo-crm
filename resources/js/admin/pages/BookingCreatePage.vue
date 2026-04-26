@@ -36,6 +36,31 @@ const selectedEquipment = computed(() =>
 const selectedAddOns = computed(() =>
     addOnOptions.value.filter((item) => (createForm.value.add_on_ids ?? []).includes(item.id)),
 );
+const clampDiscountPercentage = (value) => Math.min(100, Math.max(0, Number(value) || 0));
+const clampDiscountAmount = (value) => Math.max(0, Number(value) || 0);
+const formatMoney = (value) => Number(value || 0).toFixed(2);
+const itemDiscountTypeMapKey = (selectionType) => (
+    selectionType === 'equipment' ? 'equipment_discount_types' : 'add_on_discount_types'
+);
+const itemDiscountValueMapKey = (selectionType) => (
+    selectionType === 'equipment' ? 'equipment_discount_values' : 'add_on_discount_values'
+);
+const itemDiscountType = (item) => (
+    createForm.value[itemDiscountTypeMapKey(item.selection_type)]?.[String(item.id)] ?? 'percentage'
+);
+const itemDiscountValue = (item) => (
+    createForm.value[itemDiscountValueMapKey(item.selection_type)]?.[String(item.id)] ?? '0'
+);
+const applyDiscount = (amount, discountType, discountValue) => {
+    const numericAmount = Number(amount || 0);
+
+    if (discountType === 'amount') {
+        return Math.max(0, numericAmount - clampDiscountAmount(discountValue));
+    }
+
+    return numericAmount * (1 - (clampDiscountPercentage(discountValue) / 100));
+};
+const itemFinalPrice = (item) => formatMoney(applyDiscount(item.price_label, itemDiscountType(item), itemDiscountValue(item)));
 const combinedOptionalItems = computed(() => [
     ...equipmentOptions.value.map((item) => ({
         ...item,
@@ -81,6 +106,43 @@ const isEntryBooking = computed(() => createForm.value.booking_kind === 'market_
 const bookingKindLabel = (kind) => bookingKindLabelMap[kind] ?? 'Customer Booking';
 const packageLabel = (entry) => `${entry.name} - $${entry.display_price}`;
 const addOnSummary = (addOn) => [addOn.product_code, addOn.duration].filter(Boolean).join(' - ');
+const setItemDiscountType = (item, value) => {
+    const key = itemDiscountTypeMapKey(item.selection_type);
+    const normalizedValue = value === 'amount' ? 'amount' : 'percentage';
+
+    createForm.value[key] = {
+        ...(createForm.value[key] ?? {}),
+        [String(item.id)]: normalizedValue,
+    };
+};
+const setItemDiscountValue = (item, value) => {
+    const key = itemDiscountValueMapKey(item.selection_type);
+    const normalizedValue = itemDiscountType(item) === 'amount'
+        ? String(clampDiscountAmount(value).toFixed(2))
+        : String(clampDiscountPercentage(value).toFixed(2));
+
+    createForm.value[key] = {
+        ...(createForm.value[key] ?? {}),
+        [String(item.id)]: normalizedValue,
+    };
+};
+const clearItemDiscountValue = (selectionType, id) => {
+    const valueKey = itemDiscountValueMapKey(selectionType);
+    const typeKey = itemDiscountTypeMapKey(selectionType);
+    const currentValues = { ...(createForm.value[valueKey] ?? {}) };
+    const currentTypes = { ...(createForm.value[typeKey] ?? {}) };
+
+    delete currentValues[String(id)];
+    delete currentTypes[String(id)];
+    createForm.value[valueKey] = currentValues;
+    createForm.value[typeKey] = currentTypes;
+};
+const itemDiscountLabel = (selectionType, id) => {
+    const type = createForm.value[itemDiscountTypeMapKey(selectionType)]?.[String(id)] ?? 'percentage';
+    const value = createForm.value[itemDiscountValueMapKey(selectionType)]?.[String(id)] ?? '0';
+
+    return type === 'amount' ? `$${formatMoney(value)}` : `${formatMoney(value)}%`;
+};
 const discountLabel = (discount) => `${discount.code} - ${discount.name}`;
 const discountValueLabel = (discount) => (
     discount.discount_type === 'percentage'
@@ -124,6 +186,7 @@ const resetCreateForm = () => {
         customer_email: '',
         customer_phone: '',
         event_type: props.data.eventTypes?.[0] ?? 'Wedding',
+        venue: '',
         event_date: '',
         start_time: '',
         end_time: '',
@@ -133,6 +196,10 @@ const resetCreateForm = () => {
         discount_id: '',
         equipment_ids: [],
         add_on_ids: [],
+        equipment_discount_types: {},
+        equipment_discount_values: {},
+        add_on_discount_types: {},
+        add_on_discount_values: {},
     };
     createErrors.value = {};
     createWizardStep.value = 1;
@@ -198,9 +265,11 @@ const syncEndTime = () => {
 
 const toggleMultiSelect = (key, id) => {
     const values = new Set(createForm.value[key] ?? []);
+    const selectionType = key === 'equipment_ids' ? 'equipment' : 'add_on';
 
     if (values.has(id)) {
         values.delete(id);
+        clearItemDiscountValue(selectionType, id);
     } else {
         values.add(id);
     }
@@ -294,6 +363,10 @@ const createBooking = async () => {
         errors.event_date = requiredMessage('Event date');
     }
 
+    if (isBlank(createForm.value.venue)) {
+        errors.venue = requiredMessage('Venue');
+    }
+
     if (isBlank(createForm.value.start_time)) {
         errors.start_time = requiredMessage('Start hour');
     }
@@ -316,21 +389,11 @@ const createBooking = async () => {
         return;
     }
 
-    const formData = new FormData();
-    Object.entries(createForm.value).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-            value.forEach((item) => formData.append(`${key}[]`, String(item)));
-            return;
-        }
-
-        formData.append(key, value ?? '');
-    });
-
     try {
         const record = await submitForm({
             url: props.data.bookingCreateUrl,
             method: 'post',
-            data: formData,
+            data: { ...createForm.value },
         });
 
         window.location.href = record.show_url;
@@ -373,6 +436,10 @@ const validateCreateWizardStep = (step) => {
             errors.event_date = requiredMessage('Event date');
         }
 
+        if (isBlank(createForm.value.venue)) {
+            errors.venue = requiredMessage('Venue');
+        }
+
         if (isBlank(createForm.value.start_time)) {
             errors.start_time = requiredMessage('Start hour');
         }
@@ -401,8 +468,8 @@ const validateCreateWizardStep = (step) => {
     createErrors.value = errors;
 
     const stepOneFields = isEntryBooking.value
-        ? [subjectField, 'customer_name', 'customer_email', 'customer_phone', 'event_date', 'start_time', 'total_hours', 'end_time']
-        : [subjectField, 'customer_email', 'customer_phone', 'event_date', 'start_time', 'total_hours', 'end_time', 'event_type'];
+        ? [subjectField, 'customer_name', 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time']
+        : [subjectField, 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time', 'event_type'];
 
     const relevantFieldsByStep = {
         1: stepOneFields,
@@ -506,6 +573,19 @@ const blockCreateSubmit = () => {};
                     </div>
                 </template>
 
+                <div :class="isEntryBooking ? 'sm:col-span-2 xl:col-span-4' : 'sm:col-span-2 xl:col-span-2'">
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Venue</label>
+                    <input v-model="createForm.venue" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'venue') ? 'border-rose-300/60' : ''">
+                    <p v-if="firstError(createValidationErrors, 'venue')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(createValidationErrors, 'venue') }}</p>
+                </div>
+
+                <div v-if="!isEntryBooking" class="sm:col-span-2 xl:col-span-2">
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
+                    <select v-model="createForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_type') ? 'border-rose-300/60' : ''">
+                        <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
+                    </select>
+                </div>
+
                 <div v-if="isEntryBooking" class="sm:col-span-2 xl:col-span-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Invoice Contact</p>
                     <div class="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -539,12 +619,6 @@ const blockCreateSubmit = () => {};
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>
                     <input :value="createForm.end_time" readonly type="text" class="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none" :class="firstError(createValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
-                </div>
-                <div v-if="!isEntryBooking" class="sm:col-span-2 xl:col-span-4">
-                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
-                    <select v-model="createForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_type') ? 'border-rose-300/60' : ''">
-                        <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
-                    </select>
                 </div>
             </div>
         </section>
@@ -595,18 +669,20 @@ const blockCreateSubmit = () => {};
                     <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ (createForm.equipment_ids?.length ?? 0) + (createForm.add_on_ids?.length ?? 0) }}</span>
                 </div>
                 <div class="mt-4 overflow-hidden rounded-xl border border-white/10">
-                    <div class="grid grid-cols-[2.2rem_7rem_minmax(0,1fr)_9rem_6rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                    <div class="grid grid-cols-[2.2rem_6.5rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                         <span></span>
                         <span>Type</span>
                         <span>Item</span>
                         <span>Details</span>
                         <span>Price</span>
+                        <span>Discount</span>
+                        <span>Final</span>
                     </div>
                     <button
                         v-for="item in combinedOptionalItems"
                         :key="`${item.selection_type}-${item.id}`"
                         type="button"
-                        class="grid w-full grid-cols-[2.2rem_7rem_minmax(0,1fr)_9rem_6rem] gap-3 border-t border-white/10 px-3 py-2.5 text-left text-sm transition"
+                        class="grid w-full grid-cols-[2.2rem_6.5rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 border-t border-white/10 px-3 py-2.5 text-left text-sm transition"
                         :class="item.selected ? (item.selection_type === 'equipment' ? 'bg-cyan-300/10 text-white' : 'bg-rose-300/10 text-white') : 'text-stone-300 hover:bg-white/[0.03]'"
                         @click="toggleMultiSelect(item.selection_key, item.id)"
                     >
@@ -619,6 +695,32 @@ const blockCreateSubmit = () => {};
                         <span class="truncate font-medium">{{ item.name }}</span>
                         <span>{{ item.details_label }}</span>
                         <span>${{ item.price_label }}</span>
+                        <span class="flex gap-1">
+                            <select
+                                :value="itemDiscountType(item)"
+                                class="w-[4.2rem] rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1 text-xs text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="!item.selected"
+                                @click.stop
+                                @keydown.stop
+                                @change="setItemDiscountType(item, $event.target.value)"
+                            >
+                                <option value="percentage">%</option>
+                                <option value="amount">$</option>
+                            </select>
+                            <input
+                                :value="itemDiscountValue(item)"
+                                type="number"
+                                min="0"
+                                :max="itemDiscountType(item) === 'percentage' ? 100 : undefined"
+                                step="0.01"
+                                class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1 text-right text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="!item.selected"
+                                @click.stop
+                                @keydown.stop
+                                @input="setItemDiscountValue(item, $event.target.value)"
+                            >
+                        </span>
+                        <span>${{ itemFinalPrice(item) }}</span>
                     </button>
                     <p v-if="!combinedOptionalItems.length" class="px-3 py-3 text-sm text-stone-400">No equipment or add-ons available.</p>
                 </div>
@@ -661,6 +763,7 @@ const blockCreateSubmit = () => {};
                     <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Event</p>
                     <div class="mt-3 space-y-2 text-sm text-stone-300">
                         <p><span class="text-stone-500">Date:</span> <span class="text-white">{{ createForm.event_date || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">Venue:</span> <span class="text-white">{{ createForm.venue || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Start:</span> <span class="text-white">{{ createForm.start_time || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">End:</span> <span class="text-white">{{ createForm.end_time || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Duration:</span> <span class="text-white">{{ createForm.total_hours || '0.00' }} hrs</span></p>
@@ -689,16 +792,20 @@ const blockCreateSubmit = () => {};
                         <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ selectedEquipment.length }}</span>
                     </div>
                     <div class="mt-3 overflow-hidden rounded-xl border border-white/10">
-                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                             <span>Item</span>
                             <span>Category</span>
                             <span>Price</span>
+                            <span>Discount</span>
+                            <span>Final</span>
                         </div>
                         <div v-if="selectedEquipment.length">
-                            <div v-for="item in selectedEquipment" :key="`summary-equipment-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
+                            <div v-for="item in selectedEquipment" :key="`summary-equipment-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
                                 <span class="truncate text-white">{{ item.name }}</span>
                                 <span>{{ item.category || 'Equipment' }}</span>
                                 <span>${{ item.daily_rate }}</span>
+                                <span>{{ itemDiscountLabel('equipment', item.id) }}</span>
+                                <span>${{ formatMoney(applyDiscount(item.daily_rate, createForm.equipment_discount_types?.[String(item.id)] ?? 'percentage', createForm.equipment_discount_values?.[String(item.id)] ?? 0)) }}</span>
                             </div>
                         </div>
                         <p v-else class="px-3 py-3 text-sm text-stone-400">No equipment selected.</p>
@@ -710,16 +817,20 @@ const blockCreateSubmit = () => {};
                         <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ selectedAddOns.length }}</span>
                     </div>
                     <div class="mt-3 overflow-hidden rounded-xl border border-white/10">
-                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                             <span>Item</span>
                             <span>Details</span>
                             <span>Price</span>
+                            <span>Discount</span>
+                            <span>Final</span>
                         </div>
                         <div v-if="selectedAddOns.length">
-                            <div v-for="item in selectedAddOns" :key="`summary-addon-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
+                            <div v-for="item in selectedAddOns" :key="`summary-addon-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
                                 <span class="truncate text-white">{{ item.name }}</span>
                                 <span>{{ addOnSummary(item) || 'Add-On' }}</span>
                                 <span>${{ item.price }}</span>
+                                <span>{{ itemDiscountLabel('add_on', item.id) }}</span>
+                                <span>${{ formatMoney(applyDiscount(item.price, createForm.add_on_discount_types?.[String(item.id)] ?? 'percentage', createForm.add_on_discount_values?.[String(item.id)] ?? 0)) }}</span>
                             </div>
                         </div>
                         <p v-else class="px-3 py-3 text-sm text-stone-400">No add-ons selected.</p>

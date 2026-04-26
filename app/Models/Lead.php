@@ -21,6 +21,7 @@ class Lead extends Model
         'customer_email',
         'customer_phone',
         'event_date',
+        'venue',
         'event_location',
         'notes',
         'status',

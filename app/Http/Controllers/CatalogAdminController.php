@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Equipment;
+use App\Models\InventoryItemCategory;
 use App\Models\Booking;
 use App\Models\InventoryItem;
 use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
+use App\Models\Task;
 use App\Models\Tenant;
 use App\Support\DateFormatter;
 use App\Support\TenantStatuses;
@@ -33,6 +35,11 @@ class CatalogAdminController extends Controller
         $addOns = InventoryItem::query()->latest()->get();
         $bookings = Booking::query()->latest()->get();
         $leads = Lead::query()->latest()->get();
+        $tasks = Task::query()
+            ->with(['booking', 'status'])
+            ->latest('due_date')
+            ->latest('created_at')
+            ->get();
         $upcomingBookings = Booking::query()
             ->with('package')
             ->whereDate('event_date', '>=', now()->toDateString())
@@ -62,6 +69,40 @@ class CatalogAdminController extends Controller
                 'package_name' => $booking->package?->name,
                 'show_url' => route('admin.bookings.show', $booking),
             ])->values()->all(),
+            'taskBuckets' => [
+                'unassigned' => [
+                    'count' => $tasks->filter(fn (Task $task) => blank($task->assignee_type) || blank($task->assignee_id))->count(),
+                    'tasks' => $tasks
+                        ->filter(fn (Task $task) => blank($task->assignee_type) || blank($task->assignee_id))
+                        ->take(4)
+                        ->map(fn (Task $task) => [
+                            'id' => $task->id,
+                            'task_name' => $task->task_name,
+                            'booking_label' => $task->booking?->quote_number
+                                ? sprintf('%s - %s', $task->booking->quote_number, $task->booking->entry_name ?: $task->booking->customer_name)
+                                : ($task->booking?->entry_name ?: $task->booking?->customer_name),
+                            'due_date_label' => DateFormatter::date($task->due_date, 'No due date'),
+                        ])
+                        ->values()
+                        ->all(),
+                ],
+                'no_status' => [
+                    'count' => $tasks->whereNull('task_status_id')->count(),
+                    'tasks' => $tasks
+                        ->whereNull('task_status_id')
+                        ->take(4)
+                        ->map(fn (Task $task) => [
+                            'id' => $task->id,
+                            'task_name' => $task->task_name,
+                            'booking_label' => $task->booking?->quote_number
+                                ? sprintf('%s - %s', $task->booking->quote_number, $task->booking->entry_name ?: $task->booking->customer_name)
+                                : ($task->booking?->entry_name ?: $task->booking?->customer_name),
+                            'due_date_label' => DateFormatter::date($task->due_date, 'No due date'),
+                        ])
+                        ->values()
+                        ->all(),
+                ],
+            ],
             'routes' => $this->baseRoutes(),
         ]);
     }
@@ -166,7 +207,8 @@ class CatalogAdminController extends Controller
                 'create' => route('addons.create'),
                 'addons' => route('addons.index'),
             ],
-            'addOnCategories' => $this->addOnCategories(),
+            'addOnTypes' => $this->addOnTypes(),
+            'inventoryItemCategoryOptions' => $this->inventoryItemCategoryOptions($tenant),
         ]);
     }
 
@@ -183,7 +225,8 @@ class CatalogAdminController extends Controller
                 'addons' => route('addons.index'),
             ],
             'addon' => $this->serializeAddOn($addon),
-            'addOnCategories' => $this->addOnCategories(),
+            'addOnTypes' => $this->addOnTypes(),
+            'inventoryItemCategoryOptions' => $this->inventoryItemCategoryOptions($tenant),
         ]);
     }
 
@@ -539,10 +582,12 @@ class CatalogAdminController extends Controller
         $data = $request->validate([
             'sku' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
-            'addon_category' => ['nullable', Rule::in($this->addOnCategories())],
+            'type' => ['required', Rule::in($this->addOnTypes())],
+            'inventory_item_category_id' => ['nullable', Rule::exists('inventory_item_categories', 'id')->where(fn ($query) => $query->where('tenant_id', $tenant?->id))],
             'is_publicly_displayed' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
+            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'duration' => ['nullable', 'string', 'max:255'],
             'due_days_before_event' => ['nullable', 'integer', 'min:0'],
             'photo' => ['nullable', 'image', 'max:4096'],
@@ -558,7 +603,13 @@ class CatalogAdminController extends Controller
             'maintenance_notes' => null,
         ];
 
-        if (($data['addon_category'] ?? null) !== 'Action') {
+        $data['discount_percentage'] = (float) ($data['discount_percentage'] ?? 0);
+        $category = ! empty($data['inventory_item_category_id'])
+            ? InventoryItemCategory::query()->find($data['inventory_item_category_id'])
+            : null;
+        $data['addon_category'] = $category?->name;
+
+        if (($data['type'] ?? null) !== 'Action') {
             $data['due_days_before_event'] = null;
         }
 
@@ -680,13 +731,29 @@ class CatalogAdminController extends Controller
                 'addons' => route('addons.index'),
             ],
             'addons' => $this->serializeCollection($addons, fn (InventoryItem $addon) => $this->serializeAddOn($addon)),
-            'addOnCategories' => $this->addOnCategories(),
+            'addOnTypes' => $this->addOnTypes(),
         ]);
     }
 
-    private function addOnCategories(): array
+    private function addOnTypes(): array
     {
         return ['Action', 'Items'];
+    }
+
+    private function inventoryItemCategoryOptions(?Tenant $tenant): array
+    {
+        if (! $tenant instanceof Tenant) {
+            return [];
+        }
+
+        return $tenant->inventoryItemCategories()
+            ->get()
+            ->map(fn (InventoryItemCategory $category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+            ])
+            ->values()
+            ->all();
     }
 
     private function renderLeadsPage(CurrentTenant $currentTenant, Request $request): View|JsonResponse
@@ -843,11 +910,14 @@ class CatalogAdminController extends Controller
                 ? $package->addOns->map(fn (InventoryItem $addon) => [
                     'id' => $addon->id,
                     'name' => $addon->name,
+                    'type' => $addon->type,
                     'addon_category' => $addon->addon_category,
                     'product_code' => $addon->sku,
                     'description' => $addon->description,
                     'duration' => $addon->duration,
-                    'price' => number_format((float) $addon->unit_price, 2, '.', ''),
+                    'price' => number_format($addon->discountedUnitPrice(), 2, '.', ''),
+                    'original_price' => number_format((float) $addon->unit_price, 2, '.', ''),
+                    'discount_percentage' => number_format((float) ($addon->discount_percentage ?? 0), 2, '.', ''),
                     'photo_url' => $addon->photo_path ? $this->publicStorageUrl($addon->photo_path) : null,
                 ])->values()->all()
                 : [],
@@ -893,10 +963,16 @@ class CatalogAdminController extends Controller
             'id' => $addon->id,
             'product_code' => $addon->sku,
             'name' => $addon->name,
+            'type' => $addon->type,
+            'inventory_item_category_id' => $addon->inventory_item_category_id,
+            'inventory_item_category_name' => $addon->inventoryItemCategory?->name ?? $addon->addon_category,
             'addon_category' => $addon->addon_category,
             'is_publicly_displayed' => (bool) $addon->is_publicly_displayed,
             'description' => $addon->description,
-            'price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'unit_price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'price' => number_format($addon->discountedUnitPrice(), 2, '.', ''),
+            'original_price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'discount_percentage' => number_format((float) ($addon->discount_percentage ?? 0), 2, '.', ''),
             'duration' => $addon->duration,
             'due_days_before_event' => $addon->due_days_before_event,
             'photo_url' => $addon->photo_path ? $this->publicStorageUrl($addon->photo_path) : null,
@@ -947,11 +1023,17 @@ class CatalogAdminController extends Controller
             'id' => $addon->id,
             'name' => $addon->name,
             'product_code' => $addon->sku,
+            'type' => $addon->type,
+            'inventory_item_category_id' => $addon->inventory_item_category_id,
+            'inventory_item_category_name' => $addon->inventoryItemCategory?->name ?? $addon->addon_category,
             'addon_category' => $addon->addon_category,
             'is_publicly_displayed' => (bool) $addon->is_publicly_displayed,
             'duration' => $addon->duration,
             'due_days_before_event' => $addon->due_days_before_event,
-            'price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'unit_price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'price' => number_format($addon->discountedUnitPrice(), 2, '.', ''),
+            'original_price' => number_format((float) $addon->unit_price, 2, '.', ''),
+            'discount_percentage' => number_format((float) ($addon->discount_percentage ?? 0), 2, '.', ''),
         ];
     }
 

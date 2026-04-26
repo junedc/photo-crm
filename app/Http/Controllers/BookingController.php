@@ -15,6 +15,7 @@ use App\Models\InventoryItem;
 use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
+use App\Models\Tenant;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\User;
@@ -98,7 +99,7 @@ class BookingController extends Controller
                 ->get(),
             'addOns' => $addOns,
             'addOnCategories' => $addOns
-                ->pluck('addon_category')
+                ->pluck('type')
                 ->filter()
                 ->unique()
                 ->sort()
@@ -152,6 +153,7 @@ class BookingController extends Controller
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'event_date' => ['nullable', 'date'],
+            'venue' => ['nullable', 'string', 'max:255'],
             'event_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -162,6 +164,7 @@ class BookingController extends Controller
             $data['customer_email'] ?? null,
             $data['customer_phone'] ?? null,
             $data['event_date'] ?? null,
+            $data['venue'] ?? null,
             $data['event_location'] ?? null,
             $data['notes'] ?? null,
         ])->contains(fn ($value) => filled($value));
@@ -179,6 +182,7 @@ class BookingController extends Controller
             'customer_email' => $data['customer_email'] ?? null,
             'customer_phone' => $data['customer_phone'] ?? null,
             'event_date' => $data['event_date'] ?? null,
+            'venue' => $data['venue'] ?? null,
             'event_location' => $data['event_location'] ?? null,
             'notes' => $data['notes'] ?? null,
             'status' => 'draft',
@@ -214,6 +218,7 @@ class BookingController extends Controller
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
             'event_type' => ['required', Rule::in($this->eventTypes())],
+            'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -241,12 +246,20 @@ class BookingController extends Controller
                     ->where('tenant_id', $tenantId)
                     ->where('category', 'add-on')),
             ],
+            'add_on_discount_types' => ['nullable', 'array'],
+            'add_on_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+            'add_on_discount_values' => ['nullable', 'array'],
+            'add_on_discount_values.*' => ['nullable', 'numeric', 'min:0'],
             'equipment_ids' => ['nullable', 'array'],
             'equipment_ids.*' => [
                 'integer',
                 Rule::exists('equipment', 'id')->where(fn ($query) => $query
                     ->where('tenant_id', $tenantId)),
             ],
+            'equipment_discount_types' => ['nullable', 'array'],
+            'equipment_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+            'equipment_discount_values' => ['nullable', 'array'],
+            'equipment_discount_values.*' => ['nullable', 'numeric', 'min:0'],
         ], [
             'start_time.regex' => 'Start hour must be on the hour or half hour.',
             'end_time.regex' => 'End hour must be on the hour or half hour.',
@@ -254,6 +267,14 @@ class BookingController extends Controller
 
         $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
         $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
+        $addOnDiscountSelections = $this->normalizedItemDiscountSelections(
+            $data['add_on_discount_types'] ?? [],
+            $data['add_on_discount_values'] ?? [],
+        );
+        $equipmentDiscountSelections = $this->normalizedItemDiscountSelections(
+            $data['equipment_discount_types'] ?? [],
+            $data['equipment_discount_values'] ?? [],
+        );
         $package = $this->resolvePackageForSelection($data);
         $this->ensurePackageTimingSelection($package, $data);
         $selectedEquipment = $this->resolveEquipmentSelection($equipmentIds);
@@ -261,6 +282,8 @@ class BookingController extends Controller
         unset($data['lead_token']);
         unset($data['add_on_ids']);
         unset($data['equipment_ids']);
+        unset($data['add_on_discount_types'], $data['add_on_discount_values']);
+        unset($data['equipment_discount_types'], $data['equipment_discount_values']);
         $data['booking_kind'] = $data['booking_kind'] ?? 'customer';
         $data['customer_id'] = $this->resolveCustomer($data)->id;
         $data['package_price'] = $this->resolvePackagePrice($data, $package, ! $request->expectsJson());
@@ -268,8 +291,8 @@ class BookingController extends Controller
         $data['discount_amount'] = 0;
 
         $booking = Booking::query()->create($data);
-        $booking->addOns()->sync($addOnIds);
-        $booking->equipment()->sync($equipmentIds);
+        $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
+        $booking->equipment()->sync($this->bookingItemSyncPayload($equipmentIds, $equipmentDiscountSelections));
         $this->syncPackageActionTasks($booking);
         $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
         $this->markLeadAsBooked($lead, $booking);
@@ -290,6 +313,7 @@ class BookingController extends Controller
                 'customer_email',
                 'customer_phone',
                 'event_type',
+                'venue',
                 'event_date',
                 'start_time',
                 'end_time',
@@ -323,6 +347,7 @@ class BookingController extends Controller
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
             'event_type' => ['required', Rule::in($this->eventTypes())],
+            'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -351,12 +376,20 @@ class BookingController extends Controller
                     ->where('tenant_id', $tenantId)
                     ->where('category', 'add-on')),
             ],
+            'add_on_discount_types' => ['nullable', 'array'],
+            'add_on_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+            'add_on_discount_values' => ['nullable', 'array'],
+            'add_on_discount_values.*' => ['nullable', 'numeric', 'min:0'],
             'equipment_ids' => ['nullable', 'array'],
             'equipment_ids.*' => [
                 'integer',
                 Rule::exists('equipment', 'id')->where(fn ($query) => $query
                     ->where('tenant_id', $tenantId)),
             ],
+            'equipment_discount_types' => ['nullable', 'array'],
+            'equipment_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+            'equipment_discount_values' => ['nullable', 'array'],
+            'equipment_discount_values.*' => ['nullable', 'numeric', 'min:0'],
         ], [
             'terms_accepted.accepted' => 'Please accept the terms and conditions before continuing to payment.',
             'start_time.regex' => 'Start hour must be on the hour or half hour.',
@@ -369,10 +402,18 @@ class BookingController extends Controller
         [$booking, $invoice, $depositInstallment] = DB::transaction(function () use ($data, $invoiceBuilder, $package) {
             $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
             $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
+            $addOnDiscountSelections = $this->normalizedItemDiscountSelections(
+                $data['add_on_discount_types'] ?? [],
+                $data['add_on_discount_values'] ?? [],
+            );
+            $equipmentDiscountSelections = $this->normalizedItemDiscountSelections(
+                $data['equipment_discount_types'] ?? [],
+                $data['equipment_discount_values'] ?? [],
+            );
             $selectedEquipment = $this->resolveEquipmentSelection($equipmentIds);
             $lead = $this->resolveLead($data['lead_token'] ?? null);
             $bookingData = $data;
-            unset($bookingData['lead_token'], $bookingData['terms_accepted'], $bookingData['add_on_ids'], $bookingData['equipment_ids']);
+            unset($bookingData['lead_token'], $bookingData['terms_accepted'], $bookingData['add_on_ids'], $bookingData['equipment_ids'], $bookingData['add_on_discount_types'], $bookingData['add_on_discount_values'], $bookingData['equipment_discount_types'], $bookingData['equipment_discount_values']);
             $bookingData['booking_kind'] = $bookingData['booking_kind'] ?? 'customer';
             $quoteResponseStatus = app(CurrentTenant::class)->get()
                 ? TenantStatuses::firstOrCreateWorkspaceStatus(app(CurrentTenant::class)->get(), TenantStatuses::SCOPE_QUOTE_RESPONSE, 'accepted')
@@ -387,8 +428,8 @@ class BookingController extends Controller
             $bookingData['discount_amount'] = $discountAmount;
 
             $booking = Booking::query()->create($bookingData);
-            $booking->addOns()->sync($addOnIds);
-            $booking->equipment()->sync($equipmentIds);
+            $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
+            $booking->equipment()->sync($this->bookingItemSyncPayload($equipmentIds, $equipmentDiscountSelections));
             $this->syncPackageActionTasks($booking);
             $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
             $this->markLeadAsBooked($lead, $booking);
@@ -459,6 +500,7 @@ class BookingController extends Controller
             'customer_email',
             'customer_phone',
             'event_type',
+            'venue',
             'event_date',
             'start_time',
             'end_time',
@@ -503,6 +545,7 @@ class BookingController extends Controller
                 'customer_email' => ['required', 'email', 'max:255'],
                 'customer_phone' => ['required', 'string', 'max:50'],
                 'event_type' => ['required', Rule::in($this->eventTypes())],
+                'venue' => ['nullable', 'string', 'max:255'],
                 'event_date' => ['required', 'date'],
                 'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
                 'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -530,12 +573,20 @@ class BookingController extends Controller
                         ->where('tenant_id', $tenantId)
                         ->where('category', 'add-on')),
                 ],
+                'add_on_discount_types' => ['nullable', 'array'],
+                'add_on_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+                'add_on_discount_values' => ['nullable', 'array'],
+                'add_on_discount_values.*' => ['nullable', 'numeric', 'min:0'],
                 'equipment_ids' => ['nullable', 'array'],
                 'equipment_ids.*' => [
                     'integer',
                     Rule::exists('equipment', 'id')->where(fn ($query) => $query
                         ->where('tenant_id', $tenantId)),
                 ],
+                'equipment_discount_types' => ['nullable', 'array'],
+                'equipment_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
+                'equipment_discount_values' => ['nullable', 'array'],
+                'equipment_discount_values.*' => ['nullable', 'numeric', 'min:0'],
             ], [
                 'start_time.regex' => 'Start hour must be on the hour or half hour.',
                 'end_time.regex' => 'End hour must be on the hour or half hour.',
@@ -545,12 +596,26 @@ class BookingController extends Controller
             $data['booking_status_id'] = $status?->id;
             $data['status'] = $status?->name ?? $booking->status;
 
+            if ($this->bookingInvoiceAmountLocked($booking) && $this->bookingFinancialSelectionChanged($booking, $data)) {
+                throw ValidationException::withMessages([
+                    'invoice' => 'Invoice amounts cannot be changed after the invoice has been partially or fully paid.',
+                ]);
+            }
+
             $package = $this->resolvePackageForSelection($data);
             $this->ensurePackageTimingSelection($package, $data);
             $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
             $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
+            $addOnDiscountSelections = $this->normalizedItemDiscountSelections(
+                $data['add_on_discount_types'] ?? [],
+                $data['add_on_discount_values'] ?? [],
+            );
+            $equipmentDiscountSelections = $this->normalizedItemDiscountSelections(
+                $data['equipment_discount_types'] ?? [],
+                $data['equipment_discount_values'] ?? [],
+            );
             $bookingData = $data;
-            unset($bookingData['add_on_ids'], $bookingData['equipment_ids']);
+            unset($bookingData['add_on_ids'], $bookingData['equipment_ids'], $bookingData['add_on_discount_types'], $bookingData['add_on_discount_values'], $bookingData['equipment_discount_types'], $bookingData['equipment_discount_values']);
             $bookingData['booking_kind'] = $bookingData['booking_kind'] ?? 'customer';
             $bookingData['customer_id'] = $this->resolveCustomer($bookingData)->id;
             $bookingData['package_price'] = $this->resolvePackagePrice($bookingData, $package, true);
@@ -558,10 +623,10 @@ class BookingController extends Controller
             $bookingData['discount_id'] = $discountId;
             $bookingData['discount_amount'] = $discountAmount;
 
-            DB::transaction(function () use ($booking, $bookingData, $addOnIds, $equipmentIds): void {
+            DB::transaction(function () use ($booking, $bookingData, $addOnIds, $equipmentIds, $addOnDiscountSelections, $equipmentDiscountSelections): void {
                 $booking->update($bookingData);
-                $booking->addOns()->sync($addOnIds);
-                $booking->equipment()->sync($equipmentIds);
+                $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
+                $booking->equipment()->sync($this->bookingItemSyncPayload($equipmentIds, $equipmentDiscountSelections));
                 $this->syncPackageActionTasks($booking);
             });
         }
@@ -815,9 +880,12 @@ class BookingController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'product_code' => $item->sku,
+                'type' => $item->type,
                 'addon_category' => $item->addon_category,
                 'duration' => $item->duration,
-                'price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'price' => number_format($item->discountedUnitPrice(), 2, '.', ''),
+                'original_price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'discount_percentage' => number_format((float) ($item->discount_percentage ?? 0), 2, '.', ''),
             ])->values()->all(),
             'discountOptions' => $this->serializeDiscountOptions($this->availableDiscounts()),
         ];
@@ -828,6 +896,8 @@ class BookingController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = (string) $request->query('status', 'all');
         $bookingKind = (string) $request->query('booking_kind', 'all');
+        $eventDateFrom = trim((string) $request->query('event_date_from', ''));
+        $eventDateTo = trim((string) $request->query('event_date_to', ''));
 
         return Booking::query()
             ->with(['package', 'addOns', 'equipment', 'discount', 'invoice.installments'])
@@ -843,6 +913,8 @@ class BookingController extends Controller
             })
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when(in_array($bookingKind, $this->bookingKinds(), true), fn ($query) => $query->where('booking_kind', $bookingKind))
+            ->when($eventDateFrom !== '', fn ($query) => $query->whereDate('event_date', '>=', $eventDateFrom))
+            ->when($eventDateTo !== '', fn ($query) => $query->whereDate('event_date', '<=', $eventDateTo))
             ->latest()
             ->paginate(10);
     }
@@ -992,6 +1064,7 @@ class BookingController extends Controller
             'discount_amount' => number_format((float) ($booking->discount_amount ?? 0), 2, '.', ''),
             'event_type' => $booking->event_type,
             'event_type_label' => $booking->event_type ? str($booking->event_type)->title()->toString() : null,
+            'venue' => $booking->venue,
             'event_date' => DateFormatter::inputDate($booking->event_date),
             'event_date_label' => DateFormatter::date($booking->event_date),
             'start_time' => $this->timeValue($booking->start_time),
@@ -1033,9 +1106,19 @@ class BookingController extends Controller
                 'id' => $item->id,
                 'product_code' => $item->sku,
                 'name' => $item->name,
+                'type' => $item->type,
                 'addon_category' => $item->addon_category,
                 'description' => $item->description,
-                'price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'price' => number_format($item->discountedUnitPriceForBookingSelection(
+                    $item->pivot?->discount_type,
+                    $item->pivot?->discount_value,
+                    (float) ($item->pivot?->discount_percentage ?? 0),
+                ), 2, '.', ''),
+                'original_price' => number_format((float) $item->unit_price, 2, '.', ''),
+                'discount_percentage' => number_format((float) ($item->discount_percentage ?? 0), 2, '.', ''),
+                'booking_discount_percentage' => number_format((float) ($item->pivot?->discount_percentage ?? 0), 2, '.', ''),
+                'booking_discount_type' => $item->pivot?->discount_type ?? 'percentage',
+                'booking_discount_value' => number_format((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2, '.', ''),
                 'duration' => $item->duration,
                 'photo_url' => $item->photo_path ? Storage::disk('public')->url($item->photo_path) : null,
             ])->values()->all(),
@@ -1043,11 +1126,31 @@ class BookingController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'category' => $item->category,
-                'price' => number_format((float) $item->daily_rate, 2, '.', ''),
+                'price' => number_format($item->discountedDailyRateForBooking(
+                    $item->pivot?->discount_type,
+                    $item->pivot?->discount_value,
+                    (float) ($item->pivot?->discount_percentage ?? 0),
+                ), 2, '.', ''),
+                'original_price' => number_format((float) $item->daily_rate, 2, '.', ''),
+                'booking_discount_percentage' => number_format((float) ($item->pivot?->discount_percentage ?? 0), 2, '.', ''),
+                'booking_discount_type' => $item->pivot?->discount_type ?? 'percentage',
+                'booking_discount_value' => number_format((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2, '.', ''),
                 'photo_url' => $item->photo_path ? Storage::disk('public')->url($item->photo_path) : null,
             ])->values()->all(),
             'add_on_ids' => $booking->addOns->pluck('id')->values()->all(),
             'equipment_ids' => $booking->equipment->pluck('id')->values()->all(),
+            'add_on_discount_types' => $booking->addOns->mapWithKeys(fn (InventoryItem $item) => [
+                (string) $item->id => $item->pivot?->discount_type ?? 'percentage',
+            ])->all(),
+            'add_on_discount_values' => $booking->addOns->mapWithKeys(fn (InventoryItem $item) => [
+                (string) $item->id => number_format((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2, '.', ''),
+            ])->all(),
+            'equipment_discount_types' => $booking->equipment->mapWithKeys(fn (Equipment $item) => [
+                (string) $item->id => $item->pivot?->discount_type ?? 'percentage',
+            ])->all(),
+            'equipment_discount_values' => $booking->equipment->mapWithKeys(fn (Equipment $item) => [
+                (string) $item->id => number_format((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2, '.', ''),
+            ])->all(),
             'tasks' => $booking->tasks
                 ->sortByDesc(fn (Task $task) => $task->created_at)
                 ->values()
@@ -1099,6 +1202,11 @@ class BookingController extends Controller
                 ));
         }
 
+        $tenant->taskStatuses()->firstOrCreate(
+            ['name' => 'new'],
+            ['system' => false],
+        );
+
         return $tenant->taskStatuses()
             ->orderBy('name')
             ->get()
@@ -1114,7 +1222,7 @@ class BookingController extends Controller
         $booking->loadMissing(['package.addOns']);
 
         $actionItems = collect($booking->package?->addOns ?? [])
-            ->filter(fn (InventoryItem $item) => strcasecmp((string) $item->addon_category, 'Action') === 0)
+            ->filter(fn (InventoryItem $item) => strcasecmp((string) $item->type, 'Action') === 0)
             ->values();
 
         $desiredIds = $actionItems->pluck('id')->filter()->values()->all();
@@ -1321,6 +1429,102 @@ class BookingController extends Controller
         ];
     }
 
+    private function normalizedItemDiscountSelections(array $discountTypes, array $discountValues): array
+    {
+        return collect($discountValues)
+            ->mapWithKeys(function ($discountValue, $id) use ($discountTypes): array {
+                $normalizedType = ($discountTypes[$id] ?? 'percentage') === 'amount' ? 'amount' : 'percentage';
+                $normalizedValue = max(0, (float) $discountValue);
+
+                if ($normalizedType === 'percentage') {
+                    $normalizedValue = min(100, $normalizedValue);
+                }
+
+                return [
+                    (int) $id => [
+                        'discount_type' => $normalizedType,
+                        'discount_value' => round($normalizedValue, 2),
+                        'discount_percentage' => $normalizedType === 'percentage' ? round($normalizedValue, 2) : 0,
+                    ],
+                ];
+            })
+            ->all();
+    }
+
+    private function bookingItemSyncPayload(array $ids, array $discountSelections): array
+    {
+        return collect($ids)
+            ->mapWithKeys(fn ($id) => [
+                (int) $id => ($discountSelections[(int) $id] ?? [
+                    'discount_type' => 'percentage',
+                    'discount_value' => 0,
+                    'discount_percentage' => 0,
+                ]),
+            ])
+            ->all();
+    }
+
+    private function bookingInvoiceAmountLocked(Booking $booking): bool
+    {
+        $booking->loadMissing('invoice');
+
+        if (! $booking->invoice instanceof Invoice) {
+            return false;
+        }
+
+        return in_array($booking->invoice->status, ['partially_paid', 'paid'], true)
+            || (float) ($booking->invoice->amount_paid ?? 0) > 0;
+    }
+
+    private function bookingFinancialSelectionChanged(Booking $booking, array $data): bool
+    {
+        $booking->loadMissing(['package.hourlyPrices', 'addOns', 'equipment']);
+
+        $currentPackageHourlyPriceId = $booking->package
+            ? $this->matchPackageTimingByDuration($booking->package, $booking->total_hours)?->id
+            : null;
+        $requestedAddOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $requestedEquipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $currentAddOnIds = $booking->addOns->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $currentEquipmentIds = $booking->equipment->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $requestedAddOnDiscounts = $this->normalizedItemDiscountSelections(
+            $data['add_on_discount_types'] ?? [],
+            $data['add_on_discount_values'] ?? [],
+        );
+        $requestedEquipmentDiscounts = $this->normalizedItemDiscountSelections(
+            $data['equipment_discount_types'] ?? [],
+            $data['equipment_discount_values'] ?? [],
+        );
+        $currentAddOnDiscounts = $booking->addOns->mapWithKeys(fn (InventoryItem $item) => [
+            (int) $item->id => [
+                'discount_type' => $item->pivot?->discount_type ?? 'percentage',
+                'discount_value' => round((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2),
+                'discount_percentage' => round((float) ($item->pivot?->discount_percentage ?? 0), 2),
+            ],
+        ])->all();
+        $currentEquipmentDiscounts = $booking->equipment->mapWithKeys(fn (Equipment $item) => [
+            (int) $item->id => [
+                'discount_type' => $item->pivot?->discount_type ?? 'percentage',
+                'discount_value' => round((float) ($item->pivot?->discount_value ?? $item->pivot?->discount_percentage ?? 0), 2),
+                'discount_percentage' => round((float) ($item->pivot?->discount_percentage ?? 0), 2),
+            ],
+        ])->all();
+
+        ksort($requestedAddOnDiscounts);
+        ksort($requestedEquipmentDiscounts);
+        ksort($currentAddOnDiscounts);
+        ksort($currentEquipmentDiscounts);
+
+        return (int) ($data['package_id'] ?? 0) !== (int) ($booking->package_id ?? 0)
+            || (int) ($data['package_hourly_price_id'] ?? 0) !== (int) ($currentPackageHourlyPriceId ?? 0)
+            || number_format((float) ($data['total_hours'] ?? 0), 2, '.', '') !== number_format((float) ($booking->total_hours ?? 0), 2, '.', '')
+            || (int) ($data['discount_id'] ?? 0) !== (int) ($booking->discount_id ?? 0)
+            || $requestedAddOnIds !== $currentAddOnIds
+            || $requestedEquipmentIds !== $currentEquipmentIds
+            || $requestedAddOnDiscounts !== $currentAddOnDiscounts
+            || $requestedEquipmentDiscounts !== $currentEquipmentDiscounts;
+    }
+
     private function ensurePackageTimingSelection(?Package $package, array &$data): void
     {
         if ($package === null) {
@@ -1421,6 +1625,7 @@ class BookingController extends Controller
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
             'event_date' => $booking->event_date,
+            'venue' => $booking->venue,
             'event_location' => $booking->event_location,
             'notes' => $booking->notes,
             'status' => 'booked',

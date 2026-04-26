@@ -5,7 +5,11 @@
         : 'None selected';
     $tenantLogoUrl = $booking->tenant?->logo_path ? url(\Illuminate\Support\Facades\Storage::disk('public')->url($booking->tenant->logo_path)) : null;
     $packagePrice = (float) ($booking->package_price ?? $booking->package?->base_price ?? 0);
-    $addOnTotal = (float) ($booking->relationLoaded('addOns') ? $booking->addOns->sum('unit_price') : 0);
+    $addOnTotal = (float) ($booking->relationLoaded('addOns') ? $booking->addOns->sum(fn ($addOn) => $addOn->discountedUnitPriceForBookingSelection(
+        $addOn->pivot?->discount_type,
+        $addOn->pivot?->discount_value,
+        (float) ($addOn->pivot?->discount_percentage ?? 0),
+    )) : 0);
     $travelFee = (float) ($booking->travel_fee ?? 0);
     $discountAmount = (float) ($booking->discount_amount ?? 0);
     $bookingTotal = max(0, $packagePrice + $addOnTotal + $travelFee - $discountAmount);

@@ -13,6 +13,8 @@ const bookings = computed(() => bookingList.value);
 const bookingSearch = ref('');
 const bookingStatusFilter = ref('all');
 const bookingKindFilter = ref('all');
+const bookingDateFrom = ref('');
+const bookingDateTo = ref('');
 const pagination = ref(props.data.pagination ?? { total: bookings.value.length, has_more: false, next_page: null });
 const loadingMore = ref(false);
 let requestId = 0;
@@ -38,6 +40,8 @@ const fetchBookings = async (page = 1, append = false) => {
         search: bookingSearch.value.trim(),
         status: bookingStatusFilter.value,
         booking_kind: bookingKindFilter.value,
+        event_date_from: bookingDateFrom.value,
+        event_date_to: bookingDateTo.value,
     });
 
     try {
@@ -63,7 +67,7 @@ const fetchBookings = async (page = 1, append = false) => {
     }
 };
 
-watch([bookingSearch, bookingStatusFilter, bookingKindFilter], () => {
+watch([bookingSearch, bookingStatusFilter, bookingKindFilter, bookingDateFrom, bookingDateTo], () => {
     fetchBookings(1, false);
 });
 
@@ -93,24 +97,33 @@ const loadMoreBookings = () => pagination.value.next_page && fetchBookings(pagin
                     </a>
                 </div>
             </div>
-            <div class="mt-3 grid gap-2">
-                <input v-model="bookingSearch" type="text" placeholder="Search name, quote number, email or package" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
-                <div class="grid gap-2 sm:grid-cols-2">
-                    <label>
-                        <span class="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-500">Status</span>
-                        <select v-model="bookingStatusFilter" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+            <div class="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1.5fr)_180px_180px_150px_150px]">
+                <label class="min-w-0">
+                    <span class="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">Search</span>
+                    <input v-model="bookingSearch" type="text" placeholder="Name, quote, email, package" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                </label>
+                <label>
+                    <span class="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">Status</span>
+                    <select v-model="bookingStatusFilter" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
                             <option value="all">All statuses</option>
                             <option v-for="status in bookingStatuses" :key="status" :value="status">{{ statusLabel(status) }}</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span class="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-500">Booking Type</span>
-                        <select v-model="bookingKindFilter" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                    </select>
+                </label>
+                <label>
+                    <span class="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">Booking Type</span>
+                    <select v-model="bookingKindFilter" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/50">
                             <option value="all">All types</option>
                             <option v-for="kind in bookingKinds" :key="kind" :value="kind">{{ bookingKindLabel(kind) }}</option>
-                        </select>
-                    </label>
-                </div>
+                    </select>
+                </label>
+                <label>
+                    <span class="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">Event Date From</span>
+                    <input v-model="bookingDateFrom" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                </label>
+                <label>
+                    <span class="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">To</span>
+                    <input v-model="bookingDateTo" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                </label>
             </div>
             <div class="mt-3 hidden grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
                 <span>Booking</span>

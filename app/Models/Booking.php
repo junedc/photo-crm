@@ -29,6 +29,7 @@ class Booking extends Model
         'customer_email',
         'customer_phone',
         'event_type',
+        'venue',
         'event_date',
         'start_time',
         'end_time',
@@ -111,12 +112,14 @@ class Booking extends Model
     public function addOns(): BelongsToMany
     {
         return $this->belongsToMany(InventoryItem::class, 'booking_inventory_item')
+            ->withPivot('discount_percentage', 'discount_type', 'discount_value')
             ->withTimestamps();
     }
 
     public function equipment(): BelongsToMany
     {
         return $this->belongsToMany(Equipment::class, 'booking_equipment')
+            ->withPivot('discount_percentage', 'discount_type', 'discount_value')
             ->withTimestamps();
     }
 

@@ -19,6 +19,7 @@ use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TenantOnboardingController;
 use App\Http\Controllers\UserRoleController;
+use App\Http\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 
@@ -107,6 +108,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('/customers/create', [CustomerController::class, 'create'])->name('customers.create');
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+        Route::get('/vendors', [VendorController::class, 'index'])->name('vendors.index');
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
         Route::get('/campaigns/create', [CampaignController::class, 'create'])->name('campaigns.create');
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
@@ -144,6 +146,9 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+        Route::post('/vendors', [VendorController::class, 'store'])->name('vendors.store');
+        Route::put('/vendors/{vendor}', [VendorController::class, 'update'])->name('vendors.update');
+        Route::delete('/vendors/{vendor}', [VendorController::class, 'destroy'])->name('vendors.destroy');
         Route::post('/campaigns', [CampaignController::class, 'store'])->name('campaigns.store');
         Route::post('/campaigns/templates', [CampaignController::class, 'storeTemplate'])->name('campaigns.templates.store');
         Route::put('/campaigns/templates/{template}', [CampaignController::class, 'updateTemplate'])->name('campaigns.templates.update');
@@ -158,6 +163,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/email-tracking/bulk-delete', [EmailTrackingController::class, 'bulkDestroy'])->name('email-tracking.bulk-destroy');
         Route::post('/email-tracking/{emailLog}/resend', [EmailTrackingController::class, 'resend'])->name('email-tracking.resend');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
+        Route::get('/tasks/notifications', [TaskController::class, 'notifications'])->name('tasks.notifications.index');
         Route::post('/tasks/{task}/dismiss-notification', [TaskController::class, 'dismissNotification'])->name('tasks.notifications.dismiss');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
@@ -178,6 +184,9 @@ Route::middleware('tenant.required')->group(function () {
         Route::post('/settings/maintenance-statuses', [SettingsController::class, 'storeMaintenanceStatus'])->name('settings.maintenance.store');
         Route::put('/settings/maintenance-statuses/{status}', [SettingsController::class, 'updateMaintenanceStatus'])->name('settings.maintenance.update');
         Route::delete('/settings/maintenance-statuses/{status}', [SettingsController::class, 'destroyMaintenanceStatus'])->name('settings.maintenance.destroy');
+        Route::post('/settings/inventory-item-categories', [SettingsController::class, 'storeInventoryItemCategory'])->name('settings.inventory-item-categories.store');
+        Route::put('/settings/inventory-item-categories/{inventoryItemCategory}', [SettingsController::class, 'updateInventoryItemCategory'])->name('settings.inventory-item-categories.update');
+        Route::delete('/settings/inventory-item-categories/{inventoryItemCategory}', [SettingsController::class, 'destroyInventoryItemCategory'])->name('settings.inventory-item-categories.destroy');
         Route::post('/settings/task-statuses', [SettingsController::class, 'storeTaskStatus'])->name('settings.maintenance.tasks.store');
         Route::put('/settings/task-statuses/{status}', [SettingsController::class, 'updateTaskStatus'])->name('settings.maintenance.tasks.update');
         Route::delete('/settings/task-statuses/{status}', [SettingsController::class, 'destroyTaskStatus'])->name('settings.maintenance.tasks.destroy');

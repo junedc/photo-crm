@@ -44,6 +44,14 @@
                         <p style="margin:0;font-size:15px;line-height:1.7;color:#334155;">{{ $task->remarks }}</p>
                     </div>
                 @endif
+
+                @if (filled($actionUrl))
+                    <div style="margin-top:24px;">
+                        <a href="{{ $actionUrl }}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#0891b2;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">
+                            {{ $actionLabel }}
+                        </a>
+                    </div>
+                @endif
             </td>
         </tr>
     </table>

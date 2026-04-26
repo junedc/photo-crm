@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError } from '../validation';
 
@@ -13,6 +13,7 @@ const props = defineProps({
 const { saving, fieldErrors, submitForm, deleteRecord } = useWorkspaceCrud();
 const tasks = ref([...(props.data.tasks ?? [])]);
 const taskStatuses = computed(() => props.data.taskStatuses ?? []);
+const defaultTaskStatusId = computed(() => String(taskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 const baseAssigneeOptions = computed(() => props.data.assigneeOptions ?? []);
 const bookings = computed(() => props.data.bookings ?? []);
 const editingTask = ref(null);
@@ -25,7 +26,7 @@ function buildForm(task = null) {
         task_duration_hours: task?.task_duration_hours ?? '',
         assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
         booking_id: task?.booking_id ? String(task.booking_id) : '',
-        task_status_id: task?.task_status_id ? String(task.task_status_id) : '',
+        task_status_id: task?.task_status_id ? String(task.task_status_id) : defaultTaskStatusId.value,
         remarks: task?.remarks ?? '',
         due_date: task?.due_date ?? '',
         date_started: task?.date_started ?? '',
@@ -59,9 +60,31 @@ const openEdit = (task) => {
     showModal.value = true;
 };
 
+const openTaskFromQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('task');
+
+    if (!taskId) {
+        return;
+    }
+
+    const matchedTask = tasks.value.find((task) => String(task.id) === String(taskId));
+
+    if (matchedTask) {
+        openEdit(matchedTask);
+    }
+};
+
 const closeModal = () => {
     showModal.value = false;
     editingTask.value = null;
+
+    const url = new URL(window.location.href);
+
+    if (url.searchParams.has('task')) {
+        url.searchParams.delete('task');
+        window.history.replaceState({}, '', url.toString());
+    }
 };
 
 const bookingLabel = (booking) => [booking.quote_number, booking.display_name, booking.event_date_label].filter(Boolean).join(' - ');
@@ -99,6 +122,10 @@ const removeTask = async (task) => {
     await deleteRecord({ url: task.delete_url });
     tasks.value = tasks.value.filter((entry) => entry.id !== task.id);
 };
+
+onMounted(() => {
+    openTaskFromQuery();
+});
 </script>
 
 <template>
@@ -169,7 +196,6 @@ const removeTask = async (task) => {
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
                         <select v-model="form.task_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
-                            <option value="">No status</option>
                             <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
                         </select>
                         <p v-if="firstError(fieldErrors, 'task_status_id')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'task_status_id') }}</p>

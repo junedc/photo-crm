@@ -23,6 +23,10 @@ const statusClass = (status) => {
 };
 
 const statusLabel = (status) => (status ?? '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const taskBuckets = props.data.taskBuckets ?? {
+    unassigned: { count: 0, tasks: [] },
+    no_status: { count: 0, tasks: [] },
+};
 </script>
 
 <template>
@@ -105,6 +109,74 @@ const statusLabel = (status) => (status ?? '').replaceAll('_', ' ').replace(/\b\
                 <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Catalog</p>
                 <h3 class="mt-1 text-sm font-semibold italic">Packages and inventory <span class="font-normal text-stone-300">/ Maintain packages, equipment, and add-ons from one place.</span></h3>
             </a>
+        </div>
+    </section>
+
+    <section class="grid gap-4 xl:grid-cols-2">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Task Snapshot</p>
+                    <h3 class="mt-1 text-sm font-semibold italic">Unassigned tasks</h3>
+                </div>
+                <a :href="data.routes.tasks" class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300 transition hover:bg-white/10">
+                    {{ taskBuckets.unassigned.count }}
+                </a>
+            </div>
+
+            <div v-if="taskBuckets.unassigned.tasks?.length" class="mt-4 space-y-3">
+                <a
+                    v-for="task in taskBuckets.unassigned.tasks"
+                    :key="`unassigned-${task.id}`"
+                    :href="data.routes.tasks"
+                    class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 transition hover:border-cyan-300/30 hover:bg-white/[0.04]"
+                >
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold text-white">{{ task.task_name }}</p>
+                        <p class="mt-1 truncate text-xs text-stone-400">
+                            {{ task.booking_label || 'No booking linked' }}<span v-if="task.due_date_label"> • {{ task.due_date_label }}</span>
+                        </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-cyan-300/15 px-2.5 py-1 text-[11px] font-medium text-cyan-100">Unassigned</span>
+                </a>
+            </div>
+
+            <div v-else class="mt-4 rounded-2xl border border-dashed border-white/15 bg-slate-950/40 px-4 py-5 text-sm text-stone-400">
+                No unassigned tasks right now.
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-amber-200">Task Snapshot</p>
+                    <h3 class="mt-1 text-sm font-semibold italic">No status tasks</h3>
+                </div>
+                <a :href="data.routes.tasks" class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300 transition hover:bg-white/10">
+                    {{ taskBuckets.no_status.count }}
+                </a>
+            </div>
+
+            <div v-if="taskBuckets.no_status.tasks?.length" class="mt-4 space-y-3">
+                <a
+                    v-for="task in taskBuckets.no_status.tasks"
+                    :key="`no-status-${task.id}`"
+                    :href="data.routes.tasks"
+                    class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 transition hover:border-amber-300/30 hover:bg-white/[0.04]"
+                >
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold text-white">{{ task.task_name }}</p>
+                        <p class="mt-1 truncate text-xs text-stone-400">
+                            {{ task.booking_label || 'No booking linked' }}<span v-if="task.due_date_label"> • {{ task.due_date_label }}</span>
+                        </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-amber-300/15 px-2.5 py-1 text-[11px] font-medium text-amber-100">No status</span>
+                </a>
+            </div>
+
+            <div v-else class="mt-4 rounded-2xl border border-dashed border-white/15 bg-slate-950/40 px-4 py-5 text-sm text-stone-400">
+                No tasks are missing a status.
+            </div>
         </div>
     </section>
 </template>

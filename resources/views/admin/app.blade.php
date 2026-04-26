@@ -73,6 +73,9 @@
                     'email' => $user->email,
                 ] : null,
                 'notifications' => $notifications,
+                'notificationRoutes' => $user && $tenantId ? [
+                    'index' => route('tasks.notifications.index'),
+                ] : null,
                 'flash' => [
                     'status' => session('status'),
                     'errors' => $errors->all(),

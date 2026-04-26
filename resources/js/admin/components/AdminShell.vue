@@ -19,6 +19,7 @@ const notificationButton = ref(null);
 const notifications = ref([...(props.data.notifications ?? [])]);
 const dismissingNotifications = ref(new Set());
 const notificationCount = computed(() => notifications.value.length);
+let notificationRefreshTimeout = null;
 
 const navItems = computed(() => [
     { key: 'overview', label: 'Overview', href: props.data.routes.dashboard, accent: 'amber', icon: 'dashboard' },
@@ -27,6 +28,7 @@ const navItems = computed(() => [
     { key: 'invoices', label: 'Invoices', href: props.data.routes.invoices, accent: 'emerald', icon: 'receipt' },
     { key: 'leads', label: 'Leads', href: props.data.routes.leads, accent: 'violet', icon: 'spark' },
     { key: 'customers', label: 'Customers', href: props.data.routes.customers, accent: 'cyan', icon: 'users' },
+    { key: 'vendors', label: 'Vendors', href: props.data.routes.vendors ?? '/vendors', accent: 'sky', icon: 'users' },
     { key: 'campaigns', label: 'Campaigns', href: props.data.routes.campaigns, accent: 'rose', icon: 'megaphone' },
     { key: 'email_tracking', label: 'Email Tracking', href: props.data.routes.emailTracking ?? '/email-tracking', accent: 'violet', icon: 'receipt' },
     { key: 'tasks', label: 'Tasks', href: props.data.routes.tasks, accent: 'sky', icon: 'clipboard' },
@@ -43,7 +45,7 @@ const navItems = computed(() => [
 
 const sectionDefinitions = [
     { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices'] },
-    { key: 'contacts', label: 'Contacts', items: ['leads', 'customers'] },
+    { key: 'contacts', label: 'Contacts', items: ['leads', 'customers', 'vendors'] },
     { key: 'marketing', label: 'Marketing', items: ['campaigns', 'email_tracking'] },
     { key: 'planning', label: 'Planning', items: ['tasks'] },
     { key: 'catalog', label: 'Catalog', items: ['packages', 'equipment', 'addons', 'discounts'] },
@@ -107,6 +109,10 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('customers')) {
         return 'customers';
+    }
+
+    if (props.page.startsWith('vendors')) {
+        return 'vendors';
     }
 
     if (props.page.startsWith('campaigns')) {
@@ -223,6 +229,7 @@ const onAdminToast = (event) => {
         flashErrors.value = [];
         flashStatus.value = detail.message;
         clearStatusLater();
+        queueNotificationRefresh();
     }
 
     if (detail.type === 'error') {
@@ -230,6 +237,33 @@ const onAdminToast = (event) => {
         flashErrors.value = detail.errors?.length ? detail.errors : ['Something went wrong.'];
         clearErrorsLater();
     }
+};
+
+const refreshNotifications = async () => {
+    const url = props.data.notificationRoutes?.index;
+
+    if (!url) {
+        return;
+    }
+
+    try {
+        const response = await axios.get(url, {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        notifications.value = [...(response.data?.notifications ?? [])];
+    } catch {
+        // Keep the current bell state if refresh fails.
+    }
+};
+
+const queueNotificationRefresh = () => {
+    window.clearTimeout(notificationRefreshTimeout);
+    notificationRefreshTimeout = window.setTimeout(() => {
+        refreshNotifications();
+    }, 150);
 };
 
 const toggleNotifications = () => {
@@ -323,6 +357,7 @@ onMounted(() => {
     window.addEventListener('admin-toast', onAdminToast);
     document.addEventListener('click', onDocumentClick);
     document.addEventListener('keydown', onEscape);
+    refreshNotifications();
 });
 
 onBeforeUnmount(() => {
@@ -331,6 +366,7 @@ onBeforeUnmount(() => {
     document.removeEventListener('keydown', onEscape);
     window.clearTimeout(statusTimeout);
     window.clearTimeout(errorTimeout);
+    window.clearTimeout(notificationRefreshTimeout);
 });
 </script>
 

@@ -95,6 +95,11 @@ class Tenant extends Model
         return $this->hasMany(Equipment::class);
     }
 
+    public function inventoryItemCategories(): HasMany
+    {
+        return $this->hasMany(InventoryItemCategory::class)->orderBy('name');
+    }
+
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);

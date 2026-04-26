@@ -315,6 +315,7 @@ class MemoShotSeeder extends Seeder
                 [
                     'name' => $attributes['name'],
                     'category' => $attributes['category'],
+                    'type' => $attributes['type'] ?? 'Items',
                     'addon_category' => $attributes['addon_category'] ?? $addonCategoryFor($attributes),
                     'description' => $attributes['description'],
                     'quantity' => $attributes['quantity'],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InventoryItemCategory;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
 use App\Models\TenantFont;
@@ -79,9 +80,9 @@ class SettingsController extends Controller
                     'subscriptionPay' => route('settings.subscription.pay'),
                     'accountUpdate' => route('settings.account.update'),
                     'fontStore' => route('settings.fonts.store'),
-                    'vendorStore' => route('settings.vendors.store'),
                     'maintenanceStore' => route('settings.maintenance.store'),
                     'maintenanceTaskStore' => route('settings.maintenance.tasks.store'),
+                    'inventoryItemCategoryStore' => route('settings.inventory-item-categories.store'),
                     'tenantStripeWebhook' => route('stripe.webhook'),
                     'logout' => route('logout'),
                 ],
@@ -97,12 +98,12 @@ class SettingsController extends Controller
                     TenantStatuses::SCOPE_SUPPORT => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_SUPPORT),
                     TenantStatuses::SCOPE_REFERRAL => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_REFERRAL),
                     TenantStatuses::SCOPE_EMAIL_TRACKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EMAIL_TRACKING),
+                    'inventory_item_category' => $this->serializeInventoryItemCategories($tenant),
                 ],
-                'maintenanceLabels' => TenantStatuses::scopes(),
-                'vendors' => $tenant?->vendors()
-                    ->get()
-                    ->map(fn (TenantVendor $vendor): array => $this->serializeVendor($vendor))
-                    ->values(),
+                'maintenanceLabels' => [
+                    ...TenantStatuses::scopes(),
+                    'inventory_item_category' => 'Inventory Item Category',
+                ],
             ],
         ]);
     }
@@ -401,6 +402,72 @@ class SettingsController extends Controller
         ]);
     }
 
+    public function storeInventoryItemCategory(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $category = InventoryItemCategory::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'name' => trim((string) $data['name']),
+        ]);
+
+        return response()->json([
+            'message' => 'Inventory item category added.',
+            'record' => $this->serializeInventoryItemCategory($category),
+        ]);
+    }
+
+    public function updateInventoryItemCategory(CurrentTenant $currentTenant, Request $request, InventoryItemCategory $inventoryItemCategory): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $inventoryItemCategory->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $inventoryItemCategory->update([
+            'name' => trim((string) $data['name']),
+        ]);
+
+        \App\Models\InventoryItem::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('inventory_item_category_id', $inventoryItemCategory->id)
+            ->update([
+                'addon_category' => $inventoryItemCategory->name,
+            ]);
+
+        return response()->json([
+            'message' => 'Inventory item category updated.',
+            'record' => $this->serializeInventoryItemCategory($inventoryItemCategory->fresh()),
+        ]);
+    }
+
+    public function destroyInventoryItemCategory(CurrentTenant $currentTenant, InventoryItemCategory $inventoryItemCategory): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $inventoryItemCategory->tenant_id === $tenant->id, 404);
+
+        \App\Models\InventoryItem::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('inventory_item_category_id', $inventoryItemCategory->id)
+            ->update([
+                'inventory_item_category_id' => null,
+                'addon_category' => null,
+            ]);
+
+        $inventoryItemCategory->delete();
+
+        return response()->json([
+            'message' => 'Inventory item category deleted.',
+        ]);
+    }
+
     public function storeTaskStatus(CurrentTenant $currentTenant, Request $request): JsonResponse
     {
         $tenant = $currentTenant->get();
@@ -680,6 +747,29 @@ class SettingsController extends Controller
         ];
     }
 
+    private function serializeInventoryItemCategories(?Tenant $tenant)
+    {
+        if (! $tenant instanceof Tenant) {
+            return collect();
+        }
+
+        return $tenant->inventoryItemCategories()
+            ->get()
+            ->map(fn (InventoryItemCategory $category): array => $this->serializeInventoryItemCategory($category))
+            ->values();
+    }
+
+    private function serializeInventoryItemCategory(InventoryItemCategory $category): array
+    {
+        return [
+            'id' => $category->id,
+            'name' => $category->name,
+            'system' => false,
+            'update_url' => route('settings.inventory-item-categories.update', $category),
+            'delete_url' => route('settings.inventory-item-categories.destroy', $category),
+        ];
+    }
+
     private function serializeTaskStatus(TaskStatus $status): array
     {
         return [
@@ -695,12 +785,40 @@ class SettingsController extends Controller
 
     private function validateVendor(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'service_type' => ['required', 'string', 'max:120'],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'is_active' => ['nullable', 'boolean'],
+            'services_offered' => ['required', 'array', 'min:1'],
+            'services_offered.*' => ['required', 'string', 'max:120'],
         ]);
+
+        $services = collect($data['services_offered'] ?? [])
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($services->isEmpty()) {
+            throw ValidationException::withMessages([
+                'services_offered' => 'Add at least one service offered.',
+            ]);
+        }
+
+        return [
+            'name' => trim((string) $data['name']),
+            'company_name' => filled($data['company_name'] ?? null) ? trim((string) $data['company_name']) : null,
+            'address' => filled($data['address'] ?? null) ? trim((string) $data['address']) : null,
+            'mobile_number' => filled($data['mobile_number'] ?? null) ? trim((string) $data['mobile_number']) : null,
+            'email' => $data['email'] ?? null,
+            'is_active' => (bool) ($data['is_active'] ?? false),
+            'services_offered' => $services->all(),
+            'service_type' => $services->first(),
+            'phone' => filled($data['mobile_number'] ?? null) ? trim((string) $data['mobile_number']) : null,
+        ];
     }
 
     private function serializeVendor(TenantVendor $vendor): array
@@ -708,7 +826,20 @@ class SettingsController extends Controller
         return [
             'id' => $vendor->id,
             'name' => $vendor->name,
+            'company_name' => $vendor->company_name,
+            'address' => $vendor->address,
+            'mobile_number' => $vendor->mobile_number ?: $vendor->phone,
             'service_type' => $vendor->service_type,
+            'services_offered' => collect($vendor->services_offered ?? [])
+                ->map(fn ($service) => (string) $service)
+                ->filter()
+                ->values()
+                ->all(),
+            'services_offered_label' => collect($vendor->services_offered ?? [])
+                ->map(fn ($service) => (string) $service)
+                ->filter()
+                ->implode(', '),
+            'is_active' => (bool) $vendor->is_active,
             'email' => $vendor->email,
             'phone' => $vendor->phone,
             'update_url' => route('settings.vendors.update', $vendor),

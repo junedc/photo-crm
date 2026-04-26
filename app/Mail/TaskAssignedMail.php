@@ -18,6 +18,8 @@ class TaskAssignedMail extends Mailable
         public Tenant $tenant,
         public Task $task,
         public string $assigneeName,
+        public ?string $actionUrl = null,
+        public string $actionLabel = 'View task',
     ) {
     }
 
