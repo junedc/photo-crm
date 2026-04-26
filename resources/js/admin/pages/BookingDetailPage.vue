@@ -18,13 +18,28 @@ const isEditing = ref(false);
 const editErrors = ref({});
 const invoiceErrors = ref({});
 const taskErrors = ref({});
+const expenseErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
+const resolvedDefaultTaskStatusId = computed(() => defaultTaskStatusId.value || String(localTaskStatuses.value[0]?.id ?? ''));
+const resolveBookingStatusId = (record) => {
+    if (record?.status_id) {
+        return String(record.status_id);
+    }
+
+    const matchedStatus = bookingStatusOptions.value.find((status) => String(status.name ?? '').toLowerCase() === String(record?.status ?? '').toLowerCase());
+
+    if (matchedStatus?.id) {
+        return String(matchedStatus.id);
+    }
+
+    return String(props.data.bookingStatusOptions?.[0]?.id ?? '');
+};
 
 const buildEditForm = (record) => ({
-    booking_status_id: record?.status_id ? String(record.status_id) : String(props.data.bookingStatusOptions?.[0]?.id ?? ''),
+    booking_status_id: resolveBookingStatusId(record),
     booking_kind: record?.booking_kind ?? (props.data.bookingKinds?.[0] ?? 'customer'),
     entry_name: record?.entry_name ?? '',
     entry_description: record?.entry_description ?? '',
@@ -53,7 +68,7 @@ const buildTaskForm = (task = null) => ({
     task_name: task?.task_name ?? '',
     task_duration_hours: task?.task_duration_hours ?? '',
     assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
-    task_status_id: task?.task_status_id ? String(task.task_status_id) : defaultTaskStatusId.value,
+    task_status_id: task?.task_status_id ? String(task.task_status_id) : resolvedDefaultTaskStatusId.value,
     due_date: task?.due_date ?? '',
     date_started: task?.date_started ?? '',
     date_completed: task?.date_completed ?? '',
@@ -62,7 +77,23 @@ const buildTaskForm = (task = null) => ({
 
 const editForm = ref(buildEditForm(props.data.booking));
 const editingTask = ref(null);
+const showTaskEditor = ref(false);
 const taskForm = ref(buildTaskForm());
+const showExpenseEditor = ref(false);
+const showExpenseDetails = ref(false);
+const selectedExpense = ref(null);
+const expenseReceiptInput = ref(null);
+const buildExpenseForm = () => ({
+    expense_name: '',
+    expense_date: new Date().toISOString().slice(0, 10),
+    amount: '',
+    vendor_id: '',
+    user_id: '',
+    expense_category_id: '',
+    notes: '',
+    receipt: null,
+});
+const expenseForm = ref(buildExpenseForm());
 const invoiceForm = ref({
     installment_count: '3',
     deposit_percentage: String(props.data.defaultDepositPercentage ?? 30),
@@ -73,10 +104,14 @@ const invoiceForm = ref({
 const editValidationErrors = computed(() => mergeFieldErrors(editErrors.value, fieldErrors.value));
 const invoiceValidationErrors = computed(() => mergeFieldErrors(invoiceErrors.value, fieldErrors.value));
 const taskValidationErrors = computed(() => mergeFieldErrors(taskErrors.value, fieldErrors.value));
+const expenseValidationErrors = computed(() => mergeFieldErrors(expenseErrors.value, fieldErrors.value));
 const packages = computed(() => props.data.packages ?? []);
 const equipmentOptions = computed(() => props.data.equipmentOptions ?? []);
 const addOnOptions = computed(() => props.data.addOnOptions ?? []);
 const discountOptions = computed(() => props.data.discountOptions ?? []);
+const vendorOptions = computed(() => props.data.vendorOptions ?? []);
+const userOptions = computed(() => props.data.userOptions ?? []);
+const expenseCategoryOptions = computed(() => props.data.expenseCategoryOptions ?? []);
 const taskAssignees = computed(() => bookingRecord.value.task_assignees ?? props.data.taskAssignees ?? []);
 const taskStatuses = computed(() => localTaskStatuses.value);
 const isEntryBooking = computed(() => editForm.value.booking_kind === 'market_stall' || editForm.value.booking_kind === 'sponsored');
@@ -186,6 +221,7 @@ const itemDiscountLabel = (selectionKey, id) => {
 
     return type === 'amount' ? `$${formatMoney(value)}` : `${formatMoney(value)}%`;
 };
+const selectedExpenseReceiptName = computed(() => expenseForm.value.receipt?.name ?? '');
 const taskAssigneeGroups = computed(() => {
     return taskAssignees.value.reduce((groups, option) => {
         const group = option.group ?? 'Other';
@@ -193,6 +229,9 @@ const taskAssigneeGroups = computed(() => {
         return groups;
     }, {});
 });
+const overviewInitialTotal = computed(() => (
+    (Number(bookingRecord.value.booking_total || 0) + Number(bookingRecord.value.discount_amount || 0)).toFixed(2)
+));
 
 const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const bookingKindLabel = (kind) => ({
@@ -338,6 +377,12 @@ watch(() => editForm.value.start_time, () => {
     syncEndTime();
 });
 
+watch(resolvedDefaultTaskStatusId, (value) => {
+    if (!editingTask.value && isBlank(taskForm.value.task_status_id) && value) {
+        taskForm.value.task_status_id = value;
+    }
+});
+
 watch(isEditing, (value) => {
     if (value) {
         nextTick(() => autoAttachGoogleAddressInputs());
@@ -346,7 +391,6 @@ watch(isEditing, (value) => {
 
 onMounted(() => {
     syncPackageTimingDefaults();
-    startTaskCreate();
 });
 
 const grantClientAccess = async () => {
@@ -493,18 +537,23 @@ const sendInvoice = async () => {
 
 const startTaskCreate = () => {
     editingTask.value = null;
+    showTaskEditor.value = true;
     taskErrors.value = {};
     taskForm.value = buildTaskForm();
 };
 
 const startTaskEdit = (task) => {
     editingTask.value = task;
+    showTaskEditor.value = true;
     taskErrors.value = {};
     taskForm.value = buildTaskForm(task);
 };
 
 const cancelTaskEdit = () => {
-    startTaskCreate();
+    editingTask.value = null;
+    showTaskEditor.value = false;
+    taskErrors.value = {};
+    taskForm.value = buildTaskForm();
 };
 
 const saveTask = async () => {
@@ -521,6 +570,10 @@ const saveTask = async () => {
     }
 
     try {
+        if (!editingTask.value && isBlank(taskForm.value.task_status_id)) {
+            taskForm.value.task_status_id = resolvedDefaultTaskStatusId.value;
+        }
+
         const formData = new FormData();
         formData.append('task_name', taskForm.value.task_name ?? '');
         formData.append('task_duration_hours', taskForm.value.task_duration_hours ?? '');
@@ -550,7 +603,7 @@ const saveTask = async () => {
             ...bookingRecord.value,
             tasks: [...tasks.value],
         };
-        startTaskCreate();
+        cancelTaskEdit();
     } catch {}
 };
 
@@ -563,8 +616,94 @@ const removeTask = async (task) => {
     };
 
     if (editingTask.value?.id === task.id) {
-        startTaskCreate();
+        cancelTaskEdit();
     }
+};
+
+const startExpenseCreate = () => {
+    showExpenseEditor.value = true;
+    expenseErrors.value = {};
+    expenseForm.value = buildExpenseForm();
+};
+
+const cancelExpenseCreate = () => {
+    showExpenseEditor.value = false;
+    expenseErrors.value = {};
+    expenseForm.value = buildExpenseForm();
+
+    if (expenseReceiptInput.value) {
+        expenseReceiptInput.value.value = '';
+    }
+};
+
+const openExpenseDetails = (expense) => {
+    selectedExpense.value = expense;
+    showExpenseDetails.value = true;
+};
+
+const closeExpenseDetails = () => {
+    selectedExpense.value = null;
+    showExpenseDetails.value = false;
+};
+
+const triggerExpenseReceiptUpload = () => {
+    expenseReceiptInput.value?.click();
+};
+
+const handleExpenseReceiptSelected = (event) => {
+    const [file] = event.target?.files ?? [];
+    expenseForm.value.receipt = file ?? null;
+};
+
+const saveExpense = async () => {
+    const errors = {};
+
+    if (isBlank(expenseForm.value.expense_name)) {
+        errors.expense_name = requiredMessage('Expense name');
+    }
+
+    if (isBlank(expenseForm.value.expense_date)) {
+        errors.expense_date = requiredMessage('Expense date');
+    }
+
+    if (isBlank(expenseForm.value.amount)) {
+        errors.amount = requiredMessage('Amount');
+    }
+
+    expenseErrors.value = errors;
+
+    if (hasFieldErrors(errors)) {
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('expense_name', expenseForm.value.expense_name ?? '');
+        formData.append('expense_date', expenseForm.value.expense_date ?? '');
+        formData.append('amount', expenseForm.value.amount ?? '');
+        formData.append('booking_id', String(bookingRecord.value.id));
+        formData.append('vendor_id', expenseForm.value.vendor_id ?? '');
+        formData.append('user_id', expenseForm.value.user_id ?? '');
+        formData.append('expense_category_id', expenseForm.value.expense_category_id ?? '');
+        formData.append('notes', expenseForm.value.notes ?? '');
+
+        if (expenseForm.value.receipt) {
+            formData.append('receipt', expenseForm.value.receipt);
+        }
+
+        const record = await submitForm({
+            url: props.data.routes.expenseStore,
+            method: 'post',
+            data: formData,
+        });
+
+        bookingRecord.value = {
+            ...bookingRecord.value,
+            expenses: [record, ...(bookingRecord.value.expenses ?? [])],
+        };
+        cancelExpenseCreate();
+        openExpenseDetails(record);
+    } catch {}
 };
 </script>
 
@@ -759,6 +898,7 @@ const removeTask = async (task) => {
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'overview' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'overview'">Overview</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'tasks' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'tasks'">Task List</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'invoice' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'invoice'">Invoice</button>
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'expenses' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'expenses'">Expense</button>
             </div>
 
             <div v-if="!isEditing && activeTab === 'overview'" class="space-y-3">
@@ -768,70 +908,69 @@ const removeTask = async (task) => {
                         <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.quote_number || 'Not assigned' }}</p>
                     </div>
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Date</p>
-                        <p class="mt-1.5 text-sm font-semibold">{{ bookingRecord.event_date_label }}</p>
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Location</p>
+                        <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.event_location || 'Not set' }}</p>
+                        <p v-if="bookingRecord.notes" class="mt-1 text-xs text-stone-400">{{ bookingRecord.notes }}</p>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">{{ bookingRecord.booking_kind === 'customer' ? 'Customer Name' : 'Entry Name' }}</p>
-                        <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.display_name || bookingRecord.customer_name }}</p>
-                        <p v-if="bookingRecord.entry_description" class="mt-2 text-sm leading-5 text-stone-300">{{ bookingRecord.entry_description }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Email</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_email }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Phone</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Client Portal Access</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.client_portal_access_granted ? 'Granted' : 'Not granted yet' }}</p>
-                        <p v-if="bookingRecord.client_portal_access_granted_at_label" class="mt-1 text-xs text-stone-400">
-                            Last email sent {{ bookingRecord.client_portal_access_granted_at_label }}
-                        </p>
-                        <a v-if="bookingRecord.client_portal_access_url" :href="bookingRecord.client_portal_access_url" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">
-                            Open portal link
-                        </a>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Type</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_type_label || 'Not set' }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Travel Fee</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">${{ bookingRecord.travel_fee }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Discount</p>
-                        <p class="mt-1.5 text-sm font-medium text-stone-200">
-                            {{ bookingRecord.discount ? `${bookingRecord.discount.code} - ${bookingRecord.discount.name}` : 'No discount selected' }}
-                        </p>
-                        <p class="mt-1 text-xs text-emerald-200">-${{ bookingRecord.discount_amount }}</p>
-                    </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Hours</p>
-                        <div class="mt-2 grid gap-2 sm:grid-cols-3">
-                            <div class="rounded-lg border border-white/10 bg-slate-900/60 p-2.5">
-                                <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">Start Hour</p>
-                                <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.start_time_label || 'Not set' }}</p>
-                            </div>
-                            <div class="rounded-lg border border-white/10 bg-slate-900/60 p-2.5">
-                                <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">End Hour</p>
-                                <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.end_time_label || 'Not set' }}</p>
-                            </div>
-                            <div class="rounded-lg border border-white/10 bg-slate-900/60 p-2.5">
-                                <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">Duration</p>
-                                <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.total_hours }}</p>
-                            </div>
+                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-3">
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">{{ bookingRecord.booking_kind === 'customer' ? 'Customer Name' : 'Entry Name' }}</p>
+                            <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.display_name || bookingRecord.customer_name }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Email</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_email }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Phone</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
                         </div>
                     </div>
-                </div>
-
-                <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Location</p>
-                    <p class="mt-2 text-sm leading-5 text-stone-300">{{ bookingRecord.event_location }}</p>
-                    <p v-if="bookingRecord.notes" class="mt-3 text-sm leading-5 text-stone-400">{{ bookingRecord.notes }}</p>
+                    <div v-if="bookingRecord.entry_description" class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Entry Description</p>
+                        <p class="mt-1.5 text-sm leading-5 text-stone-300">{{ bookingRecord.entry_description }}</p>
+                    </div>
+                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-2">
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Client Portal Access</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.client_portal_access_granted ? 'Granted' : 'Not granted yet' }}</p>
+                            <p v-if="bookingRecord.client_portal_access_granted_at_label" class="mt-1 text-xs text-stone-400">
+                                Last email sent {{ bookingRecord.client_portal_access_granted_at_label }}
+                            </p>
+                            <a v-if="bookingRecord.client_portal_access_url" :href="bookingRecord.client_portal_access_url" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">
+                                Open portal link
+                            </a>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Discount</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">
+                                {{ bookingRecord.discount ? `${bookingRecord.discount.code} - ${bookingRecord.discount.name}` : 'No discount selected' }}
+                            </p>
+                            <p class="mt-1 text-xs text-emerald-200">-${{ bookingRecord.discount_amount }}</p>
+                        </div>
+                    </div>
+                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-5">
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Type</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_type_label || 'Not set' }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Date</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_date_label }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Start Hour</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.start_time_label || 'Not set' }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">End Hour</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.end_time_label || 'Not set' }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Duration</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.total_hours }}</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
@@ -857,72 +996,37 @@ const removeTask = async (task) => {
                             </div>
                         </div>
                     </div>
+                    <div v-if="overviewSelectedItems.length" class="space-y-2 border-t border-white/10 px-3 py-2.5">
+                        <div class="flex items-center justify-end gap-3">
+                            <span class="text-[11px] uppercase tracking-[0.24em] text-stone-500">Initial Total Amount</span>
+                            <span class="text-sm font-semibold text-stone-200">${{ overviewInitialTotal }}</span>
+                        </div>
+                        <div class="flex items-center justify-end gap-3">
+                            <span class="text-[11px] uppercase tracking-[0.24em] text-stone-500">Discount Amount</span>
+                            <span class="text-sm font-semibold text-emerald-200">-${{ bookingRecord.discount_amount }}</span>
+                        </div>
+                        <div class="flex items-center justify-end gap-3">
+                            <span class="text-[11px] uppercase tracking-[0.24em] text-stone-500">Total Amount</span>
+                            <span class="text-base font-semibold text-cyan-100">${{ bookingRecord.booking_total }}</span>
+                        </div>
+                    </div>
                     <p v-else class="border-t border-white/10 px-2.5 py-2.5 text-sm leading-5 text-stone-400">No package, equipment, or add-ons were selected for this booking.</p>
                 </div>
             </div>
 
             <div v-if="!isEditing && activeTab === 'tasks'" class="space-y-3">
-                <div class="rounded-xl border border-white/10 bg-slate-950/50 p-3">
-                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Tasks</p>
-                            <p class="mt-1 text-sm text-stone-300">Package action items are added here automatically, and you can still add general tasks manually.</p>
-                        </div>
-                        <button v-if="editingTask" type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelTaskEdit">Cancel edit</button>
-                    </div>
-
-                    <form class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" novalidate @submit.prevent="saveTask">
-                        <div class="sm:col-span-2">
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Task Name</label>
-                            <input v-model="taskForm.task_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_name') ? 'border-rose-300/60' : ''">
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
-                            <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
-                                <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Assigned To</label>
-                            <select v-model="taskForm.assigned_to" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                                <option value="">Unassigned</option>
-                                <optgroup v-for="(options, group) in taskAssigneeGroups" :key="group" :label="group">
-                                    <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Hours</label>
-                            <input v-model="taskForm.task_duration_hours" type="number" min="0" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Due Date</label>
-                            <input v-model="taskForm.due_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Date Started</label>
-                            <input v-model="taskForm.date_started" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Date Completed</label>
-                            <input v-model="taskForm.date_completed" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
-                        </div>
-                        <div class="xl:col-span-4">
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Remarks</label>
-                            <textarea v-model="taskForm.remarks" rows="3" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
-                        </div>
-                        <div class="xl:col-span-4 flex justify-end">
-                            <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
-                                {{ saving ? 'Saving...' : editingTask ? 'Save task' : 'Add task' }}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
                 <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
                     <div class="flex items-center justify-between gap-3 px-3 py-2.5">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Task List</p>
-                        <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ tasks.length }}</span>
+                        <div>
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Task List</p>
+                            <p class="mt-1 text-sm text-stone-300">Package action items are added here automatically, and you can still add general tasks manually.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ tasks.length }}</span>
+                            <button type="button" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" @click="startTaskCreate">
+                                Add Task
+                            </button>
+                        </div>
                     </div>
                     <div v-if="tasks.length" class="overflow-x-auto border-t border-white/10">
                         <div class="min-w-[980px]">
@@ -945,13 +1049,237 @@ const removeTask = async (task) => {
                                 <p class="text-sm text-stone-300">{{ task.date_started_label }}</p>
                                 <p class="truncate text-sm text-stone-400">{{ task.remarks || 'No remarks' }}</p>
                                 <div class="flex items-center gap-2">
-                                    <button type="button" class="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-white/5" @click="startTaskEdit(task)">Edit</button>
+                                    <button type="button" class="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-white/5" @click="startTaskEdit(task)">Edit Task</button>
                                     <button type="button" class="rounded-lg border border-rose-400/30 px-2.5 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeTask(task)">Delete</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <p v-else class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">No tasks have been attached to this booking yet.</p>
+                </div>
+
+                <div v-if="showTaskEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="cancelTaskEdit">
+                    <div class="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#132035] shadow-2xl shadow-black/40">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">{{ editingTask ? 'Edit Task' : 'Add Task' }}</p>
+                                <p class="mt-1 text-sm text-stone-300">{{ editingTask ? 'Update the selected booking task details.' : 'Add a new task for this booking.' }}</p>
+                            </div>
+                            <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelTaskEdit">Close</button>
+                        </div>
+
+                        <form class="max-h-[80vh] overflow-y-auto p-4" novalidate @submit.prevent="saveTask">
+                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Task Name</label>
+                                    <input v-model="taskForm.task_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_name') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
+                                    <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
+                                        <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Assigned To</label>
+                                    <select v-model="taskForm.assigned_to" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="">Unassigned</option>
+                                        <optgroup v-for="(options, group) in taskAssigneeGroups" :key="group" :label="group">
+                                            <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Hours</label>
+                                    <input v-model="taskForm.task_duration_hours" type="number" min="0" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Due Date</label>
+                                    <input v-model="taskForm.due_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Date Started</label>
+                                    <input v-model="taskForm.date_started" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Date Completed</label>
+                                    <input v-model="taskForm.date_completed" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" @click="openDatePicker" @keydown.prevent>
+                                </div>
+                                <div class="xl:col-span-4">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Remarks</label>
+                                    <textarea v-model="taskForm.remarks" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4">
+                                <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelTaskEdit">Cancel</button>
+                                <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
+                                    {{ saving ? 'Saving...' : editingTask ? 'Save task' : 'Add task' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="!isEditing && activeTab === 'expenses'" class="space-y-3">
+                <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
+                    <div class="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <div>
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Expense List</p>
+                            <p class="mt-1 text-sm text-stone-300">Expenses linked to this booking.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ bookingRecord.expenses?.length ?? 0 }}</span>
+                            <button type="button" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" @click="startExpenseCreate">
+                                Add Expense
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="bookingRecord.expenses?.length" class="overflow-x-auto border-t border-white/10">
+                        <div class="min-w-[880px]">
+                            <div class="grid grid-cols-[8rem_minmax(0,1.2fr)_10rem_10rem_10rem_minmax(0,1fr)_8rem] gap-2 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                                <span>Date</span>
+                                <span>Expense</span>
+                                <span>Category</span>
+                                <span>Vendor</span>
+                                <span>Amount</span>
+                                <span>Notes</span>
+                                <span>Receipt</span>
+                            </div>
+                            <button v-for="expense in bookingRecord.expenses" :key="expense.id" type="button" class="grid w-full grid-cols-[8rem_minmax(0,1.2fr)_10rem_10rem_10rem_minmax(0,1fr)_8rem] items-center gap-2 border-b border-white/10 px-3 py-2 text-left transition hover:bg-white/[0.03] last:border-b-0" @click="openExpenseDetails(expense)">
+                                <p class="text-sm text-stone-300">{{ expense.expense_date_label }}</p>
+                                <p class="truncate text-sm font-medium text-white">{{ expense.expense_name }}</p>
+                                <p class="truncate text-sm text-stone-300">{{ expense.expense_category_label }}</p>
+                                <p class="truncate text-sm text-stone-300">{{ expense.vendor_label }}</p>
+                                <p class="text-sm font-semibold text-cyan-100">${{ expense.amount }}</p>
+                                <p class="truncate text-sm text-stone-400">{{ expense.notes || 'No notes' }}</p>
+                                <a v-if="expense.receipt_url" :href="expense.receipt_url" target="_blank" rel="noreferrer" class="text-sm font-medium text-cyan-200 hover:text-cyan-100" @click.stop>View</a>
+                                <p v-else class="text-sm text-stone-500">None</p>
+                            </button>
+                        </div>
+                    </div>
+                    <p v-else class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">No expenses have been linked to this booking yet.</p>
+                </div>
+
+                <div v-if="showExpenseDetails && selectedExpense" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="closeExpenseDetails">
+                    <div class="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#132035] shadow-2xl shadow-black/40">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Expense Details</p>
+                                <p class="mt-1 text-sm text-stone-300">Review this booking-linked expense without leaving the booking page.</p>
+                            </div>
+                            <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="closeExpenseDetails">Close</button>
+                        </div>
+                        <div class="grid gap-3 p-4 sm:grid-cols-2">
+                            <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Expense</p>
+                                <p class="mt-1 text-sm font-semibold text-white">{{ selectedExpense.expense_name }}</p>
+                            </div>
+                            <div class="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Date</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.expense_date_label }}</p>
+                            </div>
+                            <div class="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Amount</p>
+                                <p class="mt-1 text-sm font-semibold text-cyan-100">${{ selectedExpense.amount }}</p>
+                            </div>
+                            <div class="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Category</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.expense_category_label }}</p>
+                            </div>
+                            <div class="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Vendor</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.vendor_label }}</p>
+                            </div>
+                            <div class="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">User</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.user_label || 'Not linked' }}</p>
+                            </div>
+                            <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Booking</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.booking_label }}</p>
+                            </div>
+                            <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Notes</p>
+                                <p class="mt-1 text-sm text-white">{{ selectedExpense.notes || 'No notes' }}</p>
+                            </div>
+                            <div class="sm:col-span-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Receipt</p>
+                                <a v-if="selectedExpense.receipt_url" :href="selectedExpense.receipt_url" target="_blank" rel="noreferrer" class="mt-1 inline-flex text-sm font-medium text-cyan-200 hover:text-cyan-100">
+                                    {{ selectedExpense.receipt_name || 'View receipt' }}
+                                </a>
+                                <p v-else class="mt-1 text-sm text-stone-400">No receipt attached.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="showExpenseEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="cancelExpenseCreate">
+                    <div class="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#132035] shadow-2xl shadow-black/40">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Add Expense</p>
+                                <p class="mt-1 text-sm text-stone-300">This expense will be attached to {{ bookingRecord.quote_number || bookingRecord.display_name || bookingRecord.customer_name }} automatically.</p>
+                            </div>
+                            <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelExpenseCreate">Close</button>
+                        </div>
+
+                        <form class="max-h-[80vh] overflow-y-auto p-4" novalidate @submit.prevent="saveExpense">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Expense Name</label>
+                                    <input v-model="expenseForm.expense_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(expenseValidationErrors, 'expense_name') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Expense Date</label>
+                                    <input v-model="expenseForm.expense_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(expenseValidationErrors, 'expense_date') ? 'border-rose-300/60' : ''" @click="openDatePicker" @keydown.prevent>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Amount</label>
+                                    <input v-model="expenseForm.amount" type="number" min="0" step="0.01" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(expenseValidationErrors, 'amount') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Expense Category</label>
+                                    <select v-model="expenseForm.expense_category_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="">Select category</option>
+                                        <option v-for="category in expenseCategoryOptions" :key="category.id" :value="String(category.id)">{{ category.label }}</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Vendor</label>
+                                    <select v-model="expenseForm.vendor_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="">Select vendor</option>
+                                        <option v-for="vendor in vendorOptions" :key="vendor.id" :value="String(vendor.id)">{{ vendor.label }}</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">User</label>
+                                    <select v-model="expenseForm.user_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="">Select user</option>
+                                        <option v-for="user in userOptions" :key="user.id" :value="String(user.id)">{{ user.label }}</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Receipt</label>
+                                    <div class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-white/10 bg-slate-950/40 px-3 py-3">
+                                        <input ref="expenseReceiptInput" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden" @change="handleExpenseReceiptSelected">
+                                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-200 transition hover:bg-white/5" @click="triggerExpenseReceiptUpload">Upload receipt</button>
+                                        <span class="text-sm text-stone-400">{{ selectedExpenseReceiptName || 'No file selected' }}</span>
+                                    </div>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
+                                    <textarea v-model="expenseForm.notes" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4">
+                                <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelExpenseCreate">Cancel</button>
+                                <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
+                                    {{ saving ? 'Saving...' : 'Add expense' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

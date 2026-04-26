@@ -142,4 +142,9 @@ class Booking extends Model
     {
         return $this->hasMany(ClientPortalTaskUpdate::class);
     }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class);
+    }
 }

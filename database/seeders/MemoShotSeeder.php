@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Equipment;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemCategory;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
 use App\Models\Tenant;
@@ -76,6 +77,8 @@ class MemoShotSeeder extends Seeder
         });
 
         TenantStatusSeeder::seedTenant($tenant);
+        Tenant::seedInventoryItemCategories($tenant);
+        Tenant::seedExpenseCategories($tenant);
 
         $packageStatusIds = collect(TenantStatuses::records($tenant, TenantStatuses::SCOPE_PACKAGE))
             ->mapWithKeys(fn (array $status): array => [$status['name'] => $status['id']]);
@@ -307,6 +310,14 @@ class MemoShotSeeder extends Seeder
             ['name' => 'Custom Neon Sign', 'category' => 'add-on', 'sku' => 'MS-ADD-002', 'description' => 'Statement neon signage for booth styling.', 'quantity' => 2, 'unit_price' => 89, 'duration' => 'Full event', 'maintenance_status' => 'ready', 'last_maintained_at' => '2026-04-01', 'maintenance_notes' => 'Transformer and mounting kit packed.', 'photo_path' => null],
             ['name' => 'Extra Print Pack', 'category' => 'add-on', 'sku' => 'MS-ADD-003', 'description' => 'Extra duplicate prints for guests throughout the event.', 'quantity' => 10, 'unit_price' => 59, 'duration' => 'Per event', 'maintenance_status' => 'ready', 'last_maintained_at' => '2026-04-01', 'maintenance_notes' => 'Stored with printer consumables.', 'photo_path' => null],
         ])->mapWithKeys(function (array $attributes) use ($tenant, $addonCategoryFor): array {
+            $categoryName = $attributes['addon_category'] ?? $addonCategoryFor($attributes);
+            $categoryId = InventoryItemCategory::query()->firstOrCreate([
+                'tenant_id' => $tenant->id,
+                'name' => $categoryName,
+            ], [
+                'sort_order' => ($tenant->inventoryItemCategories()->max('sort_order') ?? 0) + 1,
+            ])->id;
+
             $item = InventoryItem::query()->updateOrCreate(
                 [
                     'tenant_id' => $tenant->id,
@@ -316,7 +327,8 @@ class MemoShotSeeder extends Seeder
                     'name' => $attributes['name'],
                     'category' => $attributes['category'],
                     'type' => $attributes['type'] ?? 'Items',
-                    'addon_category' => $attributes['addon_category'] ?? $addonCategoryFor($attributes),
+                    'inventory_item_category_id' => $categoryId,
+                    'addon_category' => $categoryName,
                     'description' => $attributes['description'],
                     'quantity' => $attributes['quantity'],
                     'unit_price' => $attributes['unit_price'],

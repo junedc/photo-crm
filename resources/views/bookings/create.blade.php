@@ -305,7 +305,7 @@
                             </div>
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="total-hours-display" type="number" min="0.50" step="0.50" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <input id="total-hours-display" type="number" min="0.25" step="0.25" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                 <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="total_hours"></p>
                                 @error('total_hours')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
@@ -759,60 +759,46 @@
                             </h2>
                         </div>
 
-                        <div class="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-                            <div class="space-y-4">
-                                <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                    <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
-                                    <div id="wizard-summary-items" class="mt-4 text-sm text-stone-200">
-                                        <p class="text-stone-400">No package selected.</p>
+                        <div class="grid gap-4 lg:grid-cols-2">
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
+                                <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Customer, venue and location</p>
+                                <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                                    <div>
+                                        <dt class="text-stone-500">Name</dt>
+                                        <dd id="wizard-summary-customer" class="mt-1 font-medium text-white">Not entered</dd>
                                     </div>
-                                </div>
+                                    <div>
+                                        <dt class="text-stone-500">Event date</dt>
+                                        <dd id="wizard-summary-date" class="mt-1 font-medium text-white">Not selected</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-stone-500">Venue</dt>
+                                        <dd id="wizard-summary-venue" class="mt-1 font-medium text-white">Not entered</dd>
+                                    </div>
+                                    <div class="sm:col-span-2 lg:col-span-1">
+                                        <dt class="text-stone-500">Location address</dt>
+                                        <dd id="wizard-summary-location" class="mt-1 font-medium text-white">Not entered</dd>
+                                    </div>
+                                </dl>
+                            </div>
 
-                                <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                    <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Customer, venue and location</p>
-                                    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                                        <div>
-                                            <dt class="text-stone-500">Name</dt>
-                                            <dd id="wizard-summary-customer" class="mt-1 font-medium text-white">Not entered</dd>
-                                        </div>
-                                        <div>
-                                            <dt class="text-stone-500">Event date</dt>
-                                            <dd id="wizard-summary-date" class="mt-1 font-medium text-white">Not selected</dd>
-                                        </div>
-                                        <div>
-                                            <dt class="text-stone-500">Venue</dt>
-                                            <dd id="wizard-summary-venue" class="mt-1 font-medium text-white">Not entered</dd>
-                                        </div>
-                                        <div class="sm:col-span-2">
-                                            <dt class="text-stone-500">Location address</dt>
-                                            <dd id="wizard-summary-location" class="mt-1 font-medium text-white">Not entered</dd>
-                                        </div>
-                                    </dl>
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
+                                <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
+                                <div id="wizard-summary-items" class="mt-4 text-sm text-stone-200">
+                                    <p class="text-stone-400">No package selected.</p>
                                 </div>
                             </div>
 
-                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
                                 <p class="text-sm uppercase tracking-[0.3em] text-amber-200">Totals</p>
-                                <div class="mt-5 space-y-3 text-sm">
-                                    <div class="flex items-center justify-between gap-4">
-                                        <span class="text-stone-400">Package</span>
-                                        <span id="wizard-summary-package-total" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-4">
-                                        <span class="text-stone-400">Add-ons</span>
-                                        <span id="wizard-summary-addon-total" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-4">
-                                        <span class="text-stone-400">Travel fee</span>
-                                        <span id="wizard-summary-travel" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-4 border-t border-white/10 pt-4">
-                                        <span class="text-stone-300">Total</span>
-                                        <span id="wizard-summary-total" class="text-2xl font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-4">
+                                <div class="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+                                    <div class="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                                         <span class="text-stone-400">Deposit</span>
                                         <span id="wizard-summary-deposit" class="font-semibold text-amber-200">{{ $bookingCurrencyPlaceholder }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3">
+                                        <span class="text-stone-200">Total</span>
+                                        <span id="wizard-summary-total" class="text-2xl font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1051,9 +1037,6 @@
                 const wizardSummaryDate = document.getElementById('wizard-summary-date');
                 const wizardSummaryVenue = document.getElementById('wizard-summary-venue');
                 const wizardSummaryLocation = document.getElementById('wizard-summary-location');
-                const wizardSummaryPackageTotal = document.getElementById('wizard-summary-package-total');
-                const wizardSummaryAddonTotal = document.getElementById('wizard-summary-addon-total');
-                const wizardSummaryTravel = document.getElementById('wizard-summary-travel');
                 const wizardSummaryTotal = document.getElementById('wizard-summary-total');
                 const wizardSummaryDeposit = document.getElementById('wizard-summary-deposit');
                 const customerNameInput = document.getElementById('customer-name');
@@ -1069,7 +1052,7 @@
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
                     return;
                 }
 
@@ -1294,8 +1277,8 @@
                         return 'End hour must be later than the start hour.';
                     }
 
-                    if (key === 'total_hours' && parseAmount(value) < 0.5) {
-                        return 'Duration must be at least 0.5 hours.';
+                    if (key === 'total_hours' && parseAmount(value) < 0.25) {
+                        return 'Duration must be at least 0.25 hours.';
                     }
 
                     return '';
@@ -2040,9 +2023,6 @@
                     const venue = venueInput.value.trim();
                     const eventLocation = eventLocationInput.value.trim();
 
-                    wizardSummaryPackageTotal.textContent = formatCurrency(totals.packageTotal);
-                    wizardSummaryAddonTotal.textContent = formatCurrency(totals.addOnTotal);
-                    wizardSummaryTravel.textContent = formatCurrency(totals.travelFee);
                     wizardSummaryTotal.textContent = formatCurrency(totals.total);
                     wizardSummaryDeposit.textContent = formatCurrency(totals.depositAmount);
                     wizardSummaryCustomer.textContent = customerName || 'Not entered';
@@ -2069,18 +2049,25 @@
                     wizardSummaryItems.innerHTML = `<div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]"><table class="w-full min-w-[34rem] table-fixed border-collapse text-left text-sm"><thead class="bg-stone-950/60 text-[11px] uppercase tracking-[0.18em] text-stone-500"><tr><th class="w-24 px-3 py-2 font-medium">Type</th><th class="w-1/2 px-3 py-2 font-medium">Name</th><th class="w-1/4 px-3 py-2 font-medium">Category</th><th class="w-28 px-3 py-2 text-right font-medium">Price</th></tr></thead><tbody>${packageRow}${addOnRows}</tbody></table></div>`;
                 };
 
-                const updatePackageDrivenTiming = () => {
-                    const selectedPackage = document.querySelector('input[name="package_id"]:checked');
-                    const enteredDuration = parseAmount(totalHoursDisplay.value);
-                    const matchedTiming = findMatchingHourlyPrice(selectedPackage, enteredDuration);
-                    const selectedDuration = enteredDuration > 0 ? enteredDuration : 0;
+                const syncEndTimeFromDuration = () => {
+                    const selectedDuration = parseAmount(totalHoursDisplay.value);
                     const computedEndTime = selectedDuration > 0 ? addHoursToTime(startTimeInput.value, selectedDuration) : '';
 
-                    packageHourlyPriceIdInput.value = matchedTiming ? String(matchedTiming.id) : '';
                     totalHoursInput.value = selectedDuration > 0 ? selectedDuration.toFixed(2) : '0.00';
-                    totalHoursDisplay.value = selectedDuration > 0 ? selectedDuration.toFixed(2) : '';
                     endTimeInput.value = computedEndTime;
                     endTimeDisplay.value = formatTimeLabel(computedEndTime);
+
+                    return selectedDuration;
+                };
+
+                const updatePackageDrivenTiming = () => {
+                    const selectedPackage = document.querySelector('input[name="package_id"]:checked');
+                    const enteredDuration = syncEndTimeFromDuration();
+                    const matchedTiming = findMatchingHourlyPrice(selectedPackage, enteredDuration);
+                    const selectedDuration = enteredDuration > 0 ? enteredDuration : 0;
+
+                    packageHourlyPriceIdInput.value = matchedTiming ? String(matchedTiming.id) : '';
+                    totalHoursDisplay.value = selectedDuration > 0 ? selectedDuration.toFixed(2) : '';
 
                     if (matchedTiming) {
                         packageTierSelectedPrice.textContent = formatCurrency(applyPackageDiscount(matchedTiming.price));
@@ -2247,33 +2234,20 @@
                     updateBookNowAmounts();
 
                     const packageRow = totals.selectedPackage
-                        ? (() => {
-                            const photoUrl = totals.selectedPackage.dataset.packagePhotoUrl || '';
-                            const description = 'Creates your booking, invoice, and deposit payment.';
-                            const imageMarkup = photoUrl
-                                ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(totals.packageName)}" class="h-12 w-12 rounded-2xl object-cover">`
-                                : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">P</div>`;
-
-                            return `<div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-cyan-300/15 bg-stone-950/55 px-3 py-3"><div>${imageMarkup}</div><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(totals.packageName)}</p><p class="mt-1 text-[11px] uppercase tracking-[0.18em] text-cyan-200">Package</p><p class="mt-1 truncate text-xs text-stone-400">${description}</p></div><span class="text-sm font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</span></div>`;
-                        })()
+                        ? `<tr class="border-t border-white/10"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100">Package</span></td><td class="px-3 py-3"><p class="font-semibold text-white">${escapeHtml(totals.packageName)}</p><p class="mt-1 text-xs text-stone-400">Creates your booking, invoice, and deposit payment.</p></td><td class="px-3 py-3 text-right font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</td></tr>`
                         : '';
 
                     const addOnRows = totals.selectedAddOns
                         .map((input) => {
                             const name = input.dataset.addonName || 'Add-On';
                             const price = formatCurrency(parseAmount(input.dataset.addonPrice));
-                            const category = input.dataset.addonCategory || 'Uncategorized';
-                            const photoUrl = input.dataset.addonPhotoUrl || '';
-                            const imageMarkup = photoUrl
-                                ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-12 w-12 rounded-2xl object-cover">`
-                                : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">A</div>`;
 
-                            return `<div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-stone-950/45 px-3 py-3"><div>${imageMarkup}</div><div class="min-w-0"><p class="truncate text-sm font-medium text-white">${escapeHtml(name)}</p><p class="mt-1 text-[11px] uppercase tracking-[0.18em] text-emerald-200">${escapeHtml(category)}</p></div><span class="text-sm font-medium text-emerald-100">${price}</span></div>`;
+                            return `<tr class="border-t border-white/10"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">Add-on</span></td><td class="px-3 py-3"><p class="font-medium text-white">${escapeHtml(name)}</p></td><td class="px-3 py-3 text-right font-medium text-emerald-100">${price}</td></tr>`;
                         })
                         .join('');
 
                     bookNowSelectionList.innerHTML = packageRow || addOnRows
-                        ? `${packageRow}${addOnRows}`
+                        ? `<div class="overflow-x-auto rounded-2xl border border-white/10 bg-stone-950/45"><table class="w-full min-w-[28rem] border-collapse text-left text-sm"><thead class="bg-stone-950/80 text-[11px] uppercase tracking-[0.18em] text-stone-500"><tr><th class="w-28 px-3 py-2.5 font-medium">Type</th><th class="px-3 py-2.5 font-medium">Name</th><th class="w-32 px-3 py-2.5 text-right font-medium">Amount</th></tr></thead><tbody>${packageRow}${addOnRows}</tbody></table></div>`
                         : '<p class="text-stone-400">No package selected.</p>';
 
                     if (bookNowDiscountCode.value.trim()) {

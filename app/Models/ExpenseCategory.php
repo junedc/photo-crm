@@ -6,7 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class InventoryItemCategory extends Model
+class ExpenseCategory extends Model
 {
     use BelongsToTenant;
 
@@ -23,8 +23,8 @@ class InventoryItemCategory extends Model
         ];
     }
 
-    public function inventoryItems(): HasMany
+    public function expenses(): HasMany
     {
-        return $this->hasMany(InventoryItem::class);
+        return $this->hasMany(Expense::class);
     }
 }

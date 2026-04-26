@@ -16,12 +16,14 @@ class TaskStatus extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'sort_order',
         'system',
     ];
 
     protected function casts(): array
     {
         return [
+            'sort_order' => 'integer',
             'system' => 'boolean',
         ];
     }

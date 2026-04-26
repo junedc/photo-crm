@@ -19,6 +19,8 @@ class Tenant extends Model
     {
         static::created(function (self $tenant): void {
             TenantStatuses::seedDefaults($tenant);
+            self::seedInventoryItemCategories($tenant);
+            self::seedExpenseCategories($tenant);
         });
     }
 
@@ -97,7 +99,12 @@ class Tenant extends Model
 
     public function inventoryItemCategories(): HasMany
     {
-        return $this->hasMany(InventoryItemCategory::class)->orderBy('name');
+        return $this->hasMany(InventoryItemCategory::class)->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function expenseCategories(): HasMany
+    {
+        return $this->hasMany(ExpenseCategory::class)->orderBy('sort_order')->orderBy('name');
     }
 
     public function campaigns(): HasMany
@@ -112,12 +119,12 @@ class Tenant extends Model
 
     public function taskStatuses(): HasMany
     {
-        return $this->hasMany(TaskStatus::class);
+        return $this->hasMany(TaskStatus::class)->orderBy('sort_order')->orderBy('name');
     }
 
     public function workspaceStatuses(): HasMany
     {
-        return $this->hasMany(WorkspaceStatus::class);
+        return $this->hasMany(WorkspaceStatus::class)->orderBy('sort_order')->orderBy('name');
     }
 
     public function subscription(): BelongsTo
@@ -148,5 +155,55 @@ class Tenant extends Model
     public function receivedReferral()
     {
         return $this->hasOne(TenantReferral::class, 'referred_tenant_id');
+    }
+
+    public static function defaultInventoryItemCategories(): array
+    {
+        return [
+            'Backdrops',
+            'Event Staff',
+            'Prints and Keepsakes',
+            'Travel and Logistics',
+            'Digital Delivery',
+            'Event Styling',
+            'Guest Experience',
+            'Other Add-ons',
+        ];
+    }
+
+    public static function defaultExpenseCategories(): array
+    {
+        return [
+            'Travel',
+            'Vendor Services',
+            'Printing',
+            'Supplies',
+            'Equipment Hire',
+            'Venue Costs',
+            'Meals and Refreshments',
+            'Miscellaneous',
+        ];
+    }
+
+    public static function seedInventoryItemCategories(self $tenant): void
+    {
+        foreach (self::defaultInventoryItemCategories() as $index => $name) {
+            $tenant->inventoryItemCategories()->firstOrCreate([
+                'name' => $name,
+            ], [
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
+    public static function seedExpenseCategories(self $tenant): void
+    {
+        foreach (self::defaultExpenseCategories() as $index => $name) {
+            $tenant->expenseCategories()->firstOrCreate([
+                'name' => $name,
+            ], [
+                'sort_order' => $index + 1,
+            ]);
+        }
     }
 }

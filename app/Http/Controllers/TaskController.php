@@ -245,26 +245,12 @@ class TaskController extends Controller
 
     private function taskStatuses(Tenant $tenant)
     {
-        if ($tenant->taskStatuses()->doesntExist()) {
-            collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
-                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(
-                    ['name' => $name],
-                    ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
-                ));
-        }
-
-        $tenant->taskStatuses()->firstOrCreate(
-            ['name' => 'new'],
-            ['system' => false],
-        );
-
-        return $tenant->taskStatuses()
-            ->orderBy('name')
-            ->get()
+        return TenantStatuses::ensureTaskRecords($tenant)
             ->map(fn (TaskStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
                 'label' => $status->label(),
+                'sort_order' => (int) ($status->sort_order ?? 0),
             ]);
     }
 

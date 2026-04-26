@@ -64,6 +64,14 @@ class TenantStatuses
         };
     }
 
+    public static function defaultOrder(string $scope): array
+    {
+        return match ($scope) {
+            self::SCOPE_TASK => array_values(array_unique(['new', ...self::defaults($scope)])),
+            default => self::defaults($scope),
+        };
+    }
+
     public static function systemStatuses(string $scope): array
     {
         return match ($scope) {
@@ -88,21 +96,21 @@ class TenantStatuses
     public static function names(?Tenant $tenant, string $scope): array
     {
         if (! $tenant instanceof Tenant) {
-            return self::defaults($scope);
+            return self::defaultOrder($scope);
         }
 
         $names = match ($scope) {
-            self::SCOPE_TASK => $tenant->taskStatuses()->orderBy('name')->pluck('name')->all(),
-            default => $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('name')->pluck('name')->all(),
+            self::SCOPE_TASK => self::ensureTaskRecords($tenant)->pluck('name')->all(),
+            default => self::ensureWorkspaceRecords($tenant, $scope)->pluck('name')->all(),
         };
 
-        return $names !== [] ? array_values($names) : self::defaults($scope);
+        return $names !== [] ? array_values($names) : self::defaultOrder($scope);
     }
 
     public static function records(?Tenant $tenant, string $scope): Collection
     {
         if (! $tenant instanceof Tenant) {
-            return collect(self::defaults($scope))->map(fn (string $name, int $index) => [
+            return collect(self::defaultOrder($scope))->map(fn (string $name, int $index) => [
                 'id' => null,
                 'name' => $name,
                 'system' => self::isSystemStatus($scope, $name),
@@ -112,19 +120,19 @@ class TenantStatuses
         }
 
         $records = match ($scope) {
-            self::SCOPE_TASK => $tenant->taskStatuses()->orderBy('name')->get()->map(fn (TaskStatus $status, int $index) => [
+            self::SCOPE_TASK => self::ensureTaskRecords($tenant)->map(fn (TaskStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
                 'system' => (bool) $status->system,
                 'scope' => $scope,
-                'sort_order' => $index + 1,
+                'sort_order' => (int) ($status->sort_order ?? 0),
             ]),
-            default => $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('name')->get()->map(fn (WorkspaceStatus $status, int $index) => [
+            default => self::ensureWorkspaceRecords($tenant, $scope)->map(fn (WorkspaceStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
                 'system' => (bool) $status->system,
                 'scope' => $scope,
-                'sort_order' => $index + 1,
+                'sort_order' => (int) ($status->sort_order ?? 0),
             ]),
         };
 
@@ -132,7 +140,7 @@ class TenantStatuses
             return $records->values();
         }
 
-        return collect(self::defaults($scope))->map(fn (string $name, int $index) => [
+        return collect(self::defaultOrder($scope))->map(fn (string $name, int $index) => [
             'id' => null,
             'name' => $name,
             'system' => self::isSystemStatus($scope, $name),
@@ -145,32 +153,57 @@ class TenantStatuses
     {
         abort_if($scope === self::SCOPE_TASK, 500, 'Task statuses are stored separately.');
 
-        $existing = $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('name')->get();
+        $existing = $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('sort_order')->orderBy('name')->get();
 
         if ($existing->isNotEmpty()) {
             return $existing;
         }
 
-        foreach (self::defaults($scope) as $name) {
+        foreach (self::defaultOrder($scope) as $index => $name) {
             $tenant->workspaceStatuses()->firstOrCreate([
                 'scope' => $scope,
                 'name' => $name,
             ], [
                 'system' => self::isSystemStatus($scope, $name),
+                'sort_order' => $index + 1,
             ]);
         }
 
-        return $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('name')->get();
+        return $tenant->workspaceStatuses()->where('scope', $scope)->orderBy('sort_order')->orderBy('name')->get();
+    }
+
+    public static function ensureTaskRecords(Tenant $tenant): Collection
+    {
+        $existing = $tenant->taskStatuses()->orderBy('sort_order')->orderBy('name')->get();
+
+        if ($existing->isEmpty()) {
+            foreach (self::defaultOrder(self::SCOPE_TASK) as $index => $name) {
+                $tenant->taskStatuses()->firstOrCreate([
+                    'name' => $name,
+                ], [
+                    'system' => self::isSystemStatus(self::SCOPE_TASK, $name),
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            return $tenant->taskStatuses()->orderBy('sort_order')->orderBy('name')->get();
+        }
+
+        if (! $existing->contains(fn (TaskStatus $status): bool => self::normalizeName($status->name) === 'new')) {
+            $tenant->taskStatuses()->firstOrCreate([
+                'name' => 'new',
+            ], [
+                'system' => false,
+                'sort_order' => ((int) $tenant->taskStatuses()->max('sort_order')) + 1,
+            ]);
+        }
+
+        return $tenant->taskStatuses()->orderBy('sort_order')->orderBy('name')->get();
     }
 
     public static function seedDefaults(Tenant $tenant): void
     {
-        foreach (self::defaults(self::SCOPE_TASK) as $name) {
-            $tenant->taskStatuses()->updateOrCreate(
-                ['name' => $name],
-                ['system' => self::isSystemStatus(self::SCOPE_TASK, $name)],
-            );
-        }
+        self::ensureTaskRecords($tenant);
 
         foreach (self::workspaceScopes() as $scope) {
             self::ensureWorkspaceRecords($tenant, $scope);
@@ -218,6 +251,7 @@ class TenantStatuses
             'name' => $normalized,
         ], [
             'system' => self::isSystemStatus($scope, $normalized),
+            'sort_order' => ((int) $tenant->workspaceStatuses()->where('scope', $scope)->max('sort_order')) + 1,
         ]);
     }
 
