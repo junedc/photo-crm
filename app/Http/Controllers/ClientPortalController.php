@@ -541,19 +541,6 @@ class ClientPortalController extends Controller
 
     private function taskStatuses($tenant): Collection
     {
-        $statuses = $tenant->taskStatuses()->orderBy('name')->get();
-
-        if ($statuses->isNotEmpty()) {
-            return $statuses;
-        }
-
-        foreach (TenantStatuses::defaults(TenantStatuses::SCOPE_TASK) as $name) {
-            $tenant->taskStatuses()->firstOrCreate(
-                ['name' => $name],
-                ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
-            );
-        }
-
-        return $tenant->taskStatuses()->orderBy('name')->get();
+        return TenantStatuses::ensureTaskRecords($tenant);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryItemCategory;
+use App\Models\ExpenseCategory;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
 use App\Models\TenantFont;
@@ -83,6 +84,7 @@ class SettingsController extends Controller
                     'maintenanceStore' => route('settings.maintenance.store'),
                     'maintenanceTaskStore' => route('settings.maintenance.tasks.store'),
                     'inventoryItemCategoryStore' => route('settings.inventory-item-categories.store'),
+                    'expenseCategoryStore' => route('settings.expense-categories.store'),
                     'tenantStripeWebhook' => route('stripe.webhook'),
                     'logout' => route('logout'),
                 ],
@@ -99,10 +101,12 @@ class SettingsController extends Controller
                     TenantStatuses::SCOPE_REFERRAL => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_REFERRAL),
                     TenantStatuses::SCOPE_EMAIL_TRACKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EMAIL_TRACKING),
                     'inventory_item_category' => $this->serializeInventoryItemCategories($tenant),
+                    'expense_category' => $this->serializeExpenseCategories($tenant),
                 ],
                 'maintenanceLabels' => [
                     ...TenantStatuses::scopes(),
                     'inventory_item_category' => 'Inventory Item Category',
+                    'expense_category' => 'Expense Category',
                 ],
             ],
         ]);
@@ -354,6 +358,7 @@ class SettingsController extends Controller
                 TenantStatuses::SCOPE_EMAIL_TRACKING,
             ])],
             'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $status = WorkspaceStatus::query()->firstOrCreate([
@@ -362,7 +367,14 @@ class SettingsController extends Controller
             'name' => trim((string) $data['name']),
         ], [
             'system' => false,
+            'sort_order' => $data['sort_order'] ?? $this->nextWorkspaceStatusSortOrder($tenant, (string) $data['scope']),
         ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $status->sort_order !== (int) $data['sort_order']) {
+            $status->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
 
         return response()->json([
             'message' => 'Status added.',
@@ -374,15 +386,25 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
-        abort_if($status->system, 422, 'System statuses cannot be renamed.');
+        $rules = [
+            'sort_order' => ['required', 'integer', 'min:1'],
+        ];
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-        ]);
+        if (! $status->system) {
+            $rules['name'] = ['required', 'string', 'max:255'];
+        }
 
-        $status->update([
-            'name' => trim((string) $data['name']),
-        ]);
+        $data = $request->validate($rules);
+
+        $payload = [
+            'sort_order' => (int) $data['sort_order'],
+        ];
+
+        if (! $status->system) {
+            $payload['name'] = trim((string) $data['name']);
+        }
+
+        $status->update($payload);
 
         return response()->json([
             'message' => 'Status updated.',
@@ -409,16 +431,94 @@ class SettingsController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $category = InventoryItemCategory::query()->firstOrCreate([
             'tenant_id' => $tenant->id,
             'name' => trim((string) $data['name']),
+        ], [
+            'sort_order' => $data['sort_order'] ?? $this->nextInventoryItemCategorySortOrder($tenant),
         ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $category->sort_order !== (int) $data['sort_order']) {
+            $category->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
 
         return response()->json([
             'message' => 'Inventory item category added.',
             'record' => $this->serializeInventoryItemCategory($category),
+        ]);
+    }
+
+    public function storeExpenseCategory(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $category = ExpenseCategory::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'name' => trim((string) $data['name']),
+        ], [
+            'sort_order' => $data['sort_order'] ?? $this->nextExpenseCategorySortOrder($tenant),
+        ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $category->sort_order !== (int) $data['sort_order']) {
+            $category->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
+
+        return response()->json([
+            'message' => 'Expense category added.',
+            'record' => $this->serializeExpenseCategory($category),
+        ]);
+    }
+
+    public function updateExpenseCategory(CurrentTenant $currentTenant, Request $request, ExpenseCategory $expenseCategory): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $expenseCategory->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $expenseCategory->update([
+            'name' => trim((string) $data['name']),
+            'sort_order' => (int) $data['sort_order'],
+        ]);
+
+        return response()->json([
+            'message' => 'Expense category updated.',
+            'record' => $this->serializeExpenseCategory($expenseCategory->fresh()),
+        ]);
+    }
+
+    public function destroyExpenseCategory(CurrentTenant $currentTenant, ExpenseCategory $expenseCategory): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $expenseCategory->tenant_id === $tenant->id, 404);
+
+        \App\Models\Expense::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('expense_category_id', $expenseCategory->id)
+            ->update([
+                'expense_category_id' => null,
+            ]);
+
+        $expenseCategory->delete();
+
+        return response()->json([
+            'message' => 'Expense category deleted.',
         ]);
     }
 
@@ -429,10 +529,12 @@ class SettingsController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['required', 'integer', 'min:1'],
         ]);
 
         $inventoryItemCategory->update([
             'name' => trim((string) $data['name']),
+            'sort_order' => (int) $data['sort_order'],
         ]);
 
         \App\Models\InventoryItem::query()
@@ -475,6 +577,7 @@ class SettingsController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $status = TaskStatus::query()->firstOrCreate([
@@ -482,7 +585,14 @@ class SettingsController extends Controller
             'name' => trim((string) $data['name']),
         ], [
             'system' => false,
+            'sort_order' => $data['sort_order'] ?? $this->nextTaskStatusSortOrder($tenant),
         ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $status->sort_order !== (int) $data['sort_order']) {
+            $status->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
 
         return response()->json([
             'message' => 'Task status added.',
@@ -494,15 +604,25 @@ class SettingsController extends Controller
     {
         $tenant = $currentTenant->get();
         abort_unless($tenant instanceof Tenant && $status->tenant_id === $tenant->id, 404);
-        abort_if($status->system, 422, 'System statuses cannot be renamed.');
+        $rules = [
+            'sort_order' => ['required', 'integer', 'min:1'],
+        ];
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-        ]);
+        if (! $status->system) {
+            $rules['name'] = ['required', 'string', 'max:255'];
+        }
 
-        $status->update([
-            'name' => trim((string) $data['name']),
-        ]);
+        $data = $request->validate($rules);
+
+        $payload = [
+            'sort_order' => (int) $data['sort_order'],
+        ];
+
+        if (! $status->system) {
+            $payload['name'] = trim((string) $data['name']);
+        }
+
+        $status->update($payload);
 
         return response()->json([
             'message' => 'Task status updated.',
@@ -741,6 +861,7 @@ class SettingsController extends Controller
             'scope' => $status->scope,
             'name' => $status->name,
             'label' => $status->label(),
+            'sort_order' => (int) ($status->sort_order ?? 0),
             'system' => (bool) $status->system,
             'update_url' => route('settings.maintenance.update', $status),
             'delete_url' => route('settings.maintenance.destroy', $status),
@@ -764,10 +885,45 @@ class SettingsController extends Controller
         return [
             'id' => $category->id,
             'name' => $category->name,
+            'sort_order' => (int) ($category->sort_order ?? 0),
             'system' => false,
             'update_url' => route('settings.inventory-item-categories.update', $category),
             'delete_url' => route('settings.inventory-item-categories.destroy', $category),
         ];
+    }
+
+    private function nextInventoryItemCategorySortOrder(Tenant $tenant): int
+    {
+        return ((int) $tenant->inventoryItemCategories()->max('sort_order')) + 1;
+    }
+
+    private function serializeExpenseCategories(?Tenant $tenant)
+    {
+        if (! $tenant instanceof Tenant) {
+            return collect();
+        }
+
+        return $tenant->expenseCategories()
+            ->get()
+            ->map(fn (ExpenseCategory $category): array => $this->serializeExpenseCategory($category))
+            ->values();
+    }
+
+    private function serializeExpenseCategory(ExpenseCategory $category): array
+    {
+        return [
+            'id' => $category->id,
+            'name' => $category->name,
+            'sort_order' => (int) ($category->sort_order ?? 0),
+            'system' => false,
+            'update_url' => route('settings.expense-categories.update', $category),
+            'delete_url' => route('settings.expense-categories.destroy', $category),
+        ];
+    }
+
+    private function nextExpenseCategorySortOrder(Tenant $tenant): int
+    {
+        return ((int) $tenant->expenseCategories()->max('sort_order')) + 1;
     }
 
     private function serializeTaskStatus(TaskStatus $status): array
@@ -777,10 +933,21 @@ class SettingsController extends Controller
             'scope' => TenantStatuses::SCOPE_TASK,
             'name' => $status->name,
             'label' => $status->label(),
+            'sort_order' => (int) ($status->sort_order ?? 0),
             'system' => (bool) $status->system,
             'update_url' => route('settings.maintenance.tasks.update', $status),
             'delete_url' => route('settings.maintenance.tasks.destroy', $status),
         ];
+    }
+
+    private function nextWorkspaceStatusSortOrder(Tenant $tenant, string $scope): int
+    {
+        return ((int) $tenant->workspaceStatuses()->where('scope', $scope)->max('sort_order')) + 1;
+    }
+
+    private function nextTaskStatusSortOrder(Tenant $tenant): int
+    {
+        return ((int) $tenant->taskStatuses()->max('sort_order')) + 1;
     }
 
     private function validateVendor(Request $request): array

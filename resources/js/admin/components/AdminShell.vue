@@ -26,6 +26,7 @@ const navItems = computed(() => [
     { key: 'calendar', label: 'Calendar', href: props.data.routes.calendar, accent: 'cyan', icon: 'calendar' },
     { key: 'bookings', label: 'Bookings', href: props.data.routes.bookings, accent: 'rose', icon: 'clipboard' },
     { key: 'invoices', label: 'Invoices', href: props.data.routes.invoices, accent: 'emerald', icon: 'receipt' },
+    { key: 'expenses', label: 'Expenses', href: props.data.routes.expenses ?? '/expenses', accent: 'amber', icon: 'receipt' },
     { key: 'leads', label: 'Leads', href: props.data.routes.leads, accent: 'violet', icon: 'spark' },
     { key: 'customers', label: 'Customers', href: props.data.routes.customers, accent: 'cyan', icon: 'users' },
     { key: 'vendors', label: 'Vendors', href: props.data.routes.vendors ?? '/vendors', accent: 'sky', icon: 'users' },
@@ -44,7 +45,7 @@ const navItems = computed(() => [
 ].filter((item) => item.href && (!Array.isArray(props.data.allowedScreens) || props.data.allowedScreens.includes(item.key))));
 
 const sectionDefinitions = [
-    { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices'] },
+    { key: 'daily', label: 'Daily Work', items: ['overview', 'calendar', 'bookings', 'quotes', 'invoices', 'expenses'] },
     { key: 'contacts', label: 'Contacts', items: ['leads', 'customers', 'vendors'] },
     { key: 'marketing', label: 'Marketing', items: ['campaigns', 'email_tracking'] },
     { key: 'planning', label: 'Planning', items: ['tasks'] },
@@ -141,6 +142,10 @@ const activeSection = computed(() => {
 
     if (props.page.startsWith('invoices')) {
         return 'invoices';
+    }
+
+    if (props.page.startsWith('expenses')) {
+        return 'expenses';
     }
 
     if (props.page.startsWith('support')) {

@@ -614,7 +614,7 @@ const blockCreateSubmit = () => {};
                 </div>
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Hour Duration</label>
-                    <input v-model="createForm.total_hours" :readonly="selectedPackageHourlyPrices.length > 0" type="number" min="0.5" step="0.5" class="w-full rounded-lg border border-white/10 px-3 py-2 text-sm text-white outline-none transition" :class="[selectedPackageHourlyPrices.length > 0 ? 'bg-slate-900/60' : 'bg-slate-950/70 focus:border-rose-300/50', firstError(createValidationErrors, 'total_hours') ? 'border-rose-300/60' : '']">
+                    <input v-model="createForm.total_hours" type="number" min="0.25" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'total_hours') ? 'border-rose-300/60' : ''">
                 </div>
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>

@@ -16,12 +16,14 @@ class WorkspaceStatus extends Model
         'tenant_id',
         'scope',
         'name',
+        'sort_order',
         'system',
     ];
 
     protected function casts(): array
     {
         return [
+            'sort_order' => 'integer',
             'system' => 'boolean',
         ];
     }

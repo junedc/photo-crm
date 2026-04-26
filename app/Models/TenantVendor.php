@@ -42,4 +42,9 @@ class TenantVendor extends Model
         return $this->hasMany(Task::class, 'assignee_id')
             ->where('assignee_type', Task::ASSIGNEE_VENDOR);
     }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'vendor_id');
+    }
 }

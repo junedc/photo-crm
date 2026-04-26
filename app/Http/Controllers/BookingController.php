@@ -9,28 +9,30 @@ use App\Models\ClientPortalAccess;
 use App\Models\Customer;
 use App\Models\Discount;
 use App\Models\Equipment;
+use App\Models\ExpenseCategory;
+use App\Models\InventoryItem;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
-use App\Models\InventoryItem;
 use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
-use App\Models\Tenant;
 use App\Models\Task;
 use App\Models\TaskStatus;
+use App\Models\Tenant;
+use App\Models\TenantVendor;
 use App\Models\User;
+use App\Services\ClientPortalService;
 use App\Support\BookingAddonsPdfGenerator;
-use App\Support\DateFormatter;
 use App\Support\BookingDiscountResolver;
 use App\Support\BookingPricing;
+use App\Support\DateFormatter;
 use App\Support\InvoiceBuilder;
 use App\Support\PackagePriceResolver;
+use App\Support\StripeCheckoutLinkGenerator;
 use App\Support\TaskAssignees;
 use App\Support\TenantStatuses;
-use App\Support\StripeCheckoutLinkGenerator;
 use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
-use App\Services\ClientPortalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -176,7 +178,7 @@ class BookingController extends Controller
             ]);
         }
 
-        $lead ??= new Lead();
+        $lead ??= new Lead;
         $lead->fill([
             'customer_name' => $data['customer_name'] ?? null,
             'customer_email' => $data['customer_email'] ?? null,
@@ -720,6 +722,8 @@ class BookingController extends Controller
                     'create' => route('admin.bookings.create'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
+                    'expenses' => route('expenses.index'),
+                    'expenseStore' => route('expenses.store'),
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
@@ -772,6 +776,8 @@ class BookingController extends Controller
                     'create' => route('admin.bookings.create'),
                     'quotes' => route('admin.quotes.index'),
                     'invoices' => route('admin.invoices.index'),
+                    'expenses' => route('expenses.index'),
+                    'expenseStore' => route('expenses.store'),
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
@@ -783,6 +789,45 @@ class BookingController extends Controller
                 'booking' => $this->serializeBooking($booking),
                 'taskAssignees' => $tenant ? TaskAssignees::optionsForTenant($tenant, $booking)->values()->all() : [],
                 'taskStatuses' => $taskStatuses->values()->all(),
+                'vendorOptions' => $tenant
+                    ? TenantVendor::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->orderBy('company_name')
+                        ->orderBy('name')
+                        ->get()
+                        ->map(fn (TenantVendor $vendor) => [
+                            'id' => $vendor->id,
+                            'label' => $vendor->company_name
+                                ? sprintf('%s (%s)', $vendor->name, $vendor->company_name)
+                                : $vendor->name,
+                        ])
+                        ->values()
+                        ->all()
+                    : [],
+                'userOptions' => $tenant
+                    ? $tenant->users()
+                        ->orderBy('name')
+                        ->get()
+                        ->map(fn (User $user) => [
+                            'id' => $user->id,
+                            'label' => $user->name,
+                        ])
+                        ->values()
+                        ->all()
+                    : [],
+                'expenseCategoryOptions' => $tenant
+                    ? ExpenseCategory::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->get()
+                        ->map(fn (ExpenseCategory $category) => [
+                            'id' => $category->id,
+                            'label' => $category->name,
+                        ])
+                        ->values()
+                        ->all()
+                    : [],
                 'taskRoutes' => [
                     'store' => route('tasks.store'),
                 ],
@@ -1024,7 +1069,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user']);
         $clientPortalAccess = ClientPortalAccess::query()
             ->where('tenant_id', $booking->tenant_id)
             ->where('customer_email', strtolower((string) $booking->customer_email))
@@ -1156,6 +1201,27 @@ class BookingController extends Controller
                 ->values()
                 ->map(fn (Task $task) => $this->serializeTaskRecord($task))
                 ->all(),
+            'expenses' => $booking->expenses
+                ->sortByDesc(fn ($expense) => $expense->expense_date ?? $expense->created_at)
+                ->values()
+                ->map(fn ($expense) => [
+                    'id' => $expense->id,
+                    'expense_name' => $expense->expense_name,
+                    'expense_date_label' => DateFormatter::date($expense->expense_date, 'Not set'),
+                    'amount' => number_format((float) $expense->amount, 2, '.', ''),
+                    'expense_category_label' => $expense->expenseCategory?->name ?: 'Not set',
+                    'booking_label' => $booking->quote_number
+                        ? sprintf('%s - %s', $booking->quote_number, $booking->entry_name ?: $booking->customer_name)
+                        : ($booking->entry_name ?: $booking->customer_name),
+                    'vendor_label' => $expense->vendor?->company_name
+                        ? sprintf('%s (%s)', $expense->vendor->name, $expense->vendor->company_name)
+                        : ($expense->vendor?->name ?? 'Not linked'),
+                    'user_label' => $expense->user?->name ?? 'Not linked',
+                    'notes' => $expense->notes ?? '',
+                    'receipt_url' => $expense->receipt_path ? Storage::disk('public')->url($expense->receipt_path) : null,
+                    'receipt_name' => $expense->receipt_original_name ?: ($expense->receipt_path ? basename($expense->receipt_path) : ''),
+                ])
+                ->all(),
             'task_assignees' => $booking->tenant ? TaskAssignees::optionsForTenant($booking->tenant, $booking)->values()->all() : [],
             'invoice' => $booking->invoice ? $this->serializeInvoice($booking->invoice) : null,
             'show_url' => route('admin.bookings.show', $booking),
@@ -1194,32 +1260,20 @@ class BookingController extends Controller
 
     private function taskStatuses($tenant)
     {
-        if ($tenant->taskStatuses()->doesntExist()) {
-            collect(TenantStatuses::defaults(TenantStatuses::SCOPE_TASK))
-                ->each(fn (string $name) => $tenant->taskStatuses()->firstOrCreate(
-                    ['name' => $name],
-                    ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
-                ));
-        }
-
-        $tenant->taskStatuses()->firstOrCreate(
-            ['name' => 'new'],
-            ['system' => false],
-        );
-
-        return $tenant->taskStatuses()
-            ->orderBy('name')
-            ->get()
+        return TenantStatuses::ensureTaskRecords($tenant)
             ->map(fn (TaskStatus $status) => [
                 'id' => $status->id,
                 'name' => $status->name,
                 'label' => $status->label(),
+                'sort_order' => (int) ($status->sort_order ?? 0),
             ]);
     }
 
     private function syncPackageActionTasks(Booking $booking): void
     {
         $booking->loadMissing(['package.addOns']);
+        $defaultTaskStatusId = $this->taskStatuses($booking->tenant)
+            ->firstWhere('name', 'new')['id'] ?? null;
 
         $actionItems = collect($booking->package?->addOns ?? [])
             ->filter(fn (InventoryItem $item) => strcasecmp((string) $item->type, 'Action') === 0)
@@ -1261,6 +1315,7 @@ class BookingController extends Controller
                 'task_name' => $item->name,
                 'inventory_item_id' => $item->id,
                 'is_booking_action' => true,
+                'task_status_id' => $task->task_status_id ?: $defaultTaskStatusId,
                 'due_date' => $dueDate,
             ]);
             $task->save();
@@ -1329,7 +1384,7 @@ class BookingController extends Controller
             ->first();
 
         if ($customer === null) {
-            $customer = new Customer();
+            $customer = new Customer;
         }
 
         $customer->fill([

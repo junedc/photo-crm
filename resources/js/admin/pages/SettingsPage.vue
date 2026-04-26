@@ -30,6 +30,7 @@ const maintenanceRecords = ref({
     package: [...(props.data.maintenance?.package ?? [])],
     equipment: [...(props.data.maintenance?.equipment ?? [])],
     inventory_item_category: [...(props.data.maintenance?.inventory_item_category ?? [])],
+    expense_category: [...(props.data.maintenance?.expense_category ?? [])],
     campaign: [...(props.data.maintenance?.campaign ?? [])],
     support: [...(props.data.maintenance?.support ?? [])],
     referral: [...(props.data.maintenance?.referral ?? [])],
@@ -44,10 +45,26 @@ const maintenanceDrafts = ref({
     package: '',
     equipment: '',
     inventory_item_category: '',
+    expense_category: '',
     campaign: '',
     support: '',
     referral: '',
     email_tracking: '',
+});
+const maintenanceSortOrders = ref({
+    invoice: 1,
+    invoice_installment: 1,
+    task: 1,
+    booking: 1,
+    quote_response: 1,
+    package: 1,
+    equipment: 1,
+    inventory_item_category: 1,
+    expense_category: 1,
+    campaign: 1,
+    support: 1,
+    referral: 1,
+    email_tracking: 1,
 });
 const maintenanceEditing = ref({
     invoice: null,
@@ -58,6 +75,7 @@ const maintenanceEditing = ref({
     package: null,
     equipment: null,
     inventory_item_category: null,
+    expense_category: null,
     campaign: null,
     support: null,
     referral: null,
@@ -126,6 +144,7 @@ const maintenanceSections = computed(() => [
     { key: 'package', label: props.data.maintenanceLabels?.package ?? 'Package Status' },
     { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
     { key: 'inventory_item_category', label: props.data.maintenanceLabels?.inventory_item_category ?? 'Inventory Item Category' },
+    { key: 'expense_category', label: props.data.maintenanceLabels?.expense_category ?? 'Expense Category' },
     { key: 'campaign', label: props.data.maintenanceLabels?.campaign ?? 'Campaign Status' },
     { key: 'support', label: props.data.maintenanceLabels?.support ?? 'Support Status' },
     { key: 'referral', label: props.data.maintenanceLabels?.referral ?? 'Referral Status' },
@@ -138,6 +157,37 @@ const fontValidationErrors = computed(() => mergeFieldErrors(fontErrors.value, f
 const maintenanceValidationErrors = computed(() => maintenanceServerErrors.value ?? {});
 const prettifyStatus = (value) => (value || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const sectionHasEditableStatuses = (key) => (maintenanceRecords.value[key] ?? []).some((record) => !record.system);
+const sectionSupportsSortOrder = () => true;
+const sortedMaintenanceRecords = (key) => [...(maintenanceRecords.value[key] ?? [])].sort((left, right) => {
+    const leftOrder = Number(left?.sort_order ?? Number.MAX_SAFE_INTEGER);
+    const rightOrder = Number(right?.sort_order ?? Number.MAX_SAFE_INTEGER);
+
+    if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+    }
+
+    return String(left?.name ?? '').localeCompare(String(right?.name ?? ''));
+});
+const currentEditingRecord = (key) => (maintenanceRecords.value[key] ?? []).find((record) => record.id === maintenanceEditing.value[key]) ?? null;
+const canEditStatusName = (key) => {
+    if (!sectionSupportsSortOrder(key)) {
+        return true;
+    }
+
+    return !currentEditingRecord(key)?.system;
+};
+const nextMaintenanceSortOrder = (key) => {
+    const sortOrders = (maintenanceRecords.value[key] ?? [])
+        .map((record) => Number(record?.sort_order ?? 0))
+        .filter((value) => Number.isFinite(value) && value > 0);
+
+    return (sortOrders.length ? Math.max(...sortOrders) : 0) + 1;
+};
+const resetMaintenanceDraft = (key) => {
+    maintenanceEditing.value[key] = null;
+    maintenanceDrafts.value[key] = '';
+    maintenanceSortOrders.value[key] = nextMaintenanceSortOrder(key);
+};
 const fontVariantLabel = (font) => {
     if (Number(font?.weight) >= 700 && font?.style === 'italic') {
         return 'Bold Italic';
@@ -349,34 +399,51 @@ const removeFont = async (font) => {
 const beginEditStatus = (scope, record) => {
     maintenanceEditing.value[scope] = record.id;
     maintenanceDrafts.value[scope] = record.name ?? '';
+    maintenanceSortOrders.value[scope] = Number(record.sort_order ?? nextMaintenanceSortOrder(scope));
 };
 
 const cancelEditStatus = (scope) => {
-    maintenanceEditing.value[scope] = null;
-    maintenanceDrafts.value[scope] = '';
+    resetMaintenanceDraft(scope);
 };
 
 const saveStatus = async (scope) => {
     const name = String(maintenanceDrafts.value[scope] ?? '').trim();
+    const sortOrder = Number(maintenanceSortOrders.value[scope] ?? nextMaintenanceSortOrder(scope));
+    const editingRecord = currentEditingRecord(scope);
 
-    if (name === '') {
+    if (canEditStatusName(scope) && name === '') {
+        return;
+    }
+
+    if (!Number.isInteger(sortOrder) || sortOrder < 1) {
         return;
     }
 
     const editingId = maintenanceEditing.value[scope];
     const isTask = scope === 'task';
     const isInventoryItemCategory = scope === 'inventory_item_category';
+    const isExpenseCategory = scope === 'expense_category';
     const existing = maintenanceRecords.value[scope].find((entry) => entry.id === editingId);
 
     try {
+        const payload = editingId
+            ? {
+                ...(canEditStatusName(scope) ? { name } : {}),
+                sort_order: sortOrder,
+            }
+            : (isInventoryItemCategory || isExpenseCategory
+                ? { name, sort_order: sortOrder }
+                : (isTask
+                    ? { name, sort_order: sortOrder }
+                    : { scope, name, sort_order: sortOrder }));
         const record = await submitMaintenanceForm({
             url: editingId
                 ? existing?.update_url
-                : (isInventoryItemCategory
-                    ? props.data.routes.inventoryItemCategoryStore
+                : (isInventoryItemCategory || isExpenseCategory
+                    ? (isInventoryItemCategory ? props.data.routes.inventoryItemCategoryStore : props.data.routes.expenseCategoryStore)
                     : (isTask ? props.data.routes.maintenanceTaskStore : props.data.routes.maintenanceStore)),
             method: editingId ? 'put' : 'post',
-            data: editingId ? { name } : (isInventoryItemCategory ? { name } : (isTask ? { name } : { scope, name })),
+            data: payload,
         });
 
         const nextRecord = {
@@ -387,8 +454,9 @@ const saveStatus = async (scope) => {
         const index = maintenanceRecords.value[scope].findIndex((entry) => entry.id === nextRecord.id);
         maintenanceRecords.value[scope] = index >= 0
             ? maintenanceRecords.value[scope].map((entry) => (entry.id === nextRecord.id ? nextRecord : entry))
-            : [...maintenanceRecords.value[scope], nextRecord].sort((left, right) => left.name.localeCompare(right.name));
-        cancelEditStatus(scope);
+            : sortedMaintenanceRecords(scope).concat(nextRecord);
+        maintenanceRecords.value[scope] = sortedMaintenanceRecords(scope);
+        resetMaintenanceDraft(scope);
     } catch {}
 };
 
@@ -401,13 +469,17 @@ const removeStatus = async (scope, record) => {
         await deleteMaintenanceRecord({ url: record.delete_url });
         maintenanceRecords.value[scope] = maintenanceRecords.value[scope].filter((entry) => entry.id !== record.id);
         if (maintenanceEditing.value[scope] === record.id) {
-            cancelEditStatus(scope);
+            resetMaintenanceDraft(scope);
         }
+        maintenanceSortOrders.value[scope] = nextMaintenanceSortOrder(scope);
     } catch {}
 };
 
 onMounted(() => {
     nextTick(() => autoAttachGoogleAddressInputs());
+    Object.keys(maintenanceRecords.value).forEach((key) => {
+        maintenanceSortOrders.value[key] = nextMaintenanceSortOrder(key);
+    });
 });
 </script>
 
@@ -669,13 +741,27 @@ onMounted(() => {
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.25em] text-stone-500">{{ section.label }}</p>
-                        <p class="mt-1 text-xs text-stone-400">Add, rename, and remove values used by this workspace.</p>
+                        <p class="mt-1 text-xs text-stone-400">Sort order controls how these values appear in workspace dropdowns.</p>
                     </div>
                     <span class="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-stone-300">{{ maintenanceRecords[section.key]?.length ?? 0 }}</span>
                 </div>
 
                 <div class="mt-4 flex gap-3">
-                    <input v-model="maintenanceDrafts[section.key]" type="text" :placeholder="`Add ${section.label.toLowerCase()}`" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                    <input
+                        v-model="maintenanceDrafts[section.key]"
+                        type="text"
+                        :placeholder="maintenanceEditing[section.key] && !canEditStatusName(section.key) ? prettifyStatus(currentEditingRecord(section.key)?.name) : `Add ${section.label.toLowerCase()}`"
+                        class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50 disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="maintenanceEditing[section.key] && !canEditStatusName(section.key)"
+                    >
+                    <input
+                        v-model="maintenanceSortOrders[section.key]"
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="Sort order"
+                        class="w-32 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50"
+                    >
                     <button type="button" class="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60" :disabled="maintenanceSaving || isBlank(maintenanceDrafts[section.key])" @click="saveStatus(section.key)">
                         {{ maintenanceEditing[section.key] ? 'Save' : 'Add' }}
                     </button>
@@ -683,29 +769,33 @@ onMounted(() => {
                         Cancel
                     </button>
                 </div>
+                <p v-if="maintenanceEditing[section.key] && !canEditStatusName(section.key)" class="mt-2 text-xs text-stone-500">This is a system status, so only the sort order can be edited here.</p>
                 <p v-if="firstError(maintenanceValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(maintenanceValidationErrors, 'name') }}</p>
+                <p v-if="firstError(maintenanceValidationErrors, 'sort_order')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(maintenanceValidationErrors, 'sort_order') }}</p>
 
                 <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                    <div class="grid grid-cols-[5rem_minmax(0,1fr)_8rem_8rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                    <div class="grid grid-cols-[5rem_minmax(0,1fr)_7rem_8rem_8rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
                         <span>ID</span>
                         <span>Name</span>
+                        <span>Order</span>
                         <span>Edit</span>
                         <span>Delete</span>
                     </div>
-                    <div v-for="record in maintenanceRecords[section.key]" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[5rem_minmax(0,1fr)_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                    <div v-for="record in sortedMaintenanceRecords(section.key)" :key="`${section.key}-${record.id ?? record.name}`" class="grid grid-cols-[5rem_minmax(0,1fr)_7rem_8rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
                         <p class="text-sm text-stone-300">{{ record.id ?? '-' }}</p>
                         <div class="min-w-0">
                             <p class="truncate text-sm text-white">{{ prettifyStatus(record.name) }}</p>
                             <p v-if="record.system" class="mt-1 text-[11px] uppercase tracking-[0.2em] text-cyan-200">System</p>
                         </div>
-                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="beginEditStatus(section.key, record)">Edit</button>
+                        <p class="text-sm text-stone-300">{{ record.sort_order ?? '-' }}</p>
+                        <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id" @click="beginEditStatus(section.key, record)">Edit</button>
                         <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!record.id || record.system" @click="removeStatus(section.key, record)">Delete</button>
                     </div>
                     <div v-if="!(maintenanceRecords[section.key]?.length)" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
                         No values added yet.
                     </div>
                 </div>
-                <p v-if="!sectionHasEditableStatuses(section.key) && maintenanceRecords[section.key]?.length" class="mt-3 text-xs text-stone-500">System statuses are protected and cannot be renamed or deleted here.</p>
+                <p v-if="!sectionHasEditableStatuses(section.key) && maintenanceRecords[section.key]?.length" class="mt-3 text-xs text-stone-500">System statuses can stay protected while still letting you control dropdown order through sort order.</p>
             </section>
 
         </div>
