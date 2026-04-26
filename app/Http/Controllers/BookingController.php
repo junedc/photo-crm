@@ -153,6 +153,7 @@ class BookingController extends Controller
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'event_date' => ['nullable', 'date'],
+            'venue' => ['nullable', 'string', 'max:255'],
             'event_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -163,6 +164,7 @@ class BookingController extends Controller
             $data['customer_email'] ?? null,
             $data['customer_phone'] ?? null,
             $data['event_date'] ?? null,
+            $data['venue'] ?? null,
             $data['event_location'] ?? null,
             $data['notes'] ?? null,
         ])->contains(fn ($value) => filled($value));
@@ -180,6 +182,7 @@ class BookingController extends Controller
             'customer_email' => $data['customer_email'] ?? null,
             'customer_phone' => $data['customer_phone'] ?? null,
             'event_date' => $data['event_date'] ?? null,
+            'venue' => $data['venue'] ?? null,
             'event_location' => $data['event_location'] ?? null,
             'notes' => $data['notes'] ?? null,
             'status' => 'draft',
@@ -215,6 +218,7 @@ class BookingController extends Controller
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
             'event_type' => ['required', Rule::in($this->eventTypes())],
+            'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -309,6 +313,7 @@ class BookingController extends Controller
                 'customer_email',
                 'customer_phone',
                 'event_type',
+                'venue',
                 'event_date',
                 'start_time',
                 'end_time',
@@ -342,6 +347,7 @@ class BookingController extends Controller
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
             'event_type' => ['required', Rule::in($this->eventTypes())],
+            'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -494,6 +500,7 @@ class BookingController extends Controller
             'customer_email',
             'customer_phone',
             'event_type',
+            'venue',
             'event_date',
             'start_time',
             'end_time',
@@ -538,6 +545,7 @@ class BookingController extends Controller
                 'customer_email' => ['required', 'email', 'max:255'],
                 'customer_phone' => ['required', 'string', 'max:50'],
                 'event_type' => ['required', Rule::in($this->eventTypes())],
+                'venue' => ['nullable', 'string', 'max:255'],
                 'event_date' => ['required', 'date'],
                 'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
                 'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
@@ -888,6 +896,8 @@ class BookingController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = (string) $request->query('status', 'all');
         $bookingKind = (string) $request->query('booking_kind', 'all');
+        $eventDateFrom = trim((string) $request->query('event_date_from', ''));
+        $eventDateTo = trim((string) $request->query('event_date_to', ''));
 
         return Booking::query()
             ->with(['package', 'addOns', 'equipment', 'discount', 'invoice.installments'])
@@ -903,6 +913,8 @@ class BookingController extends Controller
             })
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when(in_array($bookingKind, $this->bookingKinds(), true), fn ($query) => $query->where('booking_kind', $bookingKind))
+            ->when($eventDateFrom !== '', fn ($query) => $query->whereDate('event_date', '>=', $eventDateFrom))
+            ->when($eventDateTo !== '', fn ($query) => $query->whereDate('event_date', '<=', $eventDateTo))
             ->latest()
             ->paginate(10);
     }
@@ -1052,6 +1064,7 @@ class BookingController extends Controller
             'discount_amount' => number_format((float) ($booking->discount_amount ?? 0), 2, '.', ''),
             'event_type' => $booking->event_type,
             'event_type_label' => $booking->event_type ? str($booking->event_type)->title()->toString() : null,
+            'venue' => $booking->venue,
             'event_date' => DateFormatter::inputDate($booking->event_date),
             'event_date_label' => DateFormatter::date($booking->event_date),
             'start_time' => $this->timeValue($booking->start_time),
@@ -1188,6 +1201,11 @@ class BookingController extends Controller
                     ['system' => TenantStatuses::isSystemStatus(TenantStatuses::SCOPE_TASK, $name)]
                 ));
         }
+
+        $tenant->taskStatuses()->firstOrCreate(
+            ['name' => 'new'],
+            ['system' => false],
+        );
 
         return $tenant->taskStatuses()
             ->orderBy('name')
@@ -1607,6 +1625,7 @@ class BookingController extends Controller
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
             'event_date' => $booking->event_date,
+            'venue' => $booking->venue,
             'event_location' => $booking->event_location,
             'notes' => $booking->notes,
             'status' => 'booked',

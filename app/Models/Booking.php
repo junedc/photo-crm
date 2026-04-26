@@ -29,6 +29,7 @@ class Booking extends Model
         'customer_email',
         'customer_phone',
         'event_type',
+        'venue',
         'event_date',
         'start_time',
         'end_time',

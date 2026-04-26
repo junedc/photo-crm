@@ -30,12 +30,14 @@
             $customerPackageDiscountPercentage = (float) ($customerPackageDiscountPercentage ?? 0);
             $applyCustomerPackageDiscount = static fn (float $amount): float => round($amount * (1 - ($customerPackageDiscountPercentage / 100)), 2);
             $bookingCurrencyCode = strtoupper($tenant?->stripe_currency ?: config('services.platform_stripe.currency', 'usd'));
+            $bookingCurrencyPlaceholder = $bookingCurrencyCode.' 0.00';
             $wizardErrorSteps = [
                 'customer_name' => 1,
                 'customer_phone' => 1,
                 'customer_email' => 1,
                 'event_date' => 1,
                 'event_type' => 1,
+                'venue' => 1,
                 'start_time' => 1,
                 'end_time' => 1,
                 'total_hours' => 1,
@@ -67,16 +69,16 @@
                 <div class="flex items-center gap-6 text-right">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Travel Fee</p>
-                        <p id="booking-summary-travel" class="mt-1 text-sm font-medium text-stone-200">{{ $bookingCurrencyCode }} $0.00</p>
+                        <p id="booking-summary-travel" class="mt-1 text-sm font-medium text-stone-200">{{ $bookingCurrencyPlaceholder }}</p>
                     </div>
-                    <p id="booking-summary-discount" class="hidden">-$0.00</p>
+                    <p id="booking-summary-discount" class="hidden">-{{ $bookingCurrencyPlaceholder }}</p>
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Deposit</p>
-                        <p id="booking-summary-deposit" class="mt-1 text-sm font-medium text-amber-200">{{ $bookingCurrencyCode }} $0.00</p>
+                        <p id="booking-summary-deposit" class="mt-1 text-sm font-medium text-amber-200">{{ $bookingCurrencyPlaceholder }}</p>
                     </div>
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Total Price</p>
-                        <p id="booking-summary-total" class="mt-1 text-xl font-semibold text-cyan-200">{{ $bookingCurrencyCode }} $0.00</p>
+                        <p id="booking-summary-total" class="mt-1 text-xl font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</p>
                     </div>
                     <button
                         type="button"
@@ -243,10 +245,10 @@
                         </div>
                         <div class="grid gap-4 lg:grid-cols-2">
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_date') ? 'border-rose-300/70' : 'border-white/10' }}" onkeydown="return false" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_date"></p>
-                                @error('event_date')
+                                <label class="mb-2 block text-sm text-stone-300" for="venue">Venue <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                <input id="venue" name="venue" type="text" value="{{ old('venue') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('venue') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="venue"></p>
+                                @error('venue')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
@@ -263,16 +265,16 @@
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
-                            <div class="lg:col-span-2">
-                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Event location <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_location') ? 'border-rose-300/70' : 'border-white/10' }}" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_location"></p>
-                                @error('event_location')
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_date') ? 'border-rose-300/70' : 'border-white/10' }}" onkeydown="return false" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_date"></p>
+                                @error('event_date')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
-                        </div>
-                        <div class="grid gap-4 sm:grid-cols-3">
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="start-time">Start hour <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <select id="start-time" name="start_time" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('start_time') ? 'border-rose-300/70' : 'border-white/10' }}" required>
@@ -511,7 +513,7 @@
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <div id="package-tier-selected-price" class="rounded-2xl border border-amber-300/30 bg-stone-950/70 px-4 py-2 text-sm font-semibold text-amber-100">
-                                        $0.00
+                                        {{ $bookingCurrencyPlaceholder }}
                                     </div>
                                     <button type="button" id="open-package-tier-modal" class="rounded-2xl border border-cyan-300/30 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-300/10">
                                         Choose timing
@@ -697,7 +699,7 @@
                             </option>
                         @endforeach
                     </select>
-                    <p id="discount-amount-label" class="hidden">-$0.00</p>
+                    <p id="discount-amount-label" class="hidden">-{{ $bookingCurrencyPlaceholder }}</p>
                     <p id="discount-note" class="hidden">No discount selected.</p>
 
                     <section class="rounded-[2rem] border border-white/10 bg-white/5 p-6" data-wizard-step="4" hidden>
@@ -711,16 +713,19 @@
 
                         <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                             <div class="min-w-0">
-                                <label class="mb-2 block text-sm text-stone-300" for="event-location-travel">Event location <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="event-location-travel" type="text" value="{{ old('event_location') }}" data-google-address="true" data-location-mirror autocomplete="street-address" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_location_travel"></p>
+                                <label class="mb-2 block text-sm text-stone-300" for="event-location">Location address <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                <input id="event-location" name="event_location" type="text" value="{{ old('event_location') }}" data-google-address="true" autocomplete="street-address" class="w-full rounded-2xl border {{ $errors->has('event_location') ? 'border-rose-300/70' : 'border-white/10' }} bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_location"></p>
+                                @error('event_location')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
                                 <h2 class="sr-only">
                                     <span class="text-cyan-200">Travel Fee</span>
                                     <span class="mx-2 text-stone-500">•</span>
                                     <span>Auto distance pricing</span>
                                 </h2>
                                 <p id="travel-fee-note" class="mt-1 text-xs text-stone-400">
-                                    {{ $workspaceAddress ? 'Round trip from '.$workspaceAddress.'. '.number_format((float) $travelFreeKilometers, 2).' km free each way, then $'.number_format((float) $travelFeePerKilometer, 2).' per km.' : 'Set your workspace address and travel rate in Settings to enable travel pricing.' }}
+                                    {{ $workspaceAddress ? 'Round trip from '.$workspaceAddress.'. '.number_format((float) $travelFreeKilometers, 2).' km free each way, then '.$bookingCurrencyCode.' '.number_format((float) $travelFeePerKilometer, 2).' per km.' : 'Set your workspace address and travel rate in Settings to enable travel pricing.' }}
                                 </p>
                             </div>
                             <div class="flex flex-wrap items-center gap-3 text-right">
@@ -730,7 +735,7 @@
                                 </div>
                                 <div class="rounded-2xl border border-white/10 bg-stone-950/50 px-4 py-3">
                                     <p class="text-[10px] uppercase tracking-[0.24em] text-stone-500">Travel Fee</p>
-                                    <p id="travel-fee-label" class="mt-1 text-sm font-semibold text-cyan-200">${{ number_format((float) old('travel_fee', 0), 2) }}</p>
+                                    <p id="travel-fee-label" class="mt-1 text-sm font-semibold text-cyan-200">{{ $bookingCurrencyCode }} {{ number_format((float) old('travel_fee', 0), 2) }}</p>
                                 </div>
                             </div>
                         </div>
@@ -764,7 +769,7 @@
                                 </div>
 
                                 <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5">
-                                    <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Customer and location</p>
+                                    <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Customer, venue and location</p>
                                     <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                                         <div>
                                             <dt class="text-stone-500">Name</dt>
@@ -774,8 +779,12 @@
                                             <dt class="text-stone-500">Event date</dt>
                                             <dd id="wizard-summary-date" class="mt-1 font-medium text-white">Not selected</dd>
                                         </div>
+                                        <div>
+                                            <dt class="text-stone-500">Venue</dt>
+                                            <dd id="wizard-summary-venue" class="mt-1 font-medium text-white">Not entered</dd>
+                                        </div>
                                         <div class="sm:col-span-2">
-                                            <dt class="text-stone-500">Location</dt>
+                                            <dt class="text-stone-500">Location address</dt>
                                             <dd id="wizard-summary-location" class="mt-1 font-medium text-white">Not entered</dd>
                                         </div>
                                     </dl>
@@ -787,23 +796,23 @@
                                 <div class="mt-5 space-y-3 text-sm">
                                     <div class="flex items-center justify-between gap-4">
                                         <span class="text-stone-400">Package</span>
-                                        <span id="wizard-summary-package-total" class="font-medium text-white">$0.00</span>
+                                        <span id="wizard-summary-package-total" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4">
                                         <span class="text-stone-400">Add-ons</span>
-                                        <span id="wizard-summary-addon-total" class="font-medium text-white">$0.00</span>
+                                        <span id="wizard-summary-addon-total" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4">
                                         <span class="text-stone-400">Travel fee</span>
-                                        <span id="wizard-summary-travel" class="font-medium text-white">$0.00</span>
+                                        <span id="wizard-summary-travel" class="font-medium text-white">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 border-t border-white/10 pt-4">
                                         <span class="text-stone-300">Total</span>
-                                        <span id="wizard-summary-total" class="text-2xl font-semibold text-cyan-200">$0.00</span>
+                                        <span id="wizard-summary-total" class="text-2xl font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4">
                                         <span class="text-stone-400">Deposit</span>
-                                        <span id="wizard-summary-deposit" class="font-semibold text-amber-200">$0.00</span>
+                                        <span id="wizard-summary-deposit" class="font-semibold text-amber-200">{{ $bookingCurrencyPlaceholder }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -864,35 +873,21 @@
                 </div>
 
                 <div class="space-y-5 p-6">
-                    <section class="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                        <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Package</p>
-                        <div class="mt-3 flex items-start justify-between gap-4">
-                            <div class="flex min-w-0 items-center gap-4">
-                                <div id="book-now-package-thumbnail" class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-stone-900 text-3xl font-semibold text-stone-600">P</div>
-                                <div class="min-w-0">
-                                    <h3 id="book-now-package-name" class="text-2xl font-semibold text-white">No package selected</h3>
-                                    <p class="mt-2 text-sm text-stone-300">This will be used to create your booking, invoice, and deposit payment.</p>
-                                </div>
-                            </div>
-                            <p id="book-now-package-price" class="text-xl font-semibold text-cyan-100">$0.00</p>
-                        </div>
-                    </section>
-
-                    <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <section class="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-sm uppercase tracking-[0.3em] text-emerald-200">Selected Add-Ons</p>
-                                <p class="mt-2 text-sm text-stone-300">Optional items included in this checkout.</p>
+                                <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
+                                <p class="mt-1 text-sm text-stone-300">Package and add-ons included in this checkout.</p>
                             </div>
-                            <p id="book-now-addon-total" class="text-lg font-semibold text-emerald-100">$0.00</p>
+                            <p id="book-now-selection-total" class="text-lg font-semibold text-cyan-100">{{ $bookingCurrencyPlaceholder }}</p>
                         </div>
-                        <div id="book-now-addon-list" class="mt-4 space-y-3 text-sm text-stone-200">
-                            <p class="text-stone-400">No add-ons selected.</p>
+                        <div id="book-now-selection-list" class="mt-4 space-y-2 text-sm text-stone-200">
+                            <p class="text-stone-400">No package selected.</p>
                         </div>
                     </section>
 
                     <p id="book-now-discount-name" class="hidden">No discount selected.</p>
-                    <p id="book-now-discount-amount" class="hidden">-$0.00</p>
+                    <p id="book-now-discount-amount" class="hidden">-{{ $bookingCurrencyPlaceholder }}</p>
 
                     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
                         <label class="text-sm uppercase tracking-[0.3em] text-violet-200" for="book-now-discount-code">
@@ -918,14 +913,14 @@
                     <section class="grid gap-4 md:grid-cols-2">
                         <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
                             <p class="text-sm uppercase tracking-[0.3em] text-amber-200">Deposit Due Today</p>
-                            <p id="book-now-deposit-amount" class="mt-3 text-3xl font-semibold text-white">$0.00</p>
+                            <p id="book-now-deposit-amount" class="mt-3 text-3xl font-semibold text-white">{{ $bookingCurrencyPlaceholder }}</p>
                             <p class="mt-2 text-sm text-stone-300">
                                 Deposit percentage: {{ number_format((float) config('invoicing.deposit_percentage', 30), 0) }}%
                             </p>
                         </div>
                         <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
                             <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Booking Total</p>
-                            <p id="book-now-total-amount" class="mt-3 text-3xl font-semibold text-cyan-200">$0.00</p>
+                            <p id="book-now-total-amount" class="mt-3 text-3xl font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</p>
                             <p class="mt-2 text-sm text-stone-300">The balance invoice will be created automatically and paid later through your invoice link.</p>
                         </div>
                     </section>
@@ -1008,8 +1003,8 @@
                 const travelFeeInput = document.getElementById('travel-fee');
                 const totalHoursInput = document.getElementById('total-hours');
                 const totalHoursDisplay = document.getElementById('total-hours-display');
+                const venueInput = document.getElementById('venue');
                 const eventLocationInput = document.getElementById('event-location');
-                const eventLocationMirrorInput = document.getElementById('event-location-travel');
                 const startTimeInput = document.getElementById('start-time');
                 const endTimeInput = document.getElementById('end-time');
                 const endTimeDisplay = document.getElementById('end-time-display');
@@ -1036,11 +1031,8 @@
                 const confirmBookNowButton = document.getElementById('book-now-confirm');
                 const termsAcceptedCheckbox = document.getElementById('terms-accepted');
                 const termsError = document.getElementById('book-now-terms-error');
-                const bookNowPackageThumbnail = document.getElementById('book-now-package-thumbnail');
-                const bookNowPackageName = document.getElementById('book-now-package-name');
-                const bookNowPackagePrice = document.getElementById('book-now-package-price');
-                const bookNowAddonList = document.getElementById('book-now-addon-list');
-                const bookNowAddonTotal = document.getElementById('book-now-addon-total');
+                const bookNowSelectionList = document.getElementById('book-now-selection-list');
+                const bookNowSelectionTotal = document.getElementById('book-now-selection-total');
                 const bookNowDiscountName = document.getElementById('book-now-discount-name');
                 const bookNowDiscountAmount = document.getElementById('book-now-discount-amount');
                 const bookNowDiscountCode = document.getElementById('book-now-discount-code');
@@ -1057,6 +1049,7 @@
                 const wizardSummaryItems = document.getElementById('wizard-summary-items');
                 const wizardSummaryCustomer = document.getElementById('wizard-summary-customer');
                 const wizardSummaryDate = document.getElementById('wizard-summary-date');
+                const wizardSummaryVenue = document.getElementById('wizard-summary-venue');
                 const wizardSummaryLocation = document.getElementById('wizard-summary-location');
                 const wizardSummaryPackageTotal = document.getElementById('wizard-summary-package-total');
                 const wizardSummaryAddonTotal = document.getElementById('wizard-summary-addon-total');
@@ -1071,12 +1064,12 @@
                     customerEmailInput,
                     customerPhoneInput,
                     document.getElementById('event-date'),
-                    document.getElementById('event-location'),
-                    document.getElementById('event-location-travel'),
+                    venueInput,
+                    eventLocationInput,
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !eventLocationMirrorInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowPackageThumbnail || !bookNowPackageName || !bookNowPackagePrice || !bookNowAddonList || !bookNowAddonTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryPackageTotal || !wizardSummaryAddonTotal || !wizardSummaryTravel || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
                     return;
                 }
 
@@ -1205,8 +1198,8 @@
                     customer_email: 'Email address',
                     event_date: 'Event date',
                     event_type: 'Event type',
-                    event_location: 'Event location',
-                    event_location_travel: 'Event location',
+                    venue: 'Venue',
+                    event_location: 'Location address',
                     start_time: 'Start hour',
                     end_time: 'End hour',
                     total_hours: 'Duration',
@@ -1215,10 +1208,6 @@
                 const fieldKey = (field) => {
                     if (field.id === 'total-hours-display') {
                         return 'total_hours';
-                    }
-
-                    if (field.id === 'event-location-travel') {
-                        return 'event_location_travel';
                     }
 
                     return field.name || field.id;
@@ -1235,10 +1224,6 @@
                 const fieldValue = (field) => {
                     if (field.id === 'total-hours-display') {
                         return field.value || totalHoursInput.value;
-                    }
-
-                    if (field.id === 'event-location-travel') {
-                        return field.value || eventLocationInput.value;
                     }
 
                     return field.value;
@@ -1398,15 +1383,6 @@
                     return element.innerHTML;
                 };
 
-                const renderBookNowPackageThumbnail = (packageInput) => {
-                    const photoUrl = packageInput?.dataset.packagePhotoUrl || '';
-                    const packageName = packageInput?.dataset.packageName || 'Selected package';
-
-                    bookNowPackageThumbnail.innerHTML = photoUrl
-                        ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(packageName)}" class="h-full w-full object-cover">`
-                        : 'P';
-                };
-
                 const cartImageMarkup = (photoUrl, name, fallback) => photoUrl
                     ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-12 w-12 rounded-2xl object-cover">`
                     : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">${fallback}</div>`;
@@ -1454,8 +1430,7 @@
                 const updateBookNowAmounts = () => {
                     const totals = bookNowTotals();
 
-                    bookNowPackagePrice.textContent = formatCurrency(totals.packageTotal);
-                    bookNowAddonTotal.textContent = formatCurrency(totals.addOnTotal);
+                    bookNowSelectionTotal.textContent = formatCurrency(totals.packageTotal + totals.addOnTotal);
                     bookNowDiscountName.textContent = totals.selectedDiscount ? totals.selectedDiscount.textContent.trim() : 'No discount selected.';
                     bookNowDiscountAmount.textContent = `-${formatCurrency(totals.discountAmount)}`;
                     bookNowTotalAmount.textContent = formatCurrency(totals.total);
@@ -1594,9 +1569,16 @@
                 const initialPackageTimingId = @json(old('package_hourly_price_id'));
                 const requestedPackageId = new URLSearchParams(window.location.search).get('package_id');
                 const bookingCurrencyCode = @json($bookingCurrencyCode);
-                const formatCurrency = (value) => `$${value.toFixed(2)}`;
-                const formatSummaryCurrency = (value) => `${bookingCurrencyCode} ${formatCurrency(value)}`;
                 const parseAmount = (value) => Number.parseFloat(value || '0') || 0;
+                const currencyNumberFormatter = new Intl.NumberFormat(undefined, {
+                    style: 'currency',
+                    currency: bookingCurrencyCode,
+                    currencyDisplay: 'narrowSymbol',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+                const formatCurrency = (value) => currencyNumberFormatter.format(parseAmount(value));
+                const formatSummaryCurrency = (value) => `${bookingCurrencyCode} ${formatCurrency(value)}`;
                 const applyPackageDiscount = (amount) => {
                     const normalizedAmount = parseAmount(amount);
 
@@ -1935,7 +1917,7 @@
                     if (!selectedPackage) {
                         packageTierSummary.classList.add('hidden');
                         packageTierOptions.innerHTML = '';
-                        packageTierSelectedPrice.textContent = '$0.00';
+                        packageTierSelectedPrice.textContent = formatSummaryCurrency(0);
                         packageTierSelectedLabel.textContent = 'No timing option selected yet.';
                         return;
                     }
@@ -2055,6 +2037,7 @@
                     const totals = quoteTotals();
                     const customerName = document.getElementById('customer-name')?.value.trim();
                     const eventDate = document.getElementById('event-date')?.value;
+                    const venue = venueInput.value.trim();
                     const eventLocation = eventLocationInput.value.trim();
 
                     wizardSummaryPackageTotal.textContent = formatCurrency(totals.packageTotal);
@@ -2064,6 +2047,7 @@
                     wizardSummaryDeposit.textContent = formatCurrency(totals.depositAmount);
                     wizardSummaryCustomer.textContent = customerName || 'Not entered';
                     wizardSummaryDate.textContent = eventDate || 'Not selected';
+                    wizardSummaryVenue.textContent = venue || 'Not entered';
                     wizardSummaryLocation.textContent = eventLocation || 'Not entered';
 
                     if (!totals.selectedPackage) {
@@ -2116,7 +2100,7 @@
                     summaryPackage.textContent = totals.packageName;
                     summaryTotal.textContent = formatSummaryCurrency(totals.total);
                     summaryTravel.textContent = formatSummaryCurrency(totals.travelFee);
-                    summaryDiscount.textContent = '-$0.00';
+                    summaryDiscount.textContent = `-${formatSummaryCurrency(0)}`;
                     summaryDeposit.textContent = formatSummaryCurrency(totals.depositAmount);
 
                     const discountedTotals = bookNowTotals();
@@ -2169,7 +2153,7 @@
                         }
 
                         if (!destination) {
-                            updateTravelLabels(0, 0, 'Enter an event location to calculate travel pricing automatically.');
+                            updateTravelLabels(0, 0, 'Enter a location address to calculate travel pricing automatically.');
                             return;
                         }
 
@@ -2260,28 +2244,37 @@
                         return;
                     }
 
-                    renderBookNowPackageThumbnail(totals.selectedPackage);
-                    bookNowPackageName.textContent = totals.packageName;
                     updateBookNowAmounts();
 
-                    if (totals.selectedAddOns.length) {
-                        bookNowAddonList.innerHTML = totals.selectedAddOns
-                            .map((input) => {
-                                const name = input.dataset.addonName || 'Add-On';
-                                const price = formatCurrency(parseAmount(input.dataset.addonPrice));
-                                const category = input.dataset.addonCategory || 'Uncategorized';
-                                const description = input.dataset.addonDescription || 'No add-on description provided yet.';
-                                const photoUrl = input.dataset.addonPhotoUrl || '';
-                                const imageMarkup = photoUrl
-                                    ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-16 w-16 rounded-2xl object-cover">`
-                                    : `<div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-2xl font-semibold text-stone-600">A</div>`;
+                    const packageRow = totals.selectedPackage
+                        ? (() => {
+                            const photoUrl = totals.selectedPackage.dataset.packagePhotoUrl || '';
+                            const description = 'Creates your booking, invoice, and deposit payment.';
+                            const imageMarkup = photoUrl
+                                ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(totals.packageName)}" class="h-12 w-12 rounded-2xl object-cover">`
+                                : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">P</div>`;
 
-                                return `<div class="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-stone-950/60 p-3"><div class="flex min-w-0 items-center gap-3">${imageMarkup}<div class="min-w-0"><p class="truncate font-medium text-white">${escapeHtml(name)}</p><p class="mt-1 text-xs uppercase tracking-[0.18em] text-emerald-200">${escapeHtml(category)}</p><p class="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">${escapeHtml(description)}</p></div></div><span class="shrink-0 font-medium text-emerald-100">${price}</span></div>`;
-                            })
-                            .join('');
-                    } else {
-                        bookNowAddonList.innerHTML = '<p class="text-stone-400">No add-ons selected.</p>';
-                    }
+                            return `<div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-cyan-300/15 bg-stone-950/55 px-3 py-3"><div>${imageMarkup}</div><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(totals.packageName)}</p><p class="mt-1 text-[11px] uppercase tracking-[0.18em] text-cyan-200">Package</p><p class="mt-1 truncate text-xs text-stone-400">${description}</p></div><span class="text-sm font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</span></div>`;
+                        })()
+                        : '';
+
+                    const addOnRows = totals.selectedAddOns
+                        .map((input) => {
+                            const name = input.dataset.addonName || 'Add-On';
+                            const price = formatCurrency(parseAmount(input.dataset.addonPrice));
+                            const category = input.dataset.addonCategory || 'Uncategorized';
+                            const photoUrl = input.dataset.addonPhotoUrl || '';
+                            const imageMarkup = photoUrl
+                                ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-12 w-12 rounded-2xl object-cover">`
+                                : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">A</div>`;
+
+                            return `<div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-stone-950/45 px-3 py-3"><div>${imageMarkup}</div><div class="min-w-0"><p class="truncate text-sm font-medium text-white">${escapeHtml(name)}</p><p class="mt-1 text-[11px] uppercase tracking-[0.18em] text-emerald-200">${escapeHtml(category)}</p></div><span class="text-sm font-medium text-emerald-100">${price}</span></div>`;
+                        })
+                        .join('');
+
+                    bookNowSelectionList.innerHTML = packageRow || addOnRows
+                        ? `${packageRow}${addOnRows}`
+                        : '<p class="text-stone-400">No package selected.</p>';
 
                     if (bookNowDiscountCode.value.trim()) {
                         applyDiscountCode();
@@ -2469,7 +2462,8 @@
                     payload.set('customer_email', document.getElementById('customer-email')?.value || '');
                     payload.set('customer_phone', document.getElementById('customer-phone')?.value || '');
                     payload.set('event_date', document.getElementById('event-date')?.value || '');
-                    payload.set('event_location', document.getElementById('event-location')?.value || '');
+                    payload.set('venue', venueInput?.value || '');
+                    payload.set('event_location', eventLocationInput?.value || '');
                     payload.set('notes', document.getElementById('booking-notes')?.value || '');
 
                     return payload;
@@ -2485,7 +2479,7 @@
                             return;
                         }
 
-                        const hasContent = ['customer_name', 'customer_email', 'customer_phone', 'event_date', 'event_location', 'notes']
+                        const hasContent = ['customer_name', 'customer_email', 'customer_phone', 'event_date', 'venue', 'event_location', 'notes']
                             .some((field) => (payload.get(field) || '').trim() !== '');
 
                         if (!hasContent && !leadTokenInput.value) {
@@ -2545,23 +2539,6 @@
                     field.addEventListener('input', () => clearFieldError(field));
                     field.addEventListener('change', () => clearFieldError(field));
                 });
-                eventLocationInput.addEventListener('input', () => {
-                    eventLocationMirrorInput.value = eventLocationInput.value;
-                });
-                eventLocationMirrorInput.addEventListener('input', () => {
-                    eventLocationInput.value = eventLocationMirrorInput.value;
-                    clearFieldError(eventLocationInput);
-                    clearFieldError(eventLocationMirrorInput);
-                    queueAutosave();
-                    queueTravelCalculation();
-                });
-                eventLocationMirrorInput.addEventListener('change', () => {
-                    eventLocationInput.value = eventLocationMirrorInput.value;
-                    clearFieldError(eventLocationInput);
-                    clearFieldError(eventLocationMirrorInput);
-                    queueAutosave();
-                    queueTravelCalculation();
-                });
                 startTimeInput.addEventListener('input', updateTotalHours);
                 startTimeInput.addEventListener('change', () => {
                     snapTimeInput(startTimeInput);
@@ -2590,7 +2567,6 @@
                 eventLocationInput.addEventListener('input', queueTravelCalculation);
                 eventLocationInput.addEventListener('change', queueTravelCalculation);
                 eventLocationInput.addEventListener('blur', queueTravelCalculation);
-                eventLocationMirrorInput.addEventListener('blur', queueTravelCalculation);
                 form.addEventListener('submit', (event) => {
                     updatePackageDrivenTiming();
 

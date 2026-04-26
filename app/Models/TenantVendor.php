@@ -14,6 +14,7 @@ class TenantVendor extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'company_name',
         'address',
         'mobile_number',
         'service_type',

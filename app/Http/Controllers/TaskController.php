@@ -143,7 +143,8 @@ class TaskController extends Controller
     private function validateTask(Request $request, Tenant $tenant): array
     {
         $bookingIds = Booking::query()->pluck('id');
-        $statusIds = $this->taskStatuses($tenant)->pluck('id');
+        $taskStatuses = $this->taskStatuses($tenant);
+        $statusIds = $taskStatuses->pluck('id');
         $validated = $request->validate([
             'task_name' => ['required', 'string', 'max:255'],
             'task_duration_hours' => ['nullable', 'numeric', 'min:0'],
@@ -185,6 +186,10 @@ class TaskController extends Controller
         }
 
         unset($validated['assigned_to']);
+
+        if (blank($validated['task_status_id'] ?? null)) {
+            $validated['task_status_id'] = $taskStatuses->firstWhere('name', 'new')['id'] ?? null;
+        }
 
         return $validated;
     }
@@ -248,6 +253,11 @@ class TaskController extends Controller
                 ));
         }
 
+        $tenant->taskStatuses()->firstOrCreate(
+            ['name' => 'new'],
+            ['system' => false],
+        );
+
         return $tenant->taskStatuses()
             ->orderBy('name')
             ->get()
@@ -285,6 +295,10 @@ class TaskController extends Controller
                 $tenant,
                 $task,
                 (string) ($recipient['name'] ?? 'there'),
+                $task->booking_id
+                    ? route('admin.bookings.show', $task->booking_id)
+                    : route('tasks.index', ['task' => $task->id]),
+                $task->booking_id ? 'View booking' : 'View task',
             ),
             $recipient,
             [],

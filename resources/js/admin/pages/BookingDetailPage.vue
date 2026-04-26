@@ -21,6 +21,7 @@ const taskErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
+const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 
 const buildEditForm = (record) => ({
     booking_status_id: record?.status_id ? String(record.status_id) : String(props.data.bookingStatusOptions?.[0]?.id ?? ''),
@@ -52,7 +53,7 @@ const buildTaskForm = (task = null) => ({
     task_name: task?.task_name ?? '',
     task_duration_hours: task?.task_duration_hours ?? '',
     assigned_to: task?.assigned_to ? String(task.assigned_to) : '',
-    task_status_id: task?.task_status_id ? String(task.task_status_id) : '',
+    task_status_id: task?.task_status_id ? String(task.task_status_id) : defaultTaskStatusId.value,
     due_date: task?.due_date ?? '',
     date_started: task?.date_started ?? '',
     date_completed: task?.date_completed ?? '',
@@ -878,7 +879,6 @@ const removeTask = async (task) => {
                         <div>
                             <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Status</label>
                             <select v-model="taskForm.task_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(taskValidationErrors, 'task_status_id') ? 'border-rose-300/60' : ''">
-                                <option value="">No status</option>
                                 <option v-for="status in taskStatuses" :key="status.id" :value="String(status.id)">{{ status.label ?? status.name }}</option>
                             </select>
                         </div>

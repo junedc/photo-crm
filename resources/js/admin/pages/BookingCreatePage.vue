@@ -186,6 +186,7 @@ const resetCreateForm = () => {
         customer_email: '',
         customer_phone: '',
         event_type: props.data.eventTypes?.[0] ?? 'Wedding',
+        venue: '',
         event_date: '',
         start_time: '',
         end_time: '',
@@ -362,6 +363,10 @@ const createBooking = async () => {
         errors.event_date = requiredMessage('Event date');
     }
 
+    if (isBlank(createForm.value.venue)) {
+        errors.venue = requiredMessage('Venue');
+    }
+
     if (isBlank(createForm.value.start_time)) {
         errors.start_time = requiredMessage('Start hour');
     }
@@ -431,6 +436,10 @@ const validateCreateWizardStep = (step) => {
             errors.event_date = requiredMessage('Event date');
         }
 
+        if (isBlank(createForm.value.venue)) {
+            errors.venue = requiredMessage('Venue');
+        }
+
         if (isBlank(createForm.value.start_time)) {
             errors.start_time = requiredMessage('Start hour');
         }
@@ -459,8 +468,8 @@ const validateCreateWizardStep = (step) => {
     createErrors.value = errors;
 
     const stepOneFields = isEntryBooking.value
-        ? [subjectField, 'customer_name', 'customer_email', 'customer_phone', 'event_date', 'start_time', 'total_hours', 'end_time']
-        : [subjectField, 'customer_email', 'customer_phone', 'event_date', 'start_time', 'total_hours', 'end_time', 'event_type'];
+        ? [subjectField, 'customer_name', 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time']
+        : [subjectField, 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time', 'event_type'];
 
     const relevantFieldsByStep = {
         1: stepOneFields,
@@ -564,6 +573,19 @@ const blockCreateSubmit = () => {};
                     </div>
                 </template>
 
+                <div :class="isEntryBooking ? 'sm:col-span-2 xl:col-span-4' : 'sm:col-span-2 xl:col-span-2'">
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Venue</label>
+                    <input v-model="createForm.venue" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'venue') ? 'border-rose-300/60' : ''">
+                    <p v-if="firstError(createValidationErrors, 'venue')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(createValidationErrors, 'venue') }}</p>
+                </div>
+
+                <div v-if="!isEntryBooking" class="sm:col-span-2 xl:col-span-2">
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
+                    <select v-model="createForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_type') ? 'border-rose-300/60' : ''">
+                        <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
+                    </select>
+                </div>
+
                 <div v-if="isEntryBooking" class="sm:col-span-2 xl:col-span-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Invoice Contact</p>
                     <div class="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -597,12 +619,6 @@ const blockCreateSubmit = () => {};
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>
                     <input :value="createForm.end_time" readonly type="text" class="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none" :class="firstError(createValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
-                </div>
-                <div v-if="!isEntryBooking" class="sm:col-span-2 xl:col-span-4">
-                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
-                    <select v-model="createForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_type') ? 'border-rose-300/60' : ''">
-                        <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
-                    </select>
                 </div>
             </div>
         </section>
@@ -747,6 +763,7 @@ const blockCreateSubmit = () => {};
                     <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Event</p>
                     <div class="mt-3 space-y-2 text-sm text-stone-300">
                         <p><span class="text-stone-500">Date:</span> <span class="text-white">{{ createForm.event_date || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">Venue:</span> <span class="text-white">{{ createForm.venue || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Start:</span> <span class="text-white">{{ createForm.start_time || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">End:</span> <span class="text-white">{{ createForm.end_time || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Duration:</span> <span class="text-white">{{ createForm.total_hours || '0.00' }} hrs</span></p>

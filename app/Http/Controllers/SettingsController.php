@@ -787,6 +787,7 @@ class SettingsController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'mobile_number' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -809,6 +810,7 @@ class SettingsController extends Controller
 
         return [
             'name' => trim((string) $data['name']),
+            'company_name' => filled($data['company_name'] ?? null) ? trim((string) $data['company_name']) : null,
             'address' => filled($data['address'] ?? null) ? trim((string) $data['address']) : null,
             'mobile_number' => filled($data['mobile_number'] ?? null) ? trim((string) $data['mobile_number']) : null,
             'email' => $data['email'] ?? null,
@@ -824,6 +826,7 @@ class SettingsController extends Controller
         return [
             'id' => $vendor->id,
             'name' => $vendor->name,
+            'company_name' => $vendor->company_name,
             'address' => $vendor->address,
             'mobile_number' => $vendor->mobile_number ?: $vendor->phone,
             'service_type' => $vendor->service_type,

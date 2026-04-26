@@ -24,12 +24,14 @@ class VendorController extends Controller
                 $query->where(function ($nested) use ($search): void {
                     $nested
                         ->where('name', 'like', "%{$search}%")
+                        ->orWhere('company_name', 'like', "%{$search}%")
                         ->orWhere('address', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('mobile_number', 'like', "%{$search}%")
                         ->orWhere('service_type', 'like', "%{$search}%");
                 });
             })
+            ->orderBy('company_name')
             ->orderBy('name')
             ->get()
             ->map(fn (TenantVendor $vendor) => $this->serializeVendor($vendor))
@@ -116,6 +118,7 @@ class VendorController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'mobile_number' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -138,6 +141,7 @@ class VendorController extends Controller
 
         return [
             'name' => trim((string) $data['name']),
+            'company_name' => filled($data['company_name'] ?? null) ? trim((string) $data['company_name']) : null,
             'address' => filled($data['address'] ?? null) ? trim((string) $data['address']) : null,
             'mobile_number' => filled($data['mobile_number'] ?? null) ? trim((string) $data['mobile_number']) : null,
             'email' => $data['email'] ?? null,
@@ -153,6 +157,7 @@ class VendorController extends Controller
         return [
             'id' => $vendor->id,
             'name' => $vendor->name,
+            'company_name' => $vendor->company_name,
             'address' => $vendor->address,
             'mobile_number' => $vendor->mobile_number ?: $vendor->phone,
             'service_type' => $vendor->service_type,

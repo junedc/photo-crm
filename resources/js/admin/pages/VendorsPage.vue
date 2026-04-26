@@ -25,6 +25,7 @@ const clientErrors = ref({});
 const editingVendorId = ref(null);
 const form = ref({
     name: '',
+    company_name: '',
     address: '',
     mobile_number: '',
     email: '',
@@ -39,6 +40,7 @@ const startVendorCreate = () => {
     clientErrors.value = {};
     form.value = {
         name: '',
+        company_name: '',
         address: '',
         mobile_number: '',
         email: '',
@@ -52,6 +54,7 @@ const startVendorEdit = (vendor) => {
     clientErrors.value = {};
     form.value = {
         name: vendor.name ?? '',
+        company_name: vendor.company_name ?? '',
         address: vendor.address ?? '',
         mobile_number: vendor.mobile_number ?? '',
         email: vendor.email ?? '',
@@ -98,7 +101,7 @@ const saveVendor = async () => {
     const errors = {};
 
     if (isBlank(form.value.name)) {
-        errors.name = requiredMessage('Vendor name');
+        errors.name = requiredMessage('Contact name');
     }
 
     if (isBlank(form.value.services_offered_text)) {
@@ -123,6 +126,7 @@ const saveVendor = async () => {
             method: editingVendor ? 'put' : 'post',
             data: {
                 name: form.value.name,
+                company_name: form.value.company_name,
                 address: form.value.address,
                 mobile_number: form.value.mobile_number,
                 email: form.value.email,
@@ -137,7 +141,11 @@ const saveVendor = async () => {
         const index = vendorList.value.findIndex((entry) => entry.id === record.id);
         vendorList.value = index >= 0
             ? vendorList.value.map((entry) => entry.id === record.id ? record : entry)
-            : [...vendorList.value, record].sort((left, right) => String(left.name ?? '').localeCompare(String(right.name ?? '')));
+            : [...vendorList.value, record].sort((left, right) => {
+                const companyCompare = String(left.company_name ?? '').localeCompare(String(right.company_name ?? ''));
+
+                return companyCompare !== 0 ? companyCompare : String(left.name ?? '').localeCompare(String(right.name ?? ''));
+            });
 
         startVendorCreate();
     } catch {}
@@ -183,9 +191,13 @@ const removeVendor = async (vendor) => {
 
                 <div class="mt-4 grid gap-3">
                     <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Vendor Name</label>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Contact Name</label>
                         <input v-model="form.name" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(validationErrors, 'name') ? 'border-rose-300/60' : ''">
                         <p v-if="firstError(validationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(validationErrors, 'name') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Company Name</label>
+                        <input v-model="form.company_name" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Address</label>
@@ -234,9 +246,10 @@ const removeVendor = async (vendor) => {
                 </div>
 
                 <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                    <div class="grid grid-cols-[4rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_10rem_minmax(0,1fr)_8rem_7rem_7rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                    <div class="grid grid-cols-[4rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_10rem_minmax(0,1fr)_8rem_7rem_7rem] gap-3 bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">
                         <span>ID</span>
-                        <span>Name</span>
+                        <span>Contact</span>
+                        <span>Company</span>
                         <span>Services</span>
                         <span>Address</span>
                         <span>Mobile</span>
@@ -245,9 +258,10 @@ const removeVendor = async (vendor) => {
                         <span>Edit</span>
                         <span>Delete</span>
                     </div>
-                    <div v-for="vendor in vendors" :key="vendor.id" class="grid grid-cols-[4rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_10rem_minmax(0,1fr)_8rem_7rem_7rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
+                    <div v-for="vendor in vendors" :key="vendor.id" class="grid grid-cols-[4rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_10rem_minmax(0,1fr)_8rem_7rem_7rem] items-center gap-3 border-t border-white/10 px-3 py-2.5">
                         <p class="truncate text-sm text-stone-300">{{ vendor.id }}</p>
                         <p class="truncate text-sm text-white">{{ vendor.name }}</p>
+                        <p class="truncate text-sm text-stone-300">{{ vendor.company_name || 'No company' }}</p>
                         <p class="truncate text-sm text-stone-300">{{ vendor.services_offered_label || 'No services' }}</p>
                         <p class="truncate text-sm text-stone-300">{{ vendor.address || 'No address' }}</p>
                         <p class="truncate text-sm text-stone-300">{{ vendor.mobile_number || 'No mobile' }}</p>
