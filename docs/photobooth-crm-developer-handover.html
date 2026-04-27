@@ -595,8 +595,10 @@ DEPLOY_SERVER_APP_PATH=/home/u838520432/domains/memoshot.com/laravel_app</pre>
 /opt/alt/php84/usr/bin/php artisan view:cache</pre>
 
         <h3>Storage Symlink on Hostinger</h3>
-        <pre>cd /home/u838520432/domains/memoshot.com
-ln -sfn laravel_app/storage/app/public public_html/storage</pre>
+        <pre>rm -f /home/u838520432/domains/memoshot.com/public_html/storage
+ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage
+ls -l /home/u838520432/domains/memoshot.com/public_html/storage
+readlink -f /home/u838520432/domains/memoshot.com/public_html/storage</pre>
 
         <h2>11. Tenant Domains and Wildcard DNS</h2>
         <p>

@@ -602,36 +602,38 @@ Set the production database, mail, Stripe, and API keys in this server `.env`. D
 
 ### Storage Symlink
 
-If `laravel_app` and `public_html` are sibling folders, create the public storage symlink over SSH:
+On Hostinger or a similar shared-hosting layout, point `public_html/storage` to Laravel's `storage/app/public` using absolute paths:
 
 ```bash
-cd /home/u838520432/domains/memoshot.com
-ln -sfn laravel_app/storage/app/public public_html/storage
+rm -f /home/u838520432/domains/memoshot.com/public_html/storage
+ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage
 ```
 
 Verify it:
 
 ```bash
-ls -la public_html/storage
+ls -l /home/u838520432/domains/memoshot.com/public_html/storage
+readlink -f /home/u838520432/domains/memoshot.com/public_html/storage
 ```
 
 Expected result:
 
 ```txt
-public_html/storage -> laravel_app/storage/app/public
+/home/u838520432/domains/memoshot.com/public_html/storage -> /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public
+/home/u838520432/domains/memoshot.com/laravel_app/storage/app/public
 ```
 
 If `public_html/storage` already exists as a real directory, inspect it first:
 
 ```bash
-ls -la public_html/storage
+ls -la /home/u838520432/domains/memoshot.com/public_html/storage
 ```
 
 If it is safe to replace:
 
 ```bash
-rm -rf public_html/storage
-ln -s laravel_app/storage/app/public public_html/storage
+rm -rf /home/u838520432/domains/memoshot.com/public_html/storage
+ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage
 ```
 
 Do not expose the entire Laravel `storage` folder. Only expose `storage/app/public`.
