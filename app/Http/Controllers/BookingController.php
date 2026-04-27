@@ -278,10 +278,14 @@ class BookingController extends Controller
             'equipment_discount_types.*' => ['nullable', Rule::in(['percentage', 'amount'])],
             'equipment_discount_values' => ['nullable', 'array'],
             'equipment_discount_values.*' => ['nullable', 'numeric', 'min:0'],
+            'send_quote_email' => ['nullable', 'boolean'],
+            'send_admin_quote_email' => ['nullable', 'boolean'],
         ], [
             'start_time.regex' => 'Start hour must be on the hour or half hour.',
             'end_time.regex' => 'End hour must be on the hour or half hour.',
         ]);
+        $sendQuoteEmail = Auth::check() ? $request->boolean('send_quote_email', true) : true;
+        $sendAdminQuoteEmail = Auth::check() ? $request->boolean('send_admin_quote_email', true) : true;
 
         $addOnIds = collect($data['add_on_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
         $equipmentIds = collect($data['equipment_ids'] ?? [])->map(fn ($id) => (int) $id)->values()->all();
@@ -298,6 +302,7 @@ class BookingController extends Controller
         $selectedEquipment = $this->resolveEquipmentSelection($equipmentIds);
         $lead = $this->resolveLead($data['lead_token'] ?? null);
         unset($data['lead_token']);
+        unset($data['send_quote_email'], $data['send_admin_quote_email']);
         unset($data['add_on_ids']);
         unset($data['equipment_ids']);
         unset($data['add_on_discount_types'], $data['add_on_discount_values']);
@@ -314,7 +319,7 @@ class BookingController extends Controller
         $this->syncPackageActionTasks($booking);
         $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
         $this->markLeadAsBooked($lead, $booking);
-        $this->sendBookingEmails($booking);
+        $this->sendBookingEmails($booking, $sendQuoteEmail, $sendAdminQuoteEmail);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -549,6 +554,9 @@ class BookingController extends Controller
                 'booking_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
                     ->where('tenant_id', $tenantId)
                     ->where('scope', TenantStatuses::SCOPE_BOOKING))],
+                'quote_response_status_id' => ['required', Rule::exists('workspace_statuses', 'id')->where(fn ($query) => $query
+                    ->where('tenant_id', $tenantId)
+                    ->where('scope', TenantStatuses::SCOPE_QUOTE_RESPONSE))],
                 'booking_kind' => ['nullable', Rule::in($this->bookingKinds())],
                 'entry_name' => ['nullable', 'string', 'max:255'],
                 'entry_description' => ['nullable', 'string'],
@@ -613,6 +621,15 @@ class BookingController extends Controller
             $status = $this->workspaceStatusById($tenantId, TenantStatuses::SCOPE_BOOKING, $data['booking_status_id']);
             $data['booking_status_id'] = $status?->id;
             $data['status'] = $status?->name ?? $booking->status;
+            $quoteResponseStatus = $this->workspaceStatusById($tenantId, TenantStatuses::SCOPE_QUOTE_RESPONSE, $data['quote_response_status_id']);
+            $nextQuoteResponse = $quoteResponseStatus?->name ?? 'pending';
+            $data['quote_response_status_id'] = $quoteResponseStatus?->id;
+            $data['customer_response_status'] = $nextQuoteResponse;
+            $data['customer_responded_at'] = $nextQuoteResponse === 'pending'
+                ? null
+                : ($booking->customer_response_status === $nextQuoteResponse && $booking->customer_responded_at
+                    ? $booking->customer_responded_at
+                    : now());
 
             if ($this->bookingInvoiceAmountLocked($booking) && $this->bookingFinancialSelectionChanged($booking, $data)) {
                 throw ValidationException::withMessages([
@@ -746,23 +763,13 @@ class BookingController extends Controller
 
         if ($request->expectsJson()) {
             return response()->json([
-                'records' => $bookings->getCollection()->map(fn (Booking $booking) => $this->serializeBooking($booking))->values()->all(),
+                'records' => $bookings->getCollection()->map(fn (Booking $booking) => $this->serializeBookingListRecord($booking))->values()->all(),
                 'pagination' => $this->paginationMeta($bookings),
             ]);
         }
 
-        $packages = Package::query()
-            ->where('is_active', true)
-            ->with('hourlyPrices')
-            ->latest()
-            ->get();
-        $equipment = Equipment::query()->latest()->get();
-        $addOns = InventoryItem::query()
-            ->where('category', 'add-on')
-            ->latest()
-            ->get();
         $serializedBookings = $bookings->getCollection()
-            ->map(fn (Booking $booking) => $this->serializeBooking($booking));
+            ->map(fn (Booking $booking) => $this->serializeBookingListRecord($booking));
 
         return view('admin.app', [
             'page' => 'bookings',
@@ -803,11 +810,10 @@ class BookingController extends Controller
                 ],
                 'bookingStatuses' => $this->statuses(),
                 'bookingStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_BOOKING) : [],
+                'quoteResponseStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE) : [],
                 'bookingKinds' => $this->bookingKinds(),
                 'bookings' => $serializedBookings->values()->all(),
                 'pagination' => $this->paginationMeta($bookings),
-                'eventTypes' => $this->eventTypes(),
-                ...$this->adminBookingCreateProps($tenant, $packages, $equipment, $addOns),
             ],
         ]);
     }
@@ -858,6 +864,7 @@ class BookingController extends Controller
                 ],
                 'bookingStatuses' => $this->statuses(),
                 'bookingStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_BOOKING) : [],
+                'quoteResponseStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE) : [],
                 'bookingKinds' => $this->bookingKinds(),
                 'eventTypes' => $this->eventTypes(),
                 'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
@@ -1020,7 +1027,7 @@ class BookingController extends Controller
         $eventDateTo = trim((string) $request->query('event_date_to', ''));
 
         return Booking::query()
-            ->with(['package', 'addOns', 'equipment', 'discount', 'invoice.installments'])
+            ->with(['package', 'addOns', 'equipment', 'discount', 'bookingStatus'])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
                     $nested
@@ -1053,7 +1060,11 @@ class BookingController extends Controller
     private function renderAdminCalendarPage(CurrentTenant $currentTenant): View
     {
         $tenant = $currentTenant->get();
-        $bookings = Booking::query()->with(['package'])->latest('event_date')->latest()->get();
+        $bookings = Booking::query()
+            ->with(['bookingStatus'])
+            ->latest('event_date')
+            ->latest()
+            ->get();
 
         return view('admin.app', [
             'page' => 'calendar',
@@ -1089,7 +1100,7 @@ class BookingController extends Controller
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
-                'bookings' => $bookings->map(fn (Booking $booking) => $this->serializeBooking($booking))->values()->all(),
+                'bookings' => $bookings->map(fn (Booking $booking) => $this->serializeCalendarBooking($booking))->values()->all(),
             ],
         ]);
     }
@@ -1098,7 +1109,7 @@ class BookingController extends Controller
     {
         $tenant = $currentTenant->get();
         $quotes = Booking::query()
-            ->with(['package', 'invoice'])
+            ->with(['package', 'bookingStatus', 'quoteResponseStatus'])
             ->latest()
             ->get();
 
@@ -1137,9 +1148,64 @@ class BookingController extends Controller
                     'logout' => route('logout'),
                 ],
                 'quoteResponseStatuses' => ['all', ...TenantStatuses::names($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE)],
-                'quotes' => $quotes->map(fn (Booking $booking) => $this->serializeBooking($booking))->values()->all(),
+                'quotes' => $quotes->map(fn (Booking $booking) => $this->serializeQuoteListBooking($booking))->values()->all(),
             ],
         ]);
+    }
+
+    private function serializeQuoteListBooking(Booking $booking): array
+    {
+        return [
+            'id' => $booking->id,
+            'quote_number' => $booking->quote_number,
+            'customer_name' => $booking->customer_name,
+            'customer_email' => $booking->customer_email,
+            'package_name' => $booking->package?->name,
+            'event_date_label' => DateFormatter::date($booking->event_date),
+            'status' => $booking->status,
+            'status_label' => $booking->bookingStatus?->label() ?? str($booking->status)->replace('_', ' ')->title()->toString(),
+            'customer_response_status_id' => $booking->quote_response_status_id,
+            'customer_response_status' => $booking->customer_response_status,
+            'customer_response_label' => $booking->quoteResponseStatus?->label() ?? str($booking->customer_response_status)->replace('_', ' ')->title()->toString(),
+            'customer_responded_at_label' => DateFormatter::dateTime($booking->customer_responded_at),
+            'show_url' => route('admin.bookings.show', $booking),
+        ];
+    }
+
+    private function serializeBookingListRecord(Booking $booking): array
+    {
+        return [
+            'id' => $booking->id,
+            'quote_number' => $booking->quote_number,
+            'booking_kind' => $booking->booking_kind ?? 'customer',
+            'booking_kind_label' => $this->bookingKindLabel($booking->booking_kind ?? 'customer'),
+            'display_name' => $booking->entry_name ?: $booking->customer_name,
+            'customer_name' => $booking->customer_name,
+            'event_date_label' => DateFormatter::date($booking->event_date),
+            'start_time_label' => $this->timeLabel($booking->start_time),
+            'package_name' => $booking->package?->name,
+            'booking_total' => number_format(app(BookingPricing::class)->totalForBooking($booking), 2, '.', ''),
+            'status' => $booking->status,
+            'status_label' => $booking->bookingStatus?->label() ?? str($booking->status)->replace('_', ' ')->title()->toString(),
+            'show_url' => route('admin.bookings.show', $booking),
+        ];
+    }
+
+    private function serializeCalendarBooking(Booking $booking): array
+    {
+        return [
+            'id' => $booking->id,
+            'booking_kind' => $booking->booking_kind ?? 'customer',
+            'booking_kind_label' => $this->bookingKindLabel($booking->booking_kind ?? 'customer'),
+            'display_name' => $booking->entry_name ?: $booking->customer_name,
+            'customer_name' => $booking->customer_name,
+            'event_date' => DateFormatter::inputDate($booking->event_date),
+            'start_time' => $this->timeValue($booking->start_time),
+            'end_time' => $this->timeValue($booking->end_time),
+            'status' => $booking->status,
+            'status_label' => $booking->bookingStatus?->label() ?? str($booking->status)->replace('_', ' ')->title()->toString(),
+            'show_url' => route('admin.bookings.show', $booking),
+        ];
     }
 
     private function serializeBooking(Booking $booking): array
@@ -1778,7 +1844,7 @@ class BookingController extends Controller
         $lead->save();
     }
 
-    private function sendBookingEmails(Booking $booking): void
+    private function sendBookingEmails(Booking $booking, bool $sendCustomerEmail = true, bool $sendAdminEmail = true): void
     {
         $addonsPdf = app(BookingAddonsPdfGenerator::class)->makeForBooking($booking);
         $adminRecipients = $booking->tenant?->users
@@ -1790,7 +1856,7 @@ class BookingController extends Controller
             ->all() ?? [];
         $trackedEmailSender = app(TrackedEmailSender::class);
 
-        if ($adminRecipients !== []) {
+        if ($sendAdminEmail && $adminRecipients !== []) {
             $trackedEmailSender->send(
                 new AdminBookingCreatedMail($booking, $addonsPdf),
                 $adminRecipients,
@@ -1807,35 +1873,58 @@ class BookingController extends Controller
             );
         }
 
-        $trackedEmailSender->send(
-            new CustomerBookingCreatedMail($booking, $addonsPdf),
-            [[
-                'email' => $booking->customer_email,
-                'name' => $booking->customer_name,
-            ]],
-            [],
-            [
-                'tenant' => $booking->tenant,
-                'context' => $booking,
-                'attachments' => $addonsPdf ? [[
-                    'name' => $addonsPdf->name,
-                    'mime' => 'application/pdf',
-                    'content' => $addonsPdf->content,
-                ]] : [],
-            ],
-        );
+        if ($sendCustomerEmail) {
+            $trackedEmailSender->send(
+                new CustomerBookingCreatedMail($booking, $addonsPdf),
+                [[
+                    'email' => $booking->customer_email,
+                    'name' => $booking->customer_name,
+                ]],
+                [],
+                [
+                    'tenant' => $booking->tenant,
+                    'context' => $booking,
+                    'attachments' => $addonsPdf ? [[
+                        'name' => $addonsPdf->name,
+                        'mime' => 'application/pdf',
+                        'content' => $addonsPdf->content,
+                    ]] : [],
+                ],
+            );
+        }
     }
 
     private function serializeInvoice(Invoice $invoice): array
     {
+        $invoice->loadMissing(['installments', 'booking']);
+        $firstInstallment = $invoice->installments->first();
+        $secondInstallment = $invoice->installments->skip(1)->first();
+        $depositAmount = (float) ($firstInstallment?->amount ?? 0);
+        $totalAmount = (float) $invoice->total_amount;
+
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
             'status' => $invoice->status,
+            'issued_at' => DateFormatter::inputDate($invoice->issued_at),
+            'issued_at_label' => DateFormatter::date($invoice->issued_at),
+            'amounts_are' => $invoice->amounts_are ?: 'tax_exclusive',
+            'amounts_are_label' => $this->amountsAreLabel($invoice->amounts_are ?: 'tax_exclusive'),
+            'line_description' => $invoice->line_description ?: trim(($invoice->booking?->customer_name ?: 'Customer').' booking package'),
+            'tax_rate' => $invoice->tax_rate,
+            'tax_rate_label' => $this->taxRateLabel($invoice->tax_rate),
             'total_amount' => number_format((float) $invoice->total_amount, 2, '.', ''),
             'amount_paid' => number_format((float) $invoice->amount_paid, 2, '.', ''),
             'balance_due' => number_format((float) $invoice->total_amount - (float) $invoice->amount_paid, 2, '.', ''),
+            'deposit_amount' => number_format($depositAmount, 2, '.', ''),
+            'deposit_percentage' => $totalAmount > 0 ? number_format(($depositAmount / $totalAmount) * 100, 2, '.', '') : '0.00',
+            'installment_count' => $invoice->installments->count(),
+            'first_due_date' => DateFormatter::inputDate($firstInstallment?->due_date),
+            'interval_days' => $firstInstallment && $secondInstallment
+                ? max(1, $firstInstallment->due_date->diffInDays($secondInstallment->due_date))
+                : 30,
             'public_url' => route('invoices.show', $invoice),
+            'update_url' => route('admin.bookings.invoice.update', $invoice->booking),
             'send_url' => route('admin.bookings.invoice.send', $invoice->booking),
             'installments' => $invoice->installments->map(fn (InvoiceInstallment $installment) => [
                 'id' => $installment->id,
@@ -1845,8 +1934,40 @@ class BookingController extends Controller
                 'due_date_label' => DateFormatter::date($installment->due_date),
                 'status' => $installment->status,
                 'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
+                'payment_method' => $installment->payment_method,
+                'payment_method_label' => $this->paymentMethodLabel($installment->payment_method),
+                'payment_reference' => $installment->payment_reference,
+                'payment_notes' => $installment->payment_notes,
+                'record_payment_url' => route('admin.bookings.invoice.installments.manual-payment', [$invoice->booking, $installment]),
             ])->values()->all(),
         ];
+    }
+
+    private function paymentMethodLabel(?string $value): string
+    {
+        return [
+            'bank_transfer' => 'Bank transfer',
+            'cash' => 'Cash',
+            'other' => 'Other',
+        ][$value] ?? '';
+    }
+
+    private function amountsAreLabel(string $value): string
+    {
+        return [
+            'tax_exclusive' => 'Tax exclusive',
+            'tax_inclusive' => 'Tax inclusive',
+            'no_tax' => 'No Tax',
+        ][$value] ?? 'Tax exclusive';
+    }
+
+    private function taxRateLabel(?string $value): string
+    {
+        return [
+            'bas_excluded' => 'BAS Excluded',
+            'gst_free_income' => 'GST Free Income',
+            'gst_on_income' => 'GST on Income',
+        ][$value] ?? 'No tax';
     }
 
     private function serializeBookingDocuments(Booking $booking): array
@@ -1886,7 +2007,7 @@ class BookingController extends Controller
                 'created_at_sort' => optional($booking->invoice->issued_at ?: $booking->invoice->created_at)->toIso8601String(),
                 'file_name' => ($booking->invoice->invoice_number ?: 'invoice').'.pdf',
                 'file_size_label' => null,
-                'url' => route('invoices.show', $booking->invoice),
+                'url' => route('admin.bookings.invoice.pdf', $booking),
                 'delete_url' => null,
                 'can_delete' => false,
             ]);

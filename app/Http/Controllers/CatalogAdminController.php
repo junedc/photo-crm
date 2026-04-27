@@ -170,6 +170,7 @@ class CatalogAdminController extends Controller
                 'create' => route('equipment.create'),
             ],
             'maintenanceStatuses' => $this->equipmentStatuses(),
+            'maintenanceStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_EQUIPMENT) : [],
         ]);
     }
 
@@ -186,6 +187,7 @@ class CatalogAdminController extends Controller
                 'create' => route('equipment.create'),
             ],
             'maintenanceStatuses' => $this->equipmentStatuses(),
+            'maintenanceStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_EQUIPMENT) : [],
             'equipmentRecord' => $this->serializeEquipment($equipment),
         ]);
     }

@@ -10,6 +10,7 @@ use App\Models\Lead;
 use App\Models\Package;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\TenantStatuses;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -729,6 +730,64 @@ class BookingTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_accept_quote_on_customer_behalf_from_booking_edit(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Acceptance Booth',
+            'base_price' => 1200,
+            'is_active' => true,
+        ]);
+        $bookingStatus = TenantStatuses::ensureWorkspaceRecords($tenant, TenantStatuses::SCOPE_BOOKING)
+            ->firstWhere('name', 'pending');
+        $quoteStatus = TenantStatuses::ensureWorkspaceRecords($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE)
+            ->firstWhere('name', 'accepted');
+        $eventDate = now()->addWeek()->toDateString();
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'Riley Client',
+            'customer_email' => 'riley@example.com',
+            'customer_phone' => '0400000099',
+            'event_type' => 'Wedding',
+            'event_date' => $eventDate,
+            'start_time' => '14:00',
+            'end_time' => '18:00',
+            'total_hours' => 4,
+            'event_location' => 'Garden Venue',
+            'booking_status_id' => $bookingStatus->id,
+            'status' => 'pending',
+            'customer_response_status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->putJson('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id, [
+                'booking_status_id' => $bookingStatus->id,
+                'quote_response_status_id' => $quoteStatus->id,
+                'booking_kind' => 'customer',
+                'package_id' => $package->id,
+                'customer_name' => 'Riley Client',
+                'customer_email' => 'riley@example.com',
+                'customer_phone' => '0400000099',
+                'event_type' => 'Wedding',
+                'event_date' => $eventDate,
+                'start_time' => '14:00',
+                'end_time' => '18:00',
+                'total_hours' => 4,
+                'event_location' => 'Garden Venue',
+            ])
+            ->assertOk()
+            ->assertJsonPath('record.customer_response_status', 'accepted');
+
+        $booking->refresh();
+
+        $this->assertSame($quoteStatus->id, $booking->quote_response_status_id);
+        $this->assertSame('accepted', $booking->customer_response_status);
+        $this->assertNotNull($booking->customer_responded_at);
+    }
+
     public function test_admin_can_create_booking_from_dashboard(): void
     {
         [$tenant, $user] = $this->tenantUser();
@@ -759,6 +818,7 @@ class BookingTest extends TestCase
                 'customer_email' => 'morgan@example.com',
                 'customer_phone' => '0400000004',
                 'event_type' => 'Wedding',
+                'venue' => 'South Bank',
                 'event_date' => now()->addDays(10)->toDateString(),
                 'start_time' => '13:00',
                 'end_time' => '17:00',

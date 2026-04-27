@@ -212,9 +212,12 @@ Route::post('/settings/task-statuses', [SettingsController::class, 'storeTaskSta
         Route::delete('/access-control/guests/{user}', [UserRoleController::class, 'destroyGuestAccess'])->name('access.guests.destroy');
         Route::put('/admin/bookings/{booking}', [BookingController::class, 'update'])->name('admin.bookings.update');
         Route::get('/admin/bookings/{booking}/quote-pdf', [BookingController::class, 'quotePdf'])->name('admin.bookings.quote-pdf');
+        Route::get('/admin/bookings/{booking}/invoice-pdf', [InvoiceController::class, 'pdf'])->name('admin.bookings.invoice.pdf');
         Route::post('/admin/bookings/{booking}/documents', [BookingController::class, 'storeDocument'])->name('admin.bookings.documents.store');
         Route::delete('/admin/bookings/{booking}/documents/{document}', [BookingController::class, 'destroyDocument'])->name('admin.bookings.documents.destroy');
         Route::post('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'store'])->name('admin.bookings.invoice.store');
+        Route::put('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'update'])->name('admin.bookings.invoice.update');
+        Route::post('/admin/bookings/{booking}/invoice/installments/{installment}/manual-payment', [InvoiceController::class, 'recordManualPayment'])->name('admin.bookings.invoice.installments.manual-payment');
         Route::post('/admin/bookings/{booking}/invoice/send', [InvoiceController::class, 'send'])->name('admin.bookings.invoice.send');
         Route::post('/admin/bookings/{booking}/grant-client-access', [BookingController::class, 'grantClientAccess'])->name('admin.bookings.client-access.grant');
         Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

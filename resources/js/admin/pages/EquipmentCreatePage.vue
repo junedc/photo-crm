@@ -13,13 +13,21 @@ const props = defineProps({
 const createPhotoInput = ref(null);
 const { saving, fieldErrors, submitForm } = useWorkspaceCrud();
 const clientErrors = ref({});
+const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const fallbackStatusOptions = computed(() => (props.data.maintenanceStatuses ?? []).map((status) => ({
+    id: status,
+    label: statusLabel(status),
+})));
+const maintenanceStatusOptions = computed(() => props.data.maintenanceStatusOptions?.length
+    ? props.data.maintenanceStatusOptions
+    : fallbackStatusOptions.value);
 const form = ref({
     name: '',
     category: '',
     serial_number: '',
     description: '',
     daily_rate: '',
-    maintenance_status_id: String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
+    maintenance_status_id: String(maintenanceStatusOptions.value?.[0]?.id ?? ''),
     last_maintained_at: '',
     maintenance_notes: '',
 });
@@ -43,7 +51,6 @@ const validateEquipmentForm = () => {
     return !hasFieldErrors(errors);
 };
 
-const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const openDatePicker = (event) => {
     try {
         event.target?.showPicker?.();
@@ -124,7 +131,7 @@ const createEquipment = async () => {
                 <div>
                     <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Maintenance Status</label>
                     <select v-model="form.maintenance_status_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
-                        <option v-for="status in data.maintenanceStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
+                        <option v-for="status in maintenanceStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                     </select>
                 </div>
                 <div>

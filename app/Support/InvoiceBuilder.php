@@ -23,6 +23,7 @@ class InvoiceBuilder
         ?float $depositPercentage,
         Carbon $firstDueDate,
         int $intervalDays,
+        ?float $depositAmount = null,
     ): Invoice {
         if ($booking->invoice()->exists()) {
             throw ValidationException::withMessages([
@@ -53,14 +54,47 @@ class InvoiceBuilder
             $firstDueDate,
             $intervalDays,
             (int) round($totalAmount * 100),
+            $depositAmount !== null ? (int) round($depositAmount * 100) : null,
         );
 
         return $invoice->load('installments');
     }
 
-    private function createInstallments(Invoice $invoice, int $count, float $depositPercentage, Carbon $firstDueDate, int $intervalDays, int $totalAmountCents): void
+    public function rebuildInstallments(
+        Invoice $invoice,
+        int $installmentCount,
+        ?float $depositPercentage,
+        Carbon $firstDueDate,
+        int $intervalDays,
+        ?float $depositAmount = null,
+    ): Invoice {
+        $invoice->loadMissing('installments');
+
+        if ((float) $invoice->amount_paid > 0 || $invoice->installments->contains(fn (InvoiceInstallment $installment): bool => $installment->status === 'paid')) {
+            throw ValidationException::withMessages([
+                'invoice' => 'This invoice has payment activity and its installment schedule can no longer be changed.',
+            ]);
+        }
+
+        $invoice->installments()->delete();
+        $this->createInstallments(
+            $invoice,
+            $installmentCount,
+            (float) ($depositPercentage ?? config('invoicing.deposit_percentage', 30)),
+            $firstDueDate,
+            $intervalDays,
+            (int) round((float) $invoice->total_amount * 100),
+            $depositAmount !== null ? (int) round($depositAmount * 100) : null,
+        );
+
+        return $invoice->load('installments');
+    }
+
+    private function createInstallments(Invoice $invoice, int $count, float $depositPercentage, Carbon $firstDueDate, int $intervalDays, int $totalAmountCents, ?int $depositAmountCents = null): void
     {
-        $depositAmount = (int) round($totalAmountCents * ($depositPercentage / 100));
+        $depositAmount = $depositAmountCents !== null
+            ? min(max($depositAmountCents, 0), $totalAmountCents)
+            : (int) round($totalAmountCents * ($depositPercentage / 100));
         $remainingAmount = max($totalAmountCents - $depositAmount, 0);
         $remainingInstallments = max($count - 1, 0);
         $baseRemainingAmount = $remainingInstallments > 0 ? intdiv($remainingAmount, $remainingInstallments) : 0;

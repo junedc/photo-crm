@@ -327,6 +327,194 @@ class InvoiceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_admin_can_open_booking_invoice_as_pdf(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'PDF Package',
+            'base_price' => 500,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'PDF Customer',
+            'customer_email' => 'pdf@example.com',
+            'customer_phone' => '0400000000',
+            'event_date' => now()->addWeek()->toDateString(),
+            'event_location' => 'Brisbane',
+            'status' => 'pending',
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'invoice_number' => 'INV-PDF-0001',
+            'token' => 'invoice-pdf-token',
+            'total_amount' => 500,
+            'amount_paid' => 0,
+            'status' => 'pending',
+            'issued_at' => now(),
+        ]);
+
+        $invoice->installments()->create([
+            'sequence' => 1,
+            'label' => 'Deposit',
+            'due_date' => now()->addWeek()->toDateString(),
+            'amount' => 500,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->get('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id.'/invoice-pdf')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+    }
+
+    public function test_admin_can_update_invoice_deposit_amount(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Editable Package',
+            'base_price' => 1000,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'Edit Invoice',
+            'customer_email' => 'edit@example.com',
+            'customer_phone' => '0400000000',
+            'event_date' => now()->addWeek()->toDateString(),
+            'event_location' => 'Brisbane',
+            'status' => 'pending',
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'invoice_number' => 'INV-EDIT-0001',
+            'token' => 'invoice-edit-token',
+            'total_amount' => 1000,
+            'amount_paid' => 0,
+            'status' => 'issued',
+            'issued_at' => now(),
+        ]);
+
+        $invoice->installments()->create([
+            'sequence' => 1,
+            'label' => 'Deposit',
+            'due_date' => now()->addWeek()->toDateString(),
+            'amount' => 300,
+            'status' => 'pending',
+        ]);
+        $invoice->installments()->create([
+            'sequence' => 2,
+            'label' => 'Installment 1',
+            'due_date' => now()->addWeeks(5)->toDateString(),
+            'amount' => 700,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->putJson('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id.'/invoice', [
+                'invoice_number' => 'INV-EDIT-0002',
+                'issue_date' => now()->toDateString(),
+                'amounts_are' => 'tax_exclusive',
+                'line_description' => 'Edited invoice description',
+                'tax_rate' => 'gst_on_income',
+                'installment_count' => 3,
+                'deposit_type' => 'amount',
+                'deposit_amount' => 250,
+                'first_due_date' => now()->addDays(10)->toDateString(),
+                'interval_days' => 14,
+            ])
+            ->assertOk()
+            ->assertJsonPath('record.invoice_number', 'INV-EDIT-0002')
+            ->assertJsonPath('record.line_description', 'Edited invoice description')
+            ->assertJsonPath('record.tax_rate', 'gst_on_income')
+            ->assertJsonPath('record.installments.0.amount', '250.00')
+            ->assertJsonPath('record.installments.1.amount', '375.00')
+            ->assertJsonPath('record.installments.2.amount', '375.00');
+    }
+
+    public function test_admin_can_record_bank_transfer_payment_for_installment(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Manual Payment Package',
+            'base_price' => 800,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'Manual Payer',
+            'customer_email' => 'manual@example.com',
+            'customer_phone' => '0400000000',
+            'event_date' => now()->addWeek()->toDateString(),
+            'event_location' => 'Brisbane',
+            'status' => 'pending',
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'invoice_number' => 'INV-MANUAL-0001',
+            'token' => 'invoice-manual-token',
+            'total_amount' => 800,
+            'amount_paid' => 0,
+            'status' => 'issued',
+            'issued_at' => now(),
+        ]);
+
+        $installment = $invoice->installments()->create([
+            'sequence' => 1,
+            'label' => 'Deposit',
+            'due_date' => now()->addWeek()->toDateString(),
+            'amount' => 300,
+            'status' => 'pending',
+        ]);
+
+        $invoice->installments()->create([
+            'sequence' => 2,
+            'label' => 'Installment 1',
+            'due_date' => now()->addWeeks(5)->toDateString(),
+            'amount' => 500,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id.'/invoice/installments/'.$installment->id.'/manual-payment', [
+                'payment_method' => 'bank_transfer',
+                'paid_at' => now()->toDateString(),
+                'payment_reference' => 'BANK-123',
+                'payment_notes' => 'Confirmed in bank account.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('record.status', 'partially_paid')
+            ->assertJsonPath('record.amount_paid', '300.00')
+            ->assertJsonPath('record.balance_due', '500.00')
+            ->assertJsonPath('record.installments.0.status', 'paid')
+            ->assertJsonPath('record.installments.0.payment_method', 'bank_transfer');
+
+        $this->assertDatabaseHas('invoice_installments', [
+            'id' => $installment->id,
+            'status' => 'paid',
+            'payment_method' => 'bank_transfer',
+            'payment_reference' => 'BANK-123',
+        ]);
+    }
+
     public function test_stripe_webhook_marks_installment_paid(): void
     {
         [$tenant] = $this->tenantUser();

@@ -17,14 +17,21 @@ const { saving, fieldErrors, submitForm } = useWorkspaceCrud();
 const equipmentRecord = ref(props.data.equipmentRecord);
 const clientErrors = ref({});
 const showDeleteConfirm = ref(false);
-const maintenanceStatusOptions = computed(() => props.data.maintenanceStatusOptions ?? []);
+const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const fallbackStatusOptions = computed(() => (props.data.maintenanceStatuses ?? []).map((status) => ({
+    id: status,
+    label: statusLabel(status),
+})));
+const maintenanceStatusOptions = computed(() => props.data.maintenanceStatusOptions?.length
+    ? props.data.maintenanceStatusOptions
+    : fallbackStatusOptions.value);
 const form = ref({
     name: props.data.equipmentRecord?.name ?? '',
     category: props.data.equipmentRecord?.category ?? '',
     serial_number: props.data.equipmentRecord?.serial_number ?? '',
     description: props.data.equipmentRecord?.description ?? '',
     daily_rate: props.data.equipmentRecord?.daily_rate ?? '',
-    maintenance_status_id: props.data.equipmentRecord?.maintenance_status_id ? String(props.data.equipmentRecord.maintenance_status_id) : String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
+    maintenance_status_id: props.data.equipmentRecord?.maintenance_status_id ? String(props.data.equipmentRecord.maintenance_status_id) : String(maintenanceStatusOptions.value?.[0]?.id ?? ''),
     last_maintained_at: props.data.equipmentRecord?.last_maintained_at ?? '',
     maintenance_notes: props.data.equipmentRecord?.maintenance_notes ?? '',
 });
@@ -48,7 +55,6 @@ const validateEquipmentForm = () => {
     return !hasFieldErrors(errors);
 };
 
-const statusLabel = (status) => status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const openDatePicker = (event) => {
     try {
         event.target?.showPicker?.();
@@ -88,7 +94,7 @@ const updateEquipment = async () => {
             serial_number: record.serial_number ?? '',
             description: record.description ?? '',
             daily_rate: record.daily_rate ?? '',
-            maintenance_status_id: record.maintenance_status_id ? String(record.maintenance_status_id) : String(props.data.maintenanceStatusOptions?.[0]?.id ?? ''),
+            maintenance_status_id: record.maintenance_status_id ? String(record.maintenance_status_id) : String(maintenanceStatusOptions.value?.[0]?.id ?? ''),
             last_maintained_at: record.last_maintained_at ?? '',
             maintenance_notes: record.maintenance_notes ?? '',
         };

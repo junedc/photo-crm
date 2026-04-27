@@ -27,6 +27,7 @@ const navItems = computed(() => [
     { key: 'overview', label: 'Overview', href: props.data.routes.dashboard, accent: 'amber', icon: 'dashboard' },
     { key: 'calendar', label: 'Calendar', href: props.data.routes.calendar, accent: 'cyan', icon: 'calendar' },
     { key: 'bookings', label: 'Bookings', href: props.data.routes.bookings, accent: 'rose', icon: 'clipboard' },
+    { key: 'quotes', label: 'Quotes', href: props.data.routes.quotes, accent: 'sky', icon: 'receipt' },
     { key: 'invoices', label: 'Invoices', href: props.data.routes.invoices, accent: 'emerald', icon: 'receipt' },
     { key: 'expenses', label: 'Expenses', href: props.data.routes.expenses ?? '/expenses', accent: 'amber', icon: 'receipt' },
     { key: 'leads', label: 'Leads', href: props.data.routes.leads, accent: 'violet', icon: 'spark' },
