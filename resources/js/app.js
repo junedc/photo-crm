@@ -22,6 +22,7 @@ if (clientPortalDesignElement && window.clientPortalDesignProps) {
 }
 
 if (typeof document !== 'undefined') {
+    window.autoAttachGoogleAddressInputs = autoAttachGoogleAddressInputs;
     window.calculateGoogleAddressDistanceKm = calculateGoogleAddressDistanceKm;
 
     if (document.readyState === 'loading') {

@@ -62,7 +62,8 @@ const parseViewFromUrl = () => {
     return 'month';
 };
 const selectedView = ref(parseViewFromUrl());
-const useDarkCalendar = computed(() => props.data.tenant?.theme !== 'light');
+const isLightTheme = computed(() => props.data.tenant?.theme === 'light');
+const useDarkCalendar = computed(() => !isLightTheme.value);
 const tenantTimezone = computed(() => props.data.tenant?.timezone ?? 'UTC');
 
 const monthLabel = computed(() =>
@@ -240,7 +241,10 @@ const openBooking = (booking) => {
             <span class="rounded-full border border-rose-300/30 bg-rose-300/10 px-3 py-1 text-xs font-medium text-rose-100">Cancelled</span>
         </div>
 
-        <div class="calendar-shell mt-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60 p-3">
+        <div
+            class="calendar-shell mt-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60 p-3"
+            :class="isLightTheme ? 'calendar-shell-light' : 'calendar-shell-dark'"
+        >
             <VueCal
                 ref="calendar"
                 class="memoshot-calendar"
@@ -261,14 +265,14 @@ const openBooking = (booking) => {
                 <template #event="{ event }">
                     <button
                         type="button"
-                        class="booking-chip block w-full rounded-lg border px-2 py-1.5 text-left transition hover:brightness-110"
+                        class="booking-chip block w-full rounded-lg border px-2.5 py-2 text-left shadow-sm transition hover:brightness-105"
                         :class="event.class"
                         @click.stop="openBooking(event.booking)"
                     >
-                        <span class="block truncate text-[11px] font-semibold">
+                        <span class="block truncate text-xs font-semibold leading-4">
                             {{ event.title }}
                         </span>
-                        <span class="mt-0.5 block truncate text-[10px] opacity-80">
+                        <span class="mt-0.5 block truncate text-[11px] font-medium leading-3 opacity-90">
                             {{ event.content }}
                         </span>
                     </button>
@@ -351,6 +355,12 @@ const openBooking = (booking) => {
     border-color: rgba(204, 197, 185, 0.72) !important;
 }
 
+:global([data-theme='light']) .calendar-shell-light,
+.calendar-shell-light {
+    background: #ffffff !important;
+    border-color: rgba(204, 197, 185, 0.72) !important;
+}
+
 :global([data-theme='light']) .calendar-shell :deep(.vuecal) {
     --vuecal-primary-color: #51cbce;
     --vuecal-secondary-color: #ffffff;
@@ -365,31 +375,155 @@ const openBooking = (booking) => {
     color: #252422;
 }
 
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal),
+.calendar-shell-light :deep(.vuecal) {
+    --vuecal-primary-color: #51cbce;
+    --vuecal-secondary-color: #ffffff;
+    --vuecal-base-color: #252422;
+    --vuecal-contrast-color: #ffffff;
+    --vuecal-base-border-color: rgba(204, 197, 185, 0.55);
+    --vuecal-cell-border-color: rgba(204, 197, 185, 0.45);
+    --vuecal-border-color: rgba(154, 139, 118, 0.3);
+    --vuecal-bg-color: #ffffff;
+    --vuecal-text-color: #252422;
+    --vuecal-header-color: #ede8df;
+    --vuecal-header-text-color: #252422;
+    --vuecal-today-bg-color: rgba(81, 203, 206, 0.18);
+    --vuecal-today-color: #252422;
+    color: #252422 !important;
+}
+
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__body),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__flex),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__bg),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__week),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__cell-content) {
+    background: #fffaf2 !important;
+    color: #252422 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__body),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__flex),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__bg),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__week),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__scrollable-wrap),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__scrollable),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell-content),
+.calendar-shell-light :deep(.vuecal__body),
+.calendar-shell-light :deep(.vuecal__flex),
+.calendar-shell-light :deep(.vuecal__bg),
+.calendar-shell-light :deep(.vuecal__week),
+.calendar-shell-light :deep(.vuecal__scrollable-wrap),
+.calendar-shell-light :deep(.vuecal__scrollable),
+.calendar-shell-light :deep(.vuecal__cell-content) {
+    background: #fffaf2 !important;
+    color: #252422 !important;
+}
+
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__weekdays-headings),
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__heading) {
-    background: #ffffff;
-    color: #252422;
+    background: #252422;
+    color: #f8f5ef;
     border-color: rgba(204, 197, 185, 0.55);
 }
 
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__weekdays-headings),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__heading),
+.calendar-shell-light :deep(.vuecal__weekdays-headings),
+.calendar-shell-light :deep(.vuecal__heading) {
+    background: #111827 !important;
+    color: #ffffff !important;
+    border-color: rgba(204, 197, 185, 0.55) !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__weekday),
+.calendar-shell-light :deep(.vuecal__weekday) {
+    background: #111827 !important;
+    color: #ffffff !important;
+    font-weight: 700;
+}
+
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__heading span),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__heading button) {
+    color: #f8f5ef;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__heading span),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__heading button),
+.calendar-shell-light :deep(.vuecal__heading span),
+.calendar-shell-light :deep(.vuecal__heading button) {
+    color: #ffffff !important;
+}
+
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__cell) {
-    background: #ffffff;
-    border-color: rgba(204, 197, 185, 0.45);
+    background: #fffaf2 !important;
+    border-color: rgba(154, 139, 118, 0.28) !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell),
+.calendar-shell-light :deep(.vuecal__cell) {
+    background: #fffaf2 !important;
+    border-color: rgba(154, 139, 118, 0.28) !important;
+    color: #252422 !important;
+    opacity: 1 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell::before),
+.calendar-shell-light :deep(.vuecal__cell::before) {
+    background: transparent !important;
+    filter: none !important;
 }
 
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__cell:nth-child(even)) {
-    background: #ffffff;
+    background: #fff7eb !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell:nth-child(even)),
+.calendar-shell-light :deep(.vuecal__cell:nth-child(even)) {
+    background: #fff7eb !important;
 }
 
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__cell--out-of-scope) {
-    background: #f7f5f0;
+    background: #eee8dd !important;
     opacity: 1;
 }
 
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--out-of-scope),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--out-of-range),
+.calendar-shell-light :deep(.vuecal__cell--out-of-scope),
+.calendar-shell-light :deep(.vuecal__cell--out-of-range) {
+    background: #f3eee6 !important;
+    color: #57534e !important;
+    opacity: 1 !important;
+}
+
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__cell--selected),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__cell--current),
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__cell--today) {
+    background: #f4fbfb !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--selected),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--current),
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--today),
+.calendar-shell-light :deep(.vuecal__cell--selected),
+.calendar-shell-light :deep(.vuecal__cell--current),
+.calendar-shell-light :deep(.vuecal__cell--today) {
+    background: #f4fbfb !important;
+}
+
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__cell-date) {
-    background: #f1eee7;
+    background: #d7f0f1;
     color: #252422;
     font-weight: 700;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell-date),
+.calendar-shell-light :deep(.vuecal__cell-date) {
+    background: #d7f0f1 !important;
+    color: #252422 !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
 }
 
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__cell--today .vuecal__cell-date) {
@@ -397,31 +531,87 @@ const openBooking = (booking) => {
     color: #ffffff;
 }
 
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__cell--today .vuecal__cell-date),
+.calendar-shell-light :deep(.vuecal__cell--today .vuecal__cell-date) {
+    background: #0f9da1 !important;
+    color: #ffffff !important;
+}
+
 :global([data-theme='light']) .calendar-shell :deep(.vuecal__no-event) {
     color: #9a9a9a;
 }
 
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__no-event),
+.calendar-shell-light :deep(.vuecal__no-event) {
+    color: #78716c !important;
+}
+
+:global([data-theme='light']) .calendar-shell :deep(.vuecal__event) {
+    background: transparent !important;
+    color: inherit !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light :deep(.vuecal__event),
+.calendar-shell-light :deep(.vuecal__event) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    opacity: 1 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip,
+.calendar-shell-light .booking-chip {
+    color: #111827 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip span,
+.calendar-shell-light .booking-chip span {
+    color: inherit !important;
+    opacity: 1 !important;
+}
+
 :global([data-theme='light']) .booking-chip.booking-status-pending {
-    border-color: rgba(212, 155, 42, 0.48);
-    background: rgba(251, 198, 88, 0.2);
-    color: #7a5a11;
+    border-color: #d49b2a;
+    background: #fff4d6;
+    color: #5f4307;
 }
 
 :global([data-theme='light']) .booking-chip.booking-status-confirmed {
-    border-color: rgba(45, 157, 97, 0.42);
-    background: rgba(107, 208, 152, 0.2);
-    color: #1e7044;
+    border-color: #2d9d61;
+    background: #ddf8e8;
+    color: #145c36;
 }
 
 :global([data-theme='light']) .booking-chip.booking-status-completed {
-    border-color: rgba(35, 151, 154, 0.42);
-    background: rgba(81, 203, 206, 0.18);
-    color: #176f72;
+    border-color: #23979a;
+    background: #dff8f9;
+    color: #115f62;
 }
 
 :global([data-theme='light']) .booking-chip.booking-status-cancelled {
-    border-color: rgba(211, 91, 56, 0.42);
-    background: rgba(239, 129, 87, 0.18);
-    color: #9f3f26;
+    border-color: #d35b38;
+    background: #ffe5dc;
+    color: #8c321d;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip.booking-status-pending,
+.calendar-shell-light .booking-chip.booking-status-pending {
+    color: #111827 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip.booking-status-confirmed,
+.calendar-shell-light .booking-chip.booking-status-confirmed {
+    color: #111827 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip.booking-status-completed,
+.calendar-shell-light .booking-chip.booking-status-completed {
+    color: #111827 !important;
+}
+
+:global([data-theme='light']) .calendar-shell-light .booking-chip.booking-status-cancelled,
+.calendar-shell-light .booking-chip.booking-status-cancelled {
+    color: #111827 !important;
 }
 </style>

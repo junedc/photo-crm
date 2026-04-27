@@ -200,6 +200,8 @@ const resetCreateForm = () => {
         equipment_discount_values: {},
         add_on_discount_types: {},
         add_on_discount_values: {},
+        send_quote_email: true,
+        send_admin_quote_email: true,
     };
     createErrors.value = {};
     createWizardStep.value = 1;
@@ -783,6 +785,23 @@ const blockCreateSubmit = () => {};
                         <p class="text-white">{{ createForm.event_location || 'Not entered' }}</p>
                         <p><span class="text-stone-500">Notes:</span> <span class="text-white">{{ createForm.notes || 'No notes added' }}</span></p>
                     </div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Quote Email</p>
+                    <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
+                        <input v-model="createForm.send_admin_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
+                        <span>
+                            <span class="block font-semibold text-white">Send new quote request email to admin</span>
+                            <span class="mt-1 block text-xs text-stone-400">Turn this off when you do not want the internal new quote request notification.</span>
+                        </span>
+                    </label>
+                    <label class="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
+                        <input v-model="createForm.send_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
+                        <span>
+                            <span class="block font-semibold text-white">Send quote email to customer</span>
+                            <span class="mt-1 block text-xs text-stone-400">Turn this off when you only want to save the booking internally.</span>
+                        </span>
+                    </label>
                 </div>
             </div>
             <div class="grid gap-4 lg:grid-cols-2">

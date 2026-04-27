@@ -106,6 +106,7 @@ const {
 
 const workspaceForm = ref({
     name: tenantRecord.value.name ?? '',
+    abn: tenantRecord.value.abn ?? '',
     contact_email: tenantRecord.value.contact_email ?? '',
     contact_phone: tenantRecord.value.contact_phone ?? '',
     address: tenantRecord.value.address ?? '',
@@ -227,6 +228,7 @@ const saveWorkspace = async () => {
 
     const formData = new FormData();
     formData.append('name', workspaceForm.value.name ?? '');
+    formData.append('abn', workspaceForm.value.abn ?? '');
     formData.append('contact_email', workspaceForm.value.contact_email ?? '');
     formData.append('contact_phone', workspaceForm.value.contact_phone ?? '');
     formData.append('address', workspaceForm.value.address ?? '');
@@ -258,6 +260,7 @@ const saveWorkspace = async () => {
         tenantRecord.value = record;
         workspaceForm.value = {
             name: record.name ?? '',
+            abn: record.abn ?? '',
             contact_email: record.contact_email ?? '',
             contact_phone: record.contact_phone ?? '',
             address: record.address ?? '',
@@ -526,6 +529,11 @@ onMounted(() => {
                         <p v-if="firstError(workspaceValidationErrors, 'name')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'name') }}</p>
                     </div>
                     <div>
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">ABN</label>
+                        <input v-model="workspaceForm.abn" type="text" inputmode="numeric" autocomplete="off" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'abn') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(workspaceValidationErrors, 'abn')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'abn') }}</p>
+                    </div>
+                    <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Contact Email</label>
                         <input v-model="workspaceForm.contact_email" type="email" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'contact_email') ? 'border-rose-300/60' : ''">
                         <p v-if="firstError(workspaceValidationErrors, 'contact_email')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'contact_email') }}</p>
@@ -534,7 +542,7 @@ onMounted(() => {
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Contact Phone</label>
                         <input v-model="workspaceForm.contact_phone" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                     </div>
-                    <div>
+                    <div class="sm:col-span-2">
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Logo</label>
                         <input ref="workspacePhotoInput" type="file" accept="image/*" class="block w-full rounded-xl border border-dashed border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-950">
                     </div>
@@ -542,14 +550,14 @@ onMounted(() => {
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Address</label>
                         <input v-model="workspaceForm.address" type="text" data-google-address="true" autocomplete="street-address" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                     </div>
-                    <div class="sm:col-span-2">
+                    <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Theme</label>
                         <select v-model="workspaceForm.theme" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                             <option value="dark">Dark theme</option>
                             <option value="light">Paper light theme</option>
                         </select>
                     </div>
-                    <div class="sm:col-span-2">
+                    <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Timezone</label>
                         <select v-model="workspaceForm.timezone" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'timezone') ? 'border-rose-300/60' : ''">
                             <option v-for="timezone in (props.data.timezoneOptions ?? [])" :key="timezone.value" :value="timezone.value">{{ timezone.label }}</option>

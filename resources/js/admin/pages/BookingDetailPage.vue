@@ -20,9 +20,11 @@ const invoiceErrors = ref({});
 const taskErrors = ref({});
 const expenseErrors = ref({});
 const documentErrors = ref({});
+const manualPaymentErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
+const quoteResponseStatusOptions = computed(() => props.data.quoteResponseStatusOptions ?? []);
 const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 const resolvedDefaultTaskStatusId = computed(() => defaultTaskStatusId.value || String(localTaskStatuses.value[0]?.id ?? ''));
 const resolveBookingStatusId = (record) => {
@@ -38,9 +40,23 @@ const resolveBookingStatusId = (record) => {
 
     return String(props.data.bookingStatusOptions?.[0]?.id ?? '');
 };
+const resolveQuoteResponseStatusId = (record) => {
+    if (record?.customer_response_status_id) {
+        return String(record.customer_response_status_id);
+    }
+
+    const matchedStatus = quoteResponseStatusOptions.value.find((status) => String(status.name ?? '').toLowerCase() === String(record?.customer_response_status ?? 'pending').toLowerCase());
+
+    if (matchedStatus?.id) {
+        return String(matchedStatus.id);
+    }
+
+    return String(props.data.quoteResponseStatusOptions?.[0]?.id ?? '');
+};
 
 const buildEditForm = (record) => ({
     booking_status_id: resolveBookingStatusId(record),
+    quote_response_status_id: resolveQuoteResponseStatusId(record),
     booking_kind: record?.booking_kind ?? (props.data.bookingKinds?.[0] ?? 'customer'),
     entry_name: record?.entry_name ?? '',
     entry_description: record?.entry_description ?? '',
@@ -86,6 +102,8 @@ const selectedExpense = ref(null);
 const expenseReceiptInput = ref(null);
 const showDocumentEditor = ref(false);
 const documentFileInput = ref(null);
+const showManualPaymentEditor = ref(false);
+const selectedPaymentInstallment = ref(null);
 const buildExpenseForm = () => ({
     expense_name: '',
     expense_date: new Date().toISOString().slice(0, 10),
@@ -104,18 +122,51 @@ const buildDocumentForm = () => ({
     file: null,
 });
 const documentForm = ref(buildDocumentForm());
-const invoiceForm = ref({
-    installment_count: '3',
-    deposit_percentage: String(props.data.defaultDepositPercentage ?? 30),
-    first_due_date: '',
-    interval_days: '30',
+const todayInput = () => new Date().toISOString().slice(0, 10);
+const buildManualPaymentForm = () => ({
+    payment_method: 'bank_transfer',
+    paid_at: todayInput(),
+    payment_reference: '',
+    payment_notes: '',
 });
+const manualPaymentForm = ref(buildManualPaymentForm());
+const addDaysInput = (date, days) => {
+    const next = new Date(`${date}T00:00:00`);
+    next.setDate(next.getDate() + days);
+
+    return next.toISOString().slice(0, 10);
+};
+const buildInvoiceForm = (invoice = null) => ({
+    invoice_number: invoice?.invoice_number ?? '',
+    issue_date: invoice?.issued_at ?? todayInput(),
+    amounts_are: invoice?.amounts_are ?? 'tax_exclusive',
+    line_description: invoice?.line_description ?? `${props.data.booking?.customer_name ?? 'Customer'} booking package`,
+    tax_rate: invoice?.tax_rate ?? 'gst_free_income',
+    installment_count: String(invoice?.installment_count ?? 3),
+    deposit_type: 'percentage',
+    deposit_percentage: String(invoice?.deposit_percentage ?? props.data.defaultDepositPercentage ?? 30),
+    deposit_amount: String(invoice?.deposit_amount ?? ''),
+    first_due_date: invoice?.first_due_date ?? addDaysInput(todayInput(), 7),
+    interval_days: String(invoice?.interval_days ?? 30),
+});
+const invoiceForm = ref(buildInvoiceForm(props.data.booking?.invoice));
+const amountsAreOptions = [
+    { value: 'tax_exclusive', label: 'Tax exclusive' },
+    { value: 'tax_inclusive', label: 'Tax inclusive' },
+    { value: 'no_tax', label: 'No Tax' },
+];
+const taxRateOptions = [
+    { value: 'bas_excluded', label: 'BAS Excluded' },
+    { value: 'gst_free_income', label: 'GST Free Income' },
+    { value: 'gst_on_income', label: 'GST on Income' },
+];
 
 const editValidationErrors = computed(() => mergeFieldErrors(editErrors.value, fieldErrors.value));
 const invoiceValidationErrors = computed(() => mergeFieldErrors(invoiceErrors.value, fieldErrors.value));
 const taskValidationErrors = computed(() => mergeFieldErrors(taskErrors.value, fieldErrors.value));
 const expenseValidationErrors = computed(() => mergeFieldErrors(expenseErrors.value, fieldErrors.value));
 const documentValidationErrors = computed(() => mergeFieldErrors(documentErrors.value, fieldErrors.value));
+const manualPaymentValidationErrors = computed(() => mergeFieldErrors(manualPaymentErrors.value, fieldErrors.value));
 const packages = computed(() => props.data.packages ?? []);
 const equipmentOptions = computed(() => props.data.equipmentOptions ?? []);
 const addOnOptions = computed(() => props.data.addOnOptions ?? []);
@@ -252,6 +303,55 @@ const taskAssigneeGroups = computed(() => {
 const overviewInitialTotal = computed(() => (
     (Number(bookingRecord.value.booking_total || 0) + Number(bookingRecord.value.discount_amount || 0)).toFixed(2)
 ));
+const invoiceLineAmount = computed(() => Number(bookingRecord.value.invoice?.total_amount ?? bookingRecord.value.booking_total ?? 0));
+const invoiceSubtotal = computed(() => invoiceLineAmount.value.toFixed(2));
+const invoiceTaxRateDisabled = computed(() => invoiceForm.value.amounts_are === 'no_tax');
+const invoiceGstAmount = computed(() => {
+    if (invoiceTaxRateDisabled.value || invoiceForm.value.tax_rate !== 'gst_on_income') {
+        return '0.00';
+    }
+
+    if (invoiceForm.value.amounts_are === 'tax_inclusive') {
+        return (invoiceLineAmount.value / 11).toFixed(2);
+    }
+
+    return (invoiceLineAmount.value * 0.1).toFixed(2);
+});
+const invoiceTotalAmount = computed(() => invoiceLineAmount.value.toFixed(2));
+const invoiceCanEdit = computed(() => {
+    const invoice = bookingRecord.value.invoice;
+
+    if (!invoice) {
+        return true;
+    }
+
+    return Number(invoice.amount_paid ?? 0) <= 0 && !(invoice.installments ?? []).some((installment) => installment.status === 'paid');
+});
+const invoiceDepositAmountPreview = computed(() => {
+    const total = Number(invoiceTotalAmount.value || 0);
+
+    if (invoiceForm.value.deposit_type === 'amount') {
+        return Math.min(Math.max(Number(invoiceForm.value.deposit_amount || 0), 0), total).toFixed(2);
+    }
+
+    return (total * (Math.min(Math.max(Number(invoiceForm.value.deposit_percentage || 0), 0), 100) / 100)).toFixed(2);
+});
+const invoiceDepositPercentagePreview = computed(() => {
+    const total = Number(invoiceTotalAmount.value || 0);
+
+    if (total <= 0) {
+        return '0.00';
+    }
+
+    if (invoiceForm.value.deposit_type === 'percentage') {
+        return Math.min(Math.max(Number(invoiceForm.value.deposit_percentage || 0), 0), 100).toFixed(2);
+    }
+
+    return ((Number(invoiceDepositAmountPreview.value) / total) * 100).toFixed(2);
+});
+const invoiceRemainingBalancePreview = computed(() => (
+    Math.max(Number(invoiceTotalAmount.value) - Number(invoiceDepositAmountPreview.value), 0).toFixed(2)
+));
 
 const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const bookingKindLabel = (kind) => ({
@@ -311,6 +411,7 @@ const openDatePicker = (event) => {
 const syncBooking = (record) => {
     bookingRecord.value = record;
     editForm.value = buildEditForm(record);
+    invoiceForm.value = buildInvoiceForm(record.invoice);
     tasks.value = [...(record.tasks ?? [])];
     window.history.replaceState({}, '', record.show_url);
 };
@@ -397,6 +498,17 @@ watch(() => editForm.value.start_time, () => {
     syncEndTime();
 });
 
+watch(() => invoiceForm.value.amounts_are, (value) => {
+    if (value === 'no_tax') {
+        invoiceForm.value.tax_rate = '';
+        return;
+    }
+
+    if (!invoiceForm.value.tax_rate) {
+        invoiceForm.value.tax_rate = 'gst_free_income';
+    }
+});
+
 watch(resolvedDefaultTaskStatusId, (value) => {
     if (!editingTask.value && isBlank(taskForm.value.task_status_id) && value) {
         taskForm.value.task_status_id = value;
@@ -429,6 +541,10 @@ const updateBooking = async () => {
 
     if (isBlank(editForm.value.booking_status_id)) {
         errors.booking_status_id = requiredMessage('Status');
+    }
+
+    if (isBlank(editForm.value.quote_response_status_id)) {
+        errors.quote_response_status_id = requiredMessage('Quote response');
     }
 
     if (isBlank(editForm.value.package_id)) {
@@ -502,12 +618,36 @@ const cancelEditing = () => {
 const createInvoice = async () => {
     const errors = {};
 
+    if (bookingRecord.value.invoice && isBlank(invoiceForm.value.invoice_number)) {
+        errors.invoice_number = requiredMessage('Invoice number');
+    }
+
+    if (isBlank(invoiceForm.value.issue_date)) {
+        errors.issue_date = requiredMessage('Issue date');
+    }
+
+    if (isBlank(invoiceForm.value.amounts_are)) {
+        errors.amounts_are = requiredMessage('Amounts are');
+    }
+
+    if (!invoiceTaxRateDisabled.value && isBlank(invoiceForm.value.tax_rate)) {
+        errors.tax_rate = requiredMessage('Tax rate');
+    }
+
+    if (isBlank(invoiceForm.value.line_description)) {
+        errors.line_description = requiredMessage('Description');
+    }
+
     if (isBlank(invoiceForm.value.installment_count)) {
         errors.installment_count = requiredMessage('Installments');
     }
 
-    if (isBlank(invoiceForm.value.deposit_percentage)) {
+    if (invoiceForm.value.deposit_type === 'percentage' && isBlank(invoiceForm.value.deposit_percentage)) {
         errors.deposit_percentage = requiredMessage('Deposit %');
+    }
+
+    if (invoiceForm.value.deposit_type === 'amount' && isBlank(invoiceForm.value.deposit_amount)) {
+        errors.deposit_amount = requiredMessage('Deposit amount');
     }
 
     if (isBlank(invoiceForm.value.first_due_date)) {
@@ -525,17 +665,18 @@ const createInvoice = async () => {
     }
 
     try {
+        const existingInvoice = bookingRecord.value.invoice;
         const invoice = await submitForm({
-            url: bookingRecord.value.invoice_create_url,
-            method: 'post',
+            url: existingInvoice?.update_url ?? bookingRecord.value.invoice_create_url,
+            method: existingInvoice ? 'put' : 'post',
             data: { ...invoiceForm.value },
         });
 
         invoiceErrors.value = {};
-        bookingRecord.value = {
+        syncBooking({
             ...bookingRecord.value,
             invoice,
-        };
+        });
         activeTab.value = 'invoice';
     } catch {}
 };
@@ -556,6 +697,52 @@ const sendInvoice = async () => {
             ...bookingRecord.value,
             invoice,
         });
+    } catch {}
+};
+
+const startManualPayment = (installment) => {
+    selectedPaymentInstallment.value = installment;
+    manualPaymentErrors.value = {};
+    manualPaymentForm.value = buildManualPaymentForm();
+    showManualPaymentEditor.value = true;
+};
+
+const cancelManualPayment = () => {
+    selectedPaymentInstallment.value = null;
+    showManualPaymentEditor.value = false;
+    manualPaymentErrors.value = {};
+    manualPaymentForm.value = buildManualPaymentForm();
+};
+
+const saveManualPayment = async () => {
+    const errors = {};
+
+    if (isBlank(manualPaymentForm.value.payment_method)) {
+        errors.payment_method = requiredMessage('Payment method');
+    }
+
+    if (isBlank(manualPaymentForm.value.paid_at)) {
+        errors.paid_at = requiredMessage('Payment date');
+    }
+
+    manualPaymentErrors.value = errors;
+
+    if (hasFieldErrors(errors) || !selectedPaymentInstallment.value?.record_payment_url) {
+        return;
+    }
+
+    try {
+        const invoice = await submitForm({
+            url: selectedPaymentInstallment.value.record_payment_url,
+            method: 'post',
+            data: { ...manualPaymentForm.value },
+        });
+
+        syncBooking({
+            ...bookingRecord.value,
+            invoice,
+        });
+        cancelManualPayment();
     } catch {}
 };
 
@@ -880,6 +1067,12 @@ const removeDocument = async (document) => {
                             <option v-for="status in bookingStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
                         </select>
                     </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Quote Response</label>
+                        <select v-model="editForm.quote_response_status_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'quote_response_status_id') ? 'border-rose-300/60' : ''">
+                            <option v-for="status in quoteResponseStatusOptions" :key="status.id" :value="String(status.id)">{{ status.label }}</option>
+                        </select>
+                    </div>
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">{{ isEntryBooking ? 'Entry Name' : 'Customer Name' }}</label>
                         <input v-if="isEntryBooking" v-model="editForm.entry_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'entry_name') ? 'border-rose-300/60' : ''">
@@ -1011,15 +1204,36 @@ const removeDocument = async (document) => {
             </div>
 
             <div v-if="!isEditing && activeTab === 'overview'" class="space-y-3">
-                <div class="grid gap-2.5 sm:grid-cols-2">
+                <div class="grid gap-2.5 sm:grid-cols-3">
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Quote Number</p>
-                        <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.quote_number || 'Not assigned' }}</p>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-semibold text-white">{{ bookingRecord.quote_number || 'Not assigned' }}</p>
+                            <span
+                                class="inline-flex h-7 items-center justify-center rounded-full px-2.5 text-[11px] font-medium leading-none"
+                                :class="bookingRecord.customer_response_status === 'accepted' ? 'bg-emerald-400/15 text-emerald-200' : bookingRecord.customer_response_status === 'rejected' ? 'bg-rose-400/15 text-rose-200' : 'bg-amber-300/15 text-amber-200'"
+                            >
+                                {{ bookingRecord.customer_response_label || statusLabel(bookingRecord.customer_response_status) }}
+                            </span>
+                        </div>
+                        <p v-if="bookingRecord.customer_responded_at_label" class="mt-1 text-xs text-stone-400">
+                            Responded {{ bookingRecord.customer_responded_at_label }}
+                        </p>
+                    </div>
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Status</p>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span
+                                class="inline-flex h-7 items-center justify-center rounded-full px-2.5 text-[11px] font-medium leading-none"
+                                :class="bookingRecord.status === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : bookingRecord.status === 'pending' ? 'bg-amber-300/15 text-amber-200' : bookingRecord.status === 'completed' ? 'bg-cyan-300/15 text-cyan-200' : 'bg-rose-400/15 text-rose-200'"
+                            >
+                                {{ bookingRecord.status_label || statusLabel(bookingRecord.status) }}
+                            </span>
+                        </div>
                     </div>
                     <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Location</p>
                         <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.event_location || 'Not set' }}</p>
-                        <p v-if="bookingRecord.notes" class="mt-1 text-xs text-stone-400">{{ bookingRecord.notes }}</p>
                     </div>
                     <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-3">
                         <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
@@ -1535,90 +1749,237 @@ const removeDocument = async (document) => {
                 </div>
             </div>
 
-            <div v-if="isEditing || activeTab === 'invoice'" class="mt-3 rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Invoice</p>
-                        <p class="mt-1.5 text-sm font-semibold text-white">Booking Total: ${{ bookingRecord.booking_total }}</p>
-                        <p class="mt-1 text-xs text-emerald-200">Discount Applied: -${{ bookingRecord.discount_amount }}</p>
-                    </div>
-                    <a
-                        v-if="bookingRecord.invoice?.public_url"
-                        :href="bookingRecord.invoice.public_url"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="rounded-lg border border-cyan-300/30 px-3 py-1.5 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-300/10"
-                    >
-                        Open customer invoice
-                    </a>
-                </div>
-
-                <div v-if="bookingRecord.invoice" class="mt-3 space-y-2.5">
-                    <div class="flex justify-end">
-                        <button type="button" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving" @click="sendInvoice">
-                            {{ saving ? 'Sending...' : 'Send invoice email' }}
-                        </button>
-                    </div>
-                    <div class="grid gap-2 sm:grid-cols-3">
-                        <div class="rounded-xl border border-white/10 bg-slate-900/70 p-2.5">
-                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Invoice</p>
-                            <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.invoice.invoice_number }}</p>
-                            <p class="mt-1 text-xs text-stone-400">{{ statusLabel(bookingRecord.invoice.status) }}</p>
+            <div v-if="isEditing || activeTab === 'invoice'" class="mt-3">
+                <form class="overflow-hidden rounded-xl border border-white/10 bg-[#f4f5f7] text-slate-950 shadow-xl shadow-black/10" novalidate @submit.prevent="createInvoice">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300/80 bg-white px-4 py-3">
+                        <div>
+                            <p class="text-sm text-slate-500">Sales overview / Invoices</p>
+                            <div class="mt-1 flex items-center gap-2">
+                                <h3 class="text-lg font-semibold text-slate-950">{{ bookingRecord.invoice ? 'Edit invoice' : 'New invoice' }}</h3>
+                                <span class="rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{{ bookingRecord.invoice?.status_label ?? statusLabel(bookingRecord.invoice?.status ?? 'draft') }}</span>
+                            </div>
                         </div>
-                        <div class="rounded-xl border border-white/10 bg-slate-900/70 p-2.5">
-                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Paid</p>
-                            <p class="mt-1.5 text-sm font-semibold text-emerald-200">${{ bookingRecord.invoice.amount_paid }}</p>
-                        </div>
-                        <div class="rounded-xl border border-white/10 bg-slate-900/70 p-2.5">
-                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Balance Due</p>
-                            <p class="mt-1.5 text-sm font-semibold text-amber-200">${{ bookingRecord.invoice.balance_due }}</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <a
+                                v-if="bookingRecord.invoice?.public_url"
+                                :href="bookingRecord.invoice.public_url"
+                                target="_blank"
+                                rel="noreferrer"
+                                class="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
+                            >
+                                Preview
+                            </a>
+                            <button type="submit" class="rounded border border-blue-700 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving || !invoiceCanEdit">
+                                {{ saving ? 'Saving...' : (bookingRecord.invoice ? 'Save & close' : 'Save invoice') }}
+                            </button>
+                            <button type="button" class="rounded bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving || !bookingRecord.invoice" @click="sendInvoice">
+                                {{ saving ? 'Sending...' : 'Approve & email' }}
+                            </button>
                         </div>
                     </div>
 
-                    <div class="space-y-2">
-                        <article v-for="installment in bookingRecord.invoice.installments" :key="installment.id" class="rounded-xl border border-white/10 bg-slate-900/70 p-2.5">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-semibold text-white">{{ installment.label }}</p>
-                                    <p class="mt-1 text-xs text-stone-400">Due {{ installment.due_date_label }}</p>
-                                    <p v-if="installment.paid_at_label" class="mt-1 text-xs text-emerald-200">Paid {{ installment.paid_at_label }}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-sm font-semibold text-white">${{ installment.amount }}</p>
-                                    <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium" :class="installment.status === 'paid' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-300/15 text-amber-200'">
-                                        {{ statusLabel(installment.status) }}
-                                    </span>
+                    <div class="mx-auto my-5 w-full max-w-7xl rounded border border-slate-300 bg-white p-4">
+                        <div v-if="!invoiceCanEdit" class="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            This invoice has payment activity, so the deposit and installment schedule are locked.
+                        </div>
+
+                        <div class="grid gap-3 lg:grid-cols-6">
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Contact</label>
+                                <div class="flex h-9 items-center rounded border border-slate-300 bg-slate-50 px-2 text-sm font-medium text-slate-900">
+                                    {{ bookingRecord.customer_name || 'No contact' }}
                                 </div>
                             </div>
-                        </article>
-                    </div>
-                </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Issue date</label>
+                                <input v-model="invoiceForm.issue_date" type="date" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'issue_date') ? 'border-red-500' : ''" @click="openDatePicker">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Due date</label>
+                                <input v-model="invoiceForm.first_due_date" type="date" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'first_due_date') ? 'border-red-500' : ''" @click="openDatePicker">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Invoice number</label>
+                                <input v-model="invoiceForm.invoice_number" type="text" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :placeholder="bookingRecord.invoice ? '' : 'Auto generated'" :disabled="!bookingRecord.invoice || !invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'invoice_number') ? 'border-red-500' : ''">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Reference</label>
+                                <div class="flex h-9 items-center rounded border border-slate-300 bg-slate-50 px-2 text-sm text-slate-900">
+                                    {{ bookingRecord.quote_number || 'No quote' }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Online payments</label>
+                                <div class="flex h-9 items-center rounded bg-slate-100 px-2 text-sm font-semibold text-slate-950">Enabled</div>
+                            </div>
+                        </div>
 
-                <form v-else class="mt-3 space-y-3" novalidate @submit.prevent="createInvoice">
-                    <div class="grid gap-3 sm:grid-cols-4">
-                        <div>
-                            <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Installments</label>
-                            <input v-model="invoiceForm.installment_count" type="number" min="1" max="12" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(invoiceValidationErrors, 'installment_count') ? 'border-rose-300/60' : ''">
+                        <div class="mt-4 w-full max-w-xs">
+                            <label class="mb-1 block text-xs font-semibold text-slate-800">Amounts are</label>
+                            <select v-model="invoiceForm.amounts_are" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'amounts_are') ? 'border-red-500' : ''">
+                                <option v-for="option in amountsAreOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                            </select>
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Deposit %</label>
-                            <input v-model="invoiceForm.deposit_percentage" type="number" min="0" max="100" step="0.01" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(invoiceValidationErrors, 'deposit_percentage') ? 'border-rose-300/60' : ''">
+
+                        <div class="mt-4 overflow-x-auto">
+                            <div class="min-w-[1050px] overflow-hidden border border-slate-300">
+                                <div class="grid grid-cols-[2.4rem_1.1fr_2fr_7rem_8rem_7rem_8rem_8rem_8rem] bg-slate-100 text-xs font-semibold text-slate-800">
+                                    <div class="border-r border-slate-300 px-2 py-3"></div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-center">Item</div>
+                                    <div class="border-r border-slate-300 px-2 py-3">Description</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">Qty.</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">Price</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">Disc.</div>
+                                    <div class="border-r border-slate-300 px-2 py-3">Tax rate</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">Tax amount</div>
+                                    <div class="px-2 py-3 text-right">Amount</div>
+                                </div>
+                                <div class="grid grid-cols-[2.4rem_1.1fr_2fr_7rem_8rem_7rem_8rem_8rem_8rem] border-t border-slate-300 text-sm text-slate-950">
+                                    <div class="border-r border-slate-300 px-2 py-3 text-center text-slate-400">::</div>
+                                    <div class="border-r border-slate-300 px-2 py-3">{{ bookingRecord.package?.name || bookingRecord.package_name || 'Booking' }}</div>
+                                    <div class="border-r border-slate-300 p-1.5">
+                                        <textarea v-model="invoiceForm.line_description" rows="2" class="w-full resize-none rounded border border-transparent bg-white px-2 py-1 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'line_description') ? 'border-red-500' : ''" />
+                                    </div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">1.00</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ invoiceSubtotal }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ bookingRecord.discount_amount || '0.00' }}</div>
+                                    <div class="border-r border-slate-300 p-1.5">
+                                        <select v-model="invoiceForm.tax_rate" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500" :disabled="!invoiceCanEdit || invoiceTaxRateDisabled" :class="firstError(invoiceValidationErrors, 'tax_rate') ? 'border-red-500' : ''">
+                                            <option v-if="invoiceTaxRateDisabled" value="">No tax</option>
+                                            <option v-for="option in taxRateOptions" v-else :key="option.value" :value="option.value">{{ option.label }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ invoiceGstAmount }}</div>
+                                    <div class="px-2 py-3 text-right font-semibold">{{ invoiceTotalAmount }}</div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">First Due Date</label>
-                            <input v-model="invoiceForm.first_due_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(invoiceValidationErrors, 'first_due_date') ? 'border-rose-300/60' : ''" @click="openDatePicker" @keydown.prevent>
+
+                        <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_500px]">
+                            <div class="space-y-3">
+                                <div class="grid gap-3 sm:grid-cols-3">
+                                    <div>
+                                        <label class="mb-1 block text-xs font-semibold text-slate-800">Installments</label>
+                                        <input v-model="invoiceForm.installment_count" type="number" min="1" max="12" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'installment_count') ? 'border-red-500' : ''">
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-xs font-semibold text-slate-800">Every days</label>
+                                        <input v-model="invoiceForm.interval_days" type="number" min="1" max="90" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'interval_days') ? 'border-red-500' : ''">
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-xs font-semibold text-slate-800">Deposit type</label>
+                                        <select v-model="invoiceForm.deposit_type" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit">
+                                            <option value="percentage">Percentage</option>
+                                            <option value="amount">Amount</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="space-y-3 text-sm">
+                                    <div class="flex justify-between">
+                                        <span>Subtotal</span>
+                                        <span>{{ invoiceSubtotal }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Total GST</span>
+                                        <span>{{ invoiceGstAmount }}</span>
+                                    </div>
+                                    <div class="border-t-2 border-slate-400 pt-3">
+                                        <div class="flex justify-between text-xl font-bold">
+                                            <span>Total</span>
+                                            <span>{{ invoiceTotalAmount }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="rounded border border-slate-300 bg-slate-50 p-3">
+                                        <div class="grid gap-3 sm:grid-cols-2">
+                                            <div>
+                                                <label class="mb-1 block text-xs font-semibold text-slate-800">Deposit %</label>
+                                                <input v-model="invoiceForm.deposit_percentage" type="number" min="0" max="100" step="0.01" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit || invoiceForm.deposit_type !== 'percentage'" :class="firstError(invoiceValidationErrors, 'deposit_percentage') ? 'border-red-500' : ''">
+                                            </div>
+                                            <div>
+                                                <label class="mb-1 block text-xs font-semibold text-slate-800">Deposit amount</label>
+                                                <input v-model="invoiceForm.deposit_amount" type="number" min="0" :max="invoiceTotalAmount" step="0.01" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit || invoiceForm.deposit_type !== 'amount'" :class="firstError(invoiceValidationErrors, 'deposit_amount') ? 'border-red-500' : ''">
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 flex justify-between text-sm font-semibold">
+                                            <span>Requested deposit</span>
+                                            <span>${{ invoiceDepositAmountPreview }} ({{ invoiceDepositPercentagePreview }}%)</span>
+                                        </div>
+                                        <div class="mt-1 flex justify-between text-xs text-slate-600">
+                                            <span>Remaining balance</span>
+                                            <span>${{ invoiceRemainingBalancePreview }}</span>
+                                        </div>
+                                    </div>
+                                    <div v-if="bookingRecord.invoice?.installments?.length" class="border-t border-slate-300 pt-3">
+                                        <div v-for="installment in bookingRecord.invoice.installments" :key="installment.id" class="flex items-center justify-between gap-3 py-1 text-xs text-slate-700">
+                                            <span>
+                                                {{ installment.label }} · {{ installment.due_date_label }}
+                                                <span v-if="installment.payment_method_label"> · {{ installment.payment_method_label }}</span>
+                                                <span v-if="installment.payment_reference"> · {{ installment.payment_reference }}</span>
+                                            </span>
+                                            <span class="flex items-center gap-2">
+                                                <span>${{ installment.amount }} · {{ installment.status_label ?? statusLabel(installment.status) }}</span>
+                                                <button
+                                                    v-if="installment.status !== 'paid'"
+                                                    type="button"
+                                                    class="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50"
+                                                    @click="startManualPayment(installment)"
+                                                >
+                                                    Record payment
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Interval Days</label>
-                            <input v-model="invoiceForm.interval_days" type="number" min="1" max="90" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(invoiceValidationErrors, 'interval_days') ? 'border-rose-300/60' : ''">
-                        </div>
-                    </div>
-                    <div class="flex justify-end">
-                        <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
-                            {{ saving ? 'Creating...' : 'Create invoice' }}
-                        </button>
                     </div>
                 </form>
+
+                <div v-if="showManualPaymentEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="cancelManualPayment">
+                    <div class="w-full max-w-lg overflow-hidden rounded-xl border border-slate-300 bg-white text-slate-950 shadow-2xl shadow-black/30">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Record payment</p>
+                                <p class="mt-1 text-sm font-semibold text-slate-950">
+                                    {{ selectedPaymentInstallment?.label }} · ${{ selectedPaymentInstallment?.amount }}
+                                </p>
+                            </div>
+                            <button type="button" class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50" @click="cancelManualPayment">Close</button>
+                        </div>
+
+                        <form class="space-y-3 p-4" novalidate @submit.prevent="saveManualPayment">
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Payment method</label>
+                                <select v-model="manualPaymentForm.payment_method" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :class="firstError(manualPaymentValidationErrors, 'payment_method') ? 'border-red-500' : ''">
+                                    <option value="bank_transfer">Bank transfer</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Payment date</label>
+                                <input v-model="manualPaymentForm.paid_at" type="date" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" :class="firstError(manualPaymentValidationErrors, 'paid_at') ? 'border-red-500' : ''" @click="openDatePicker">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Reference</label>
+                                <input v-model="manualPaymentForm.payment_reference" type="text" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500" placeholder="Bank receipt, transfer ID, or note">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-semibold text-slate-800">Notes</label>
+                                <textarea v-model="manualPaymentForm.payment_notes" rows="3" class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-950 outline-none focus:border-blue-500" />
+                            </div>
+                            <div class="flex justify-end gap-2 border-t border-slate-200 pt-3">
+                                <button type="button" class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50" @click="cancelManualPayment">Cancel</button>
+                                <button type="submit" class="rounded bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
+                                    {{ saving ? 'Recording...' : 'Record payment' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </section>

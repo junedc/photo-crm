@@ -20,6 +20,10 @@
             [data-wizard-step][hidden] {
                 display: none;
             }
+
+            .pac-container {
+                z-index: 100000 !important;
+            }
         </style>
     </head>
     <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
@@ -790,6 +794,14 @@
                             </div>
 
                             <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
+                                <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Travel Fee</p>
+                                <div class="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                                    <span class="text-stone-400">Calculated travel fee</span>
+                                    <span id="wizard-summary-travel-fee" class="font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</span>
+                                </div>
+                            </div>
+
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
                                 <p class="text-sm uppercase tracking-[0.3em] text-amber-200">Totals</p>
                                 <div class="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                                     <div class="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -903,6 +915,11 @@
                             <p class="mt-2 text-sm text-stone-300">
                                 Deposit percentage: {{ number_format((float) config('invoicing.deposit_percentage', 30), 0) }}%
                             </p>
+                        </div>
+                        <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
+                            <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Travel Fee</p>
+                            <p id="book-now-travel-fee" class="mt-3 text-3xl font-semibold text-white">{{ $bookingCurrencyPlaceholder }}</p>
+                            <p class="mt-2 text-sm text-stone-300">Included in the booking total below.</p>
                         </div>
                         <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
                             <p class="text-sm uppercase tracking-[0.3em] text-stone-400">Booking Total</p>
@@ -1025,6 +1042,7 @@
                 const bookNowDiscountApply = document.getElementById('book-now-discount-apply');
                 const bookNowDiscountFeedback = document.getElementById('book-now-discount-feedback');
                 const bookNowDepositAmount = document.getElementById('book-now-deposit-amount');
+                const bookNowTravelFee = document.getElementById('book-now-travel-fee');
                 const bookNowTotalAmount = document.getElementById('book-now-total-amount');
                 const initialWizardStep = Number(@json($initialWizardStep)) || 1;
                 const wizardSteps = Array.from(document.querySelectorAll('[data-wizard-step]'));
@@ -1037,6 +1055,7 @@
                 const wizardSummaryDate = document.getElementById('wizard-summary-date');
                 const wizardSummaryVenue = document.getElementById('wizard-summary-venue');
                 const wizardSummaryLocation = document.getElementById('wizard-summary-location');
+                const wizardSummaryTravelFee = document.getElementById('wizard-summary-travel-fee');
                 const wizardSummaryTotal = document.getElementById('wizard-summary-total');
                 const wizardSummaryDeposit = document.getElementById('wizard-summary-deposit');
                 const customerNameInput = document.getElementById('customer-name');
@@ -1052,7 +1071,7 @@
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTravelFee || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryTravelFee || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
                     return;
                 }
 
@@ -1165,13 +1184,26 @@
                     });
                 };
 
+                const syncGoogleAddressDropdownVisibility = () => {
+                    document.querySelectorAll('.pac-container').forEach((element) => {
+                        element.style.display = currentWizardStep === 4 ? '' : 'none';
+                    });
+                };
+
                 const showWizardStep = (step) => {
                     currentWizardStep = Math.max(1, Math.min(5, step));
                     wizardSteps.forEach((element) => {
                         element.hidden = Number(element.dataset.wizardStep) !== currentWizardStep;
                     });
+                    if (currentWizardStep !== 4) {
+                        eventLocationInput.blur();
+                    }
+                    syncGoogleAddressDropdownVisibility();
                     updateWizardNav();
                     updateSummary();
+                    if (currentWizardStep === 4) {
+                        window.autoAttachGoogleAddressInputs?.();
+                    }
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
 
@@ -1416,6 +1448,7 @@
                     bookNowSelectionTotal.textContent = formatCurrency(totals.packageTotal + totals.addOnTotal);
                     bookNowDiscountName.textContent = totals.selectedDiscount ? totals.selectedDiscount.textContent.trim() : 'No discount selected.';
                     bookNowDiscountAmount.textContent = `-${formatCurrency(totals.discountAmount)}`;
+                    bookNowTravelFee.textContent = formatCurrency(totals.travelFee);
                     bookNowTotalAmount.textContent = formatCurrency(totals.total);
                     bookNowDepositAmount.textContent = formatCurrency(totals.depositAmount);
 
@@ -2025,6 +2058,7 @@
 
                     wizardSummaryTotal.textContent = formatCurrency(totals.total);
                     wizardSummaryDeposit.textContent = formatCurrency(totals.depositAmount);
+                    wizardSummaryTravelFee.textContent = formatCurrency(totals.travelFee);
                     wizardSummaryCustomer.textContent = customerName || 'Not entered';
                     wizardSummaryDate.textContent = eventDate || 'Not selected';
                     wizardSummaryVenue.textContent = venue || 'Not entered';
@@ -2541,6 +2575,10 @@
                 eventLocationInput.addEventListener('input', queueTravelCalculation);
                 eventLocationInput.addEventListener('change', queueTravelCalculation);
                 eventLocationInput.addEventListener('blur', queueTravelCalculation);
+                eventLocationInput.addEventListener('focus', () => {
+                    window.autoAttachGoogleAddressInputs?.();
+                    syncGoogleAddressDropdownVisibility();
+                });
                 form.addEventListener('submit', (event) => {
                     updatePackageDrivenTiming();
 

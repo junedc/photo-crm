@@ -32,14 +32,15 @@ class SettingsTest extends TestCase
         $this->actingAs($user)
             ->postJson('http://'.$tenant->slug.'.memoshot.test/settings/workspace', [
                 'name' => 'MemoShot Brisbane',
+                'abn' => '12 345 678 901',
                 'contact_email' => 'hello@memoshot.test',
                 'contact_phone' => '0400123456',
                 'address' => '123 Queen Street, Brisbane',
                 'theme' => 'light',
+                'timezone' => 'Australia/Brisbane',
                 'invoice_deposit_percentage' => 35,
                 'travel_free_kilometers' => 20,
                 'travel_fee_per_kilometer' => 4.5,
-                'google_maps_api_key' => 'google-key-123',
                 'packages_api_key' => 'packages-key-456',
                 'stripe_secret' => 'sk_test_workspace',
                 'stripe_webhook_secret' => 'whsec_workspace',
@@ -52,12 +53,13 @@ class SettingsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'Workspace settings updated.')
             ->assertJsonPath('record.name', 'MemoShot Brisbane')
+            ->assertJsonPath('record.abn', '12 345 678 901')
             ->assertJsonPath('record.contact_email', 'hello@memoshot.test')
             ->assertJsonPath('record.theme', 'light')
+            ->assertJsonPath('record.timezone', 'Australia/Brisbane')
             ->assertJsonPath('record.invoice_deposit_percentage', '35.00')
             ->assertJsonPath('record.travel_free_kilometers', '20.00')
             ->assertJsonPath('record.travel_fee_per_kilometer', '4.50')
-            ->assertJsonPath('record.google_maps_api_key', 'google-key-123')
             ->assertJsonPath('record.packages_api_key', 'packages-key-456')
             ->assertJsonPath('record.stripe_secret', '')
             ->assertJsonPath('record.stripe_webhook_secret', '')
@@ -71,14 +73,15 @@ class SettingsTest extends TestCase
         $tenant->refresh();
 
         $this->assertSame('MemoShot Brisbane', $tenant->name);
+        $this->assertSame('12 345 678 901', $tenant->abn);
         $this->assertSame('hello@memoshot.test', $tenant->contact_email);
         $this->assertSame('0400123456', $tenant->contact_phone);
         $this->assertSame('123 Queen Street, Brisbane', $tenant->address);
         $this->assertSame('light', $tenant->theme);
+        $this->assertSame('Australia/Brisbane', $tenant->timezone);
         $this->assertSame('35.00', number_format((float) $tenant->invoice_deposit_percentage, 2, '.', ''));
         $this->assertSame('20.00', number_format((float) $tenant->travel_free_kilometers, 2, '.', ''));
         $this->assertSame('4.50', number_format((float) $tenant->travel_fee_per_kilometer, 2, '.', ''));
-        $this->assertSame('google-key-123', $tenant->google_maps_api_key);
         $this->assertSame('packages-key-456', $tenant->packages_api_key);
         $this->assertSame('sk_test_workspace', $tenant->stripe_secret);
         $this->assertSame('whsec_workspace', $tenant->stripe_webhook_secret);

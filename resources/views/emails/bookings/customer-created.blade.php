@@ -39,6 +39,11 @@
                                         <p style="margin: 0 0 8px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #cffafe;">
                                             MemoShot Quote
                                         </p>
+                                        @if (filled($booking->tenant?->abn))
+                                            <p style="margin: -2px 0 10px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #bae6fd;">
+                                                ABN {{ $booking->tenant->abn }}
+                                            </p>
+                                        @endif
                                         <h1 style="margin: 0; font-size: 30px; line-height: 1.2; color: #ffffff;">
                                             Your quote is ready
                                         </h1>
@@ -215,6 +220,11 @@
                                         <p style="margin: 0 0 6px; font-size: 13px; color: #334155;">
                                             {{ $booking->tenant?->name ?? 'MemoShot' }}
                                         </p>
+                                        @if (filled($booking->tenant?->abn))
+                                            <p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: #64748b;">
+                                                ABN {{ $booking->tenant->abn }}
+                                            </p>
+                                        @endif
                                         <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #64748b;">
                                             This quote was sent to {{ $booking->customer_email }} for follow-up and customer response tracking.
                                         </p>

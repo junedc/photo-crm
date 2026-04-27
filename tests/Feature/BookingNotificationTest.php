@@ -72,6 +72,7 @@ class BookingNotificationTest extends TestCase
                 'customer_email' => 'jane@example.com',
                 'customer_phone' => '0400000000',
                 'event_type' => 'Wedding',
+                'venue' => 'Brisbane Hall',
                 'event_date' => now()->addDay()->toDateString(),
                 'start_time' => '15:00',
                 'end_time' => '19:00',
@@ -102,6 +103,110 @@ class BookingNotificationTest extends TestCase
                     'mime' => 'application/pdf',
                 ]);
             }
+
+            return true;
+        });
+    }
+
+    public function test_admin_can_create_booking_without_sending_customer_quote_email(): void
+    {
+        Mail::fake();
+
+        $tenant = Tenant::query()->create([
+            'name' => 'Acme Studio',
+            'slug' => 'acme',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'owner@example.com',
+            'password' => 'password',
+            'current_tenant_id' => $tenant->id,
+        ]);
+
+        $owner->tenants()->attach($tenant, ['role' => 'owner']);
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Deluxe Booth',
+            'description' => 'Photo booth package',
+            'base_price' => 499,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/bookings', [
+                'package_id' => $package->id,
+                'customer_name' => 'Jane Customer',
+                'customer_email' => 'jane@example.com',
+                'customer_phone' => '0400000000',
+                'event_type' => 'Wedding',
+                'venue' => 'Brisbane Hall',
+                'event_date' => now()->addDay()->toDateString(),
+                'start_time' => '15:00',
+                'end_time' => '19:00',
+                'total_hours' => '4.00',
+                'event_location' => 'Brisbane',
+                'send_quote_email' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Booking created successfully.');
+
+        Mail::assertSent(AdminBookingCreatedMail::class, function (AdminBookingCreatedMail $mail) use ($owner): bool {
+            $mail->assertHasTo($owner->email);
+
+            return true;
+        });
+        Mail::assertNotSent(CustomerBookingCreatedMail::class);
+    }
+
+    public function test_admin_can_create_booking_without_sending_new_quote_request_email(): void
+    {
+        Mail::fake();
+
+        $tenant = Tenant::query()->create([
+            'name' => 'Acme Studio',
+            'slug' => 'acme',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'owner@example.com',
+            'password' => 'password',
+            'current_tenant_id' => $tenant->id,
+        ]);
+
+        $owner->tenants()->attach($tenant, ['role' => 'owner']);
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Deluxe Booth',
+            'description' => 'Photo booth package',
+            'base_price' => 499,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/bookings', [
+                'package_id' => $package->id,
+                'customer_name' => 'Jane Customer',
+                'customer_email' => 'jane@example.com',
+                'customer_phone' => '0400000000',
+                'event_type' => 'Wedding',
+                'venue' => 'Brisbane Hall',
+                'event_date' => now()->addDay()->toDateString(),
+                'start_time' => '15:00',
+                'end_time' => '19:00',
+                'total_hours' => '4.00',
+                'event_location' => 'Brisbane',
+                'send_admin_quote_email' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Booking created successfully.');
+
+        Mail::assertNotSent(AdminBookingCreatedMail::class);
+        Mail::assertSent(CustomerBookingCreatedMail::class, function (CustomerBookingCreatedMail $mail): bool {
+            $mail->assertHasTo('jane@example.com');
 
             return true;
         });

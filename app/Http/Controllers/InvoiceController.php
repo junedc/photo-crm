@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\StripeCheckoutLinkGenerator;
 use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,23 +120,109 @@ class InvoiceController extends Controller
     {
         $data = $request->validate([
             'installment_count' => ['required', 'integer', 'min:1', 'max:12'],
+            'amounts_are' => ['nullable', 'in:tax_exclusive,tax_inclusive,no_tax'],
+            'line_description' => ['nullable', 'string', 'max:5000'],
+            'tax_rate' => ['nullable', 'in:bas_excluded,gst_free_income,gst_on_income'],
+            'deposit_type' => ['nullable', 'in:percentage,amount'],
             'deposit_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'deposit_amount' => ['nullable', 'numeric', 'min:0'],
             'first_due_date' => ['required', 'date'],
             'interval_days' => ['required', 'integer', 'min:1', 'max:90'],
         ]);
+        $depositType = $data['deposit_type'] ?? 'percentage';
+
+        if ($depositType === 'amount' && ! isset($data['deposit_amount'])) {
+            throw ValidationException::withMessages([
+                'deposit_amount' => 'Deposit amount is required.',
+            ]);
+        }
 
         $invoice = $invoiceBuilder->createForBooking(
             $booking,
             (int) $data['installment_count'],
-            isset($data['deposit_percentage']) ? (float) $data['deposit_percentage'] : null,
+            $depositType === 'percentage' && isset($data['deposit_percentage']) ? (float) $data['deposit_percentage'] : null,
             Carbon::parse($data['first_due_date']),
             (int) $data['interval_days'],
+            $depositType === 'amount' && isset($data['deposit_amount']) ? (float) $data['deposit_amount'] : null,
         );
+        $invoice->update($this->editableInvoiceData($data, $booking));
 
         return response()->json([
             'message' => 'Invoice created successfully.',
-            'record' => $this->serializeInvoice($invoice),
+            'record' => $this->serializeInvoice($invoice->refresh()->load('installments', 'booking')),
         ]);
+    }
+
+    public function update(Request $request, Booking $booking, InvoiceBuilder $invoiceBuilder): JsonResponse
+    {
+        $invoice = $booking->invoice()->with('installments')->firstOrFail();
+        $data = $request->validate([
+            'invoice_number' => ['required', 'string', 'max:255', 'unique:invoices,invoice_number,'.$invoice->id],
+            'issue_date' => ['nullable', 'date'],
+            'amounts_are' => ['required', 'in:tax_exclusive,tax_inclusive,no_tax'],
+            'line_description' => ['nullable', 'string', 'max:5000'],
+            'tax_rate' => ['nullable', 'in:bas_excluded,gst_free_income,gst_on_income'],
+            'installment_count' => ['required', 'integer', 'min:1', 'max:12'],
+            'deposit_type' => ['required', 'in:percentage,amount'],
+            'deposit_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'deposit_amount' => ['nullable', 'numeric', 'min:0', 'max:'.$invoice->total_amount],
+            'first_due_date' => ['required', 'date'],
+            'interval_days' => ['required', 'integer', 'min:1', 'max:90'],
+        ]);
+
+        if ($data['deposit_type'] === 'percentage' && ! isset($data['deposit_percentage'])) {
+            throw ValidationException::withMessages([
+                'deposit_percentage' => 'Deposit percentage is required.',
+            ]);
+        }
+
+        if ($data['deposit_type'] === 'amount' && ! isset($data['deposit_amount'])) {
+            throw ValidationException::withMessages([
+                'deposit_amount' => 'Deposit amount is required.',
+            ]);
+        }
+
+        if ($data['amounts_are'] !== 'no_tax' && ! isset($data['tax_rate'])) {
+            throw ValidationException::withMessages([
+                'tax_rate' => 'Tax rate is required.',
+            ]);
+        }
+
+        $invoice->update([
+            'invoice_number' => $data['invoice_number'],
+            'issued_at' => isset($data['issue_date']) ? Carbon::parse($data['issue_date']) : $invoice->issued_at,
+            ...$this->editableInvoiceData($data, $booking),
+        ]);
+
+        $invoice = $invoiceBuilder->rebuildInstallments(
+            $invoice,
+            (int) $data['installment_count'],
+            $data['deposit_type'] === 'percentage' ? (float) $data['deposit_percentage'] : null,
+            Carbon::parse($data['first_due_date']),
+            (int) $data['interval_days'],
+            $data['deposit_type'] === 'amount' ? (float) $data['deposit_amount'] : null,
+        );
+
+        return response()->json([
+            'message' => 'Invoice updated successfully.',
+            'record' => $this->serializeInvoice($invoice->load('invoiceStatus', 'installments.installmentStatus', 'booking')),
+        ]);
+    }
+
+    private function editableInvoiceData(array $data, Booking $booking): array
+    {
+        $amountsAre = $data['amounts_are'] ?? 'tax_exclusive';
+
+        return [
+            'amounts_are' => $amountsAre,
+            'line_description' => $data['line_description'] ?? $this->defaultInvoiceLineDescription($booking),
+            'tax_rate' => $amountsAre === 'no_tax' ? null : ($data['tax_rate'] ?? 'gst_free_income'),
+        ];
+    }
+
+    private function defaultInvoiceLineDescription(Booking $booking): string
+    {
+        return trim(($booking->customer_name ?: 'Customer').' booking package');
     }
 
     public function show(CurrentTenant $currentTenant, Request $request, Invoice $invoice): View
@@ -153,6 +240,41 @@ class InvoiceController extends Controller
         return view('invoices.show', [
             'tenant' => $currentTenant->get(),
             'invoice' => $invoice,
+        ]);
+    }
+
+    public function pdf(CurrentTenant $currentTenant, Booking $booking)
+    {
+        abort_unless($booking->tenant_id === $currentTenant->id(), 404);
+
+        $invoice = $booking->invoice()
+            ->with(['installments', 'booking.package', 'booking.addOns', 'booking.discount'])
+            ->firstOrFail();
+
+        $tenant = $currentTenant->get();
+        $businessLines = collect([
+            $tenant?->name,
+            $tenant?->abn ? 'ABN '.$tenant->abn : null,
+            $tenant?->contact_email,
+            $tenant?->contact_phone,
+            $tenant?->address,
+        ])->filter()->values()->all();
+
+        $pdf = Pdf::loadView('pdf.invoices.show', [
+            'tenant' => $tenant,
+            'booking' => $booking,
+            'invoice' => $invoice,
+            'business_lines' => $businessLines,
+            'line_description' => $invoice->line_description ?: $this->defaultInvoiceLineDescription($booking),
+            'amounts_are_label' => $this->amountsAreLabel($invoice->amounts_are ?: 'tax_exclusive'),
+            'tax_rate_label' => $this->taxRateLabel($invoice->tax_rate),
+        ])->setPaper('a4');
+
+        $filename = str($invoice->invoice_number ?: 'invoice')->slug().'.pdf';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
         ]);
     }
 
@@ -242,6 +364,40 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function recordManualPayment(CurrentTenant $currentTenant, Request $request, Booking $booking, InvoiceInstallment $installment): JsonResponse
+    {
+        $invoice = $booking->invoice()->with(['installments', 'tenant'])->firstOrFail();
+        abort_unless($installment->invoice_id === $invoice->id && $booking->tenant_id === $currentTenant->id(), 404);
+        abort_if($installment->status === 'paid', 422, 'This installment has already been paid.');
+
+        $data = $request->validate([
+            'payment_method' => ['required', 'in:bank_transfer,cash,other'],
+            'paid_at' => ['required', 'date'],
+            'payment_reference' => ['nullable', 'string', 'max:255'],
+            'payment_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $paidInstallmentStatus = $invoice->tenant
+            ? TenantStatuses::firstOrCreateWorkspaceStatus($invoice->tenant, TenantStatuses::SCOPE_INVOICE_INSTALLMENT, 'paid')
+            : null;
+
+        $installment->update([
+            'invoice_installment_status_id' => $paidInstallmentStatus?->id,
+            'status' => $paidInstallmentStatus?->name ?? 'paid',
+            'paid_at' => Carbon::parse($data['paid_at']),
+            'payment_method' => $data['payment_method'],
+            'payment_reference' => $data['payment_reference'] ?? null,
+            'payment_notes' => $data['payment_notes'] ?? null,
+        ]);
+
+        $invoice = $this->syncInvoiceAndBookingAfterPayment($invoice);
+
+        return response()->json([
+            'message' => 'Payment recorded successfully.',
+            'record' => $this->serializeInvoice($invoice->load('invoiceStatus', 'installments.installmentStatus', 'booking')),
+        ]);
+    }
+
     private function syncTenantCheckoutSession(Invoice $invoice, string $sessionId, int $installmentId): void
     {
         if ($sessionId === '' || $installmentId <= 0) {
@@ -289,6 +445,12 @@ class InvoiceController extends Controller
         }
 
         $invoice->load('installments');
+        $this->syncInvoiceAndBookingAfterPayment($invoice);
+    }
+
+    private function syncInvoiceAndBookingAfterPayment(Invoice $invoice): Invoice
+    {
+        $invoice->load(['tenant', 'installments', 'booking']);
         $amountPaid = (float) $invoice->installments->where('status', 'paid')->sum('amount');
         $invoiceStatusName = $amountPaid >= (float) $invoice->total_amount ? 'paid' : 'partially_paid';
         $invoiceStatus = $invoice->tenant
@@ -310,20 +472,43 @@ class InvoiceController extends Controller
                 'status' => $bookingStatus?->name ?? $bookingStatusName,
             ]);
         }
+
+        return $invoice->refresh()->load(['tenant', 'installments.installmentStatus', 'booking']);
     }
 
     private function serializeInvoice(Invoice $invoice): array
     {
+        $invoice->loadMissing(['installments', 'booking']);
+        $firstInstallment = $invoice->installments->first();
+        $secondInstallment = $invoice->installments->skip(1)->first();
+        $depositAmount = (float) ($firstInstallment?->amount ?? 0);
+        $totalAmount = (float) $invoice->total_amount;
+
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
             'status_id' => $invoice->invoice_status_id,
             'status' => $invoice->status,
             'status_label' => $invoice->invoiceStatus?->label() ?? str($invoice->status)->replace('_', ' ')->title()->toString(),
+            'issued_at' => DateFormatter::inputDate($invoice->issued_at),
+            'issued_at_label' => DateFormatter::date($invoice->issued_at),
+            'amounts_are' => $invoice->amounts_are ?: 'tax_exclusive',
+            'amounts_are_label' => $this->amountsAreLabel($invoice->amounts_are ?: 'tax_exclusive'),
+            'line_description' => $invoice->line_description ?: $this->defaultInvoiceLineDescription($invoice->booking),
+            'tax_rate' => $invoice->tax_rate,
+            'tax_rate_label' => $this->taxRateLabel($invoice->tax_rate),
             'total_amount' => number_format((float) $invoice->total_amount, 2, '.', ''),
             'amount_paid' => number_format((float) $invoice->amount_paid, 2, '.', ''),
             'balance_due' => number_format((float) $invoice->total_amount - (float) $invoice->amount_paid, 2, '.', ''),
+            'deposit_amount' => number_format($depositAmount, 2, '.', ''),
+            'deposit_percentage' => $totalAmount > 0 ? number_format(($depositAmount / $totalAmount) * 100, 2, '.', '') : '0.00',
+            'installment_count' => $invoice->installments->count(),
+            'first_due_date' => DateFormatter::inputDate($firstInstallment?->due_date),
+            'interval_days' => $firstInstallment && $secondInstallment
+                ? max(1, $firstInstallment->due_date->diffInDays($secondInstallment->due_date))
+                : 30,
             'public_url' => route('invoices.show', $invoice),
+            'update_url' => route('admin.bookings.invoice.update', $invoice->booking),
             'send_url' => route('admin.bookings.invoice.send', $invoice->booking),
             'installments' => $invoice->installments->map(fn (InvoiceInstallment $installment) => [
                 'id' => $installment->id,
@@ -335,8 +520,40 @@ class InvoiceController extends Controller
                 'status' => $installment->status,
                 'status_label' => $installment->installmentStatus?->label() ?? str($installment->status)->replace('_', ' ')->title()->toString(),
                 'paid_at_label' => DateFormatter::dateTime($installment->paid_at),
+                'payment_method' => $installment->payment_method,
+                'payment_method_label' => $this->paymentMethodLabel($installment->payment_method),
+                'payment_reference' => $installment->payment_reference,
+                'payment_notes' => $installment->payment_notes,
+                'record_payment_url' => route('admin.bookings.invoice.installments.manual-payment', [$invoice->booking, $installment]),
             ])->values()->all(),
         ];
+    }
+
+    private function paymentMethodLabel(?string $value): string
+    {
+        return [
+            'bank_transfer' => 'Bank transfer',
+            'cash' => 'Cash',
+            'other' => 'Other',
+        ][$value] ?? '';
+    }
+
+    private function amountsAreLabel(string $value): string
+    {
+        return [
+            'tax_exclusive' => 'Tax exclusive',
+            'tax_inclusive' => 'Tax inclusive',
+            'no_tax' => 'No Tax',
+        ][$value] ?? 'Tax exclusive';
+    }
+
+    private function taxRateLabel(?string $value): string
+    {
+        return [
+            'bas_excluded' => 'BAS Excluded',
+            'gst_free_income' => 'GST Free Income',
+            'gst_on_income' => 'GST on Income',
+        ][$value] ?? 'No tax';
     }
 
     private function serializeInvoiceListRecord(Invoice $invoice): array

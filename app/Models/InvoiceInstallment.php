@@ -16,6 +16,9 @@ class InvoiceInstallment extends Model
         'invoice_installment_status_id',
         'status',
         'paid_at',
+        'payment_method',
+        'payment_reference',
+        'payment_notes',
     ];
 
     protected function casts(): array

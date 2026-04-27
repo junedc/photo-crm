@@ -38,6 +38,7 @@ class Tenant extends Model
         'platform_stripe_payment_method_id',
         'contact_email',
         'contact_phone',
+        'abn',
         'address',
         'invoice_deposit_percentage',
         'travel_free_kilometers',
