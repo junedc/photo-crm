@@ -617,6 +617,7 @@ class BookingTest extends TestCase
             'customer_email' => 'prospect@example.com',
             'customer_phone' => '0400000099',
             'event_type' => 'Anniversary',
+            'venue' => 'Gold Coast Convention Centre',
             'event_date' => now()->addWeeks(2)->toDateString(),
             'start_time' => '12:00',
             'end_time' => '15:30',
@@ -633,6 +634,71 @@ class BookingTest extends TestCase
             'id' => $lead->booking_id,
             'tenant_id' => $tenant->id,
             'customer_email' => 'prospect@example.com',
+        ]);
+    }
+
+    public function test_created_booking_deletes_matching_unbooked_lead_for_same_tenant(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'slug' => 'photoboo',
+        ]);
+
+        $otherTenant = Tenant::factory()->create([
+            'slug' => 'otherbooth',
+        ]);
+
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Corporate Booth',
+            'base_price' => 1800,
+            'is_active' => true,
+        ]);
+
+        $lead = Lead::query()->create([
+            'tenant_id' => $tenant->id,
+            'customer_name' => 'Jamie Prospect',
+            'customer_email' => 'prospect@example.com',
+            'customer_phone' => '0400000099',
+            'event_date' => now()->addWeeks(2)->toDateString(),
+            'event_location' => 'Gold Coast',
+            'notes' => 'Interested in a Saturday package.',
+            'status' => 'draft',
+            'last_activity_at' => now(),
+        ]);
+
+        $otherTenantLead = Lead::query()->create([
+            'tenant_id' => $otherTenant->id,
+            'customer_name' => 'Jamie Prospect',
+            'customer_email' => 'prospect@example.com',
+            'customer_phone' => '0400000099',
+            'event_date' => now()->addWeeks(2)->toDateString(),
+            'event_location' => 'Gold Coast',
+            'notes' => 'Should remain untouched.',
+            'status' => 'draft',
+            'last_activity_at' => now(),
+        ]);
+
+        $this->post('http://'.$tenant->slug.'.memoshot.test/bookings', [
+            'package_id' => $package->id,
+            'customer_name' => 'Jamie Prospect',
+            'customer_email' => 'prospect@example.com',
+            'customer_phone' => '0400000099',
+            'event_type' => 'Anniversary',
+            'venue' => 'Gold Coast Convention Centre',
+            'event_date' => now()->addWeeks(2)->toDateString(),
+            'start_time' => '12:00',
+            'end_time' => '15:30',
+            'total_hours' => '3.50',
+            'event_location' => 'Gold Coast',
+            'notes' => 'Ready to book now.',
+        ])->assertRedirect();
+
+        $this->assertDatabaseMissing('leads', [
+            'id' => $lead->id,
+        ]);
+
+        $this->assertDatabaseHas('leads', [
+            'id' => $otherTenantLead->id,
         ]);
     }
 
@@ -1115,4 +1181,3 @@ class BookingTest extends TestCase
         return [$tenant, $user];
     }
 }
-

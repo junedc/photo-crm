@@ -1309,8 +1309,8 @@
                         return 'End hour must be later than the start hour.';
                     }
 
-                    if (key === 'total_hours' && parseAmount(value) < 0.25) {
-                        return 'Duration must be at least 0.25 hours.';
+                    if (key === 'total_hours' && parseAmount(value) < 2) {
+                        return 'Duration must be at least 2 hours.';
                     }
 
                     return '';

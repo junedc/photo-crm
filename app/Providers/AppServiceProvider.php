@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Booking;
 use App\Tenancy\CurrentTenant;
+use App\Observers\BookingObserver;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Booking::observe(BookingObserver::class);
+
         if (parse_url((string) config('app.url'), PHP_URL_SCHEME) === 'https') {
             URL::forceScheme('https');
         }

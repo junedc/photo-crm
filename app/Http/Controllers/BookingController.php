@@ -371,12 +371,17 @@ class BookingController extends Controller
         $data['booking_discount_value'] = $discountValue;
         $data['booking_discount_source'] = $discountSource;
 
-        $booking = Booking::query()->create($data);
-        $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
-        $booking->equipment()->sync($this->bookingItemSyncPayload($equipmentIds, $equipmentDiscountSelections));
-        $this->syncPackageActionTasks($booking);
-        $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
-        $this->markLeadAsBooked($lead, $booking);
+        $booking = DB::transaction(function () use ($data, $addOnIds, $addOnDiscountSelections, $equipmentIds, $equipmentDiscountSelections, $lead) {
+            $booking = Booking::query()->create($data);
+            $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
+            $booking->equipment()->sync($this->bookingItemSyncPayload($equipmentIds, $equipmentDiscountSelections));
+            $this->syncPackageActionTasks($booking);
+            $this->markLeadAsBooked($lead, $booking);
+            $booking->load(['package', 'tenant.users', 'addOns', 'equipment']);
+
+            return $booking;
+        });
+
         $this->sendBookingEmails($booking, $sendQuoteEmail, $sendAdminQuoteEmail);
 
         if ($request->expectsJson()) {
