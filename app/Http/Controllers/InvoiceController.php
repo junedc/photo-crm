@@ -226,7 +226,7 @@ class InvoiceController extends Controller
         $booking->loadMissing(['package.equipment', 'package.addOns']);
 
         $packageName = trim((string) ($booking->package?->name ?: 'Booking package'));
-        $hoursLabel = filled($booking->total_hours) ? ' - '.number_format((float) $booking->total_hours, 2).' hrs' : '';
+        $hoursLabel = filled($booking->total_hours) ? ' - '.$this->formatHoursLabel($booking->total_hours).' hrs' : '';
         $packageHeading = $packageName.$hoursLabel;
         $inclusions = collect([
             ...$booking->package?->equipment?->pluck('name')->filter()->all() ?? [],
@@ -575,6 +575,17 @@ class InvoiceController extends Controller
             'gst_free_income' => 'GST Free Income',
             'gst_on_income' => 'GST on Income',
         ][$value] ?? 'No tax';
+    }
+
+    private function formatHoursLabel(mixed $value): string
+    {
+        $hours = (float) $value;
+
+        if (fmod($hours, 1.0) === 0.0) {
+            return (string) (int) $hours;
+        }
+
+        return rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.');
     }
 
     private function invoicePdfItems(Booking $booking): array

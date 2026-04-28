@@ -37,7 +37,7 @@ class BookingAddonsPdfGenerator
 
         $items = collect([
             [
-                'description_title' => trim(($package->name ?? 'Package').($booking->total_hours ? ' · '.number_format((float) $booking->total_hours, 2).' hrs' : '')),
+                'description_title' => trim(($package->name ?? 'Package').($booking->total_hours ? ' · '.$this->formatHoursLabel($booking->total_hours).' hrs' : '')),
                 'type' => 'package',
                 'description_lines' => $this->packageDescriptionLines($booking),
                 'quantity' => 1,
@@ -179,6 +179,17 @@ class BookingAddonsPdfGenerator
         }
 
         return '-';
+    }
+
+    private function formatHoursLabel(mixed $value): string
+    {
+        $hours = (float) $value;
+
+        if (fmod($hours, 1.0) === 0.0) {
+            return (string) (int) $hours;
+        }
+
+        return rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.');
     }
 
     private function imageDataUri(?string $path): ?string

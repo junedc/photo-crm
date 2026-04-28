@@ -157,7 +157,7 @@
                             @endif
                         @endif
                     </td>
-                    <td class="text-right">{{ number_format((float) $item['quantity'], 2) }}</td>
+                    <td class="text-right">{{ number_format((float) $item['quantity'], 0) }}</td>
                     <td class="text-right">${{ number_format((float) $item['price'], 2) }}</td>
                     <td class="text-right">{{ $item['discount_label'] === 'No discount' ? '-' : $item['discount_label'] }}</td>
                     <td class="text-right">${{ number_format((float) $item['amount'], 2) }}</td>

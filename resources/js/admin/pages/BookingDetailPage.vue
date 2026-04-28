@@ -28,6 +28,7 @@ const contacts = ref([...(props.data.booking?.contacts ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 const quoteResponseStatusOptions = computed(() => props.data.quoteResponseStatusOptions ?? []);
+const isLightTheme = computed(() => props.data.tenant?.theme === 'light');
 const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 const resolvedDefaultTaskStatusId = computed(() => defaultTaskStatusId.value || String(localTaskStatuses.value[0]?.id ?? ''));
 const resolveBookingStatusId = (record) => {
@@ -154,7 +155,7 @@ const pendingDelete = ref(null);
 const showDeleteConfirm = ref(false);
 const defaultInvoiceDescription = (record) => {
     const packageName = record?.package?.name || record?.package_name || 'Booking package';
-    const hoursLabel = record?.total_hours ? ` - ${Number(record.total_hours).toFixed(2)} hrs` : '';
+    const hoursLabel = record?.total_hours ? ` - ${formatHours(record.total_hours)} hrs` : '';
     const packageHeading = `${packageName}${hoursLabel}`;
     const equipmentNames = record?.package?.equipment_names ?? [];
     const addOnNames = record?.package?.add_on_names ?? [];
@@ -276,6 +277,16 @@ const combinedOptionalItems = computed(() => [
 const clampDiscountPercentage = (value) => Math.min(100, Math.max(0, Number(value) || 0));
 const clampDiscountAmount = (value) => Math.max(0, Number(value) || 0);
 const formatMoney = (value) => Number(value || 0).toFixed(2);
+const formatIntegerQuantity = (value = 1) => String(Math.max(0, Math.round(Number(value || 0))));
+const formatHours = (value) => {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return '0';
+    }
+
+    return numericValue % 1 === 0 ? String(numericValue) : numericValue.toFixed(2).replace(/\.?0+$/, '');
+};
 const itemDiscountTypeMapKey = (selectionKey) => (
     selectionKey === 'equipment_ids' ? 'equipment_discount_types' : 'add_on_discount_types'
 );
@@ -376,7 +387,7 @@ const invoiceItemsPreview = computed(() => {
             type: 'package',
             item: bookingRecord.value.package?.name || bookingRecord.value.package_name || 'Booking package',
             description: invoiceForm.value.line_description,
-            quantity: '1.00',
+            quantity: formatIntegerQuantity(),
             price: bookingRecord.value.package_price || '0.00',
             discount: '0.00',
             taxAmount: '0.00',
@@ -390,7 +401,7 @@ const invoiceItemsPreview = computed(() => {
             type: 'equipment',
             item: item.name || 'Equipment',
             description: item.description || item.category || 'Selected equipment',
-            quantity: '1.00',
+            quantity: formatIntegerQuantity(),
             price: item.original_price || item.price || '0.00',
             discount: itemDiscountLabel('equipment_ids', item.id),
             taxAmount: '0.00',
@@ -404,7 +415,7 @@ const invoiceItemsPreview = computed(() => {
             type: 'add_on',
             item: item.name || 'Add-On',
             description: item.description || item.duration || 'Selected add-on',
-            quantity: '1.00',
+            quantity: formatIntegerQuantity(),
             price: item.original_price || item.price || '0.00',
             discount: itemDiscountLabel('add_on_ids', item.id),
             taxAmount: '0.00',
@@ -420,7 +431,7 @@ const invoiceItemsPreview = computed(() => {
             description: bookingRecord.value.travel_distance_km
                 ? `${bookingRecord.value.travel_distance_km} km`
                 : 'Travel charge',
-            quantity: '1.00',
+            quantity: formatIntegerQuantity(),
             price: bookingRecord.value.travel_fee,
             discount: '0.00',
             taxAmount: '0.00',
@@ -436,7 +447,7 @@ const invoiceItemsPreview = computed(() => {
             description: bookingRecord.value.discount
                 ? `${bookingRecord.value.discount.code} - ${bookingRecord.value.discount.name}`
                 : 'Applied booking discount',
-            quantity: '1.00',
+            quantity: formatIntegerQuantity(),
             price: bookingRecord.value.discount_amount,
             discount: 'Included',
             taxAmount: '0.00',
@@ -497,6 +508,21 @@ const invoiceDepositPercentagePreview = computed(() => {
 const invoiceRemainingBalancePreview = computed(() => (
     Math.max(Number(invoiceTotalAmount.value) - Number(invoiceDepositAmountPreview.value), 0).toFixed(2)
 ));
+const invoicePreviewButtonClass = computed(() => (
+    isLightTheme.value
+        ? 'rounded border border-[#d8d0c4] bg-[#fffdf8] px-3 py-1.5 text-sm font-medium text-[#66615b] transition hover:border-[#c9c1b5] hover:bg-[#f7f1e8]'
+        : 'rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50'
+));
+const invoiceSaveButtonClass = computed(() => (
+    isLightTheme.value
+        ? 'rounded border border-[#51cbce]/40 bg-white px-3 py-1.5 text-sm font-semibold text-[#23979a] transition hover:bg-[#eefbfb] disabled:cursor-not-allowed disabled:opacity-60'
+        : 'rounded border border-blue-700 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60'
+));
+const invoiceApproveButtonClass = computed(() => (
+    isLightTheme.value
+        ? 'rounded bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60'
+        : 'rounded bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60'
+));
 
 const statusLabel = (status) => (status || '').replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 const bookingKindLabel = (kind) => ({
@@ -514,7 +540,7 @@ const overviewSelectedItems = computed(() => {
             id: `package-${bookingRecord.value.package.id ?? 'selected'}`,
             type_label: 'Package',
             name: bookingRecord.value.package.name ?? bookingRecord.value.package_name ?? 'No package selected',
-            details: bookingRecord.value.total_hours ? `${bookingRecord.value.total_hours} hrs` : 'Package',
+            details: bookingRecord.value.total_hours ? `${formatHours(bookingRecord.value.total_hours)} hrs` : 'Package',
             price: bookingRecord.value.package.price ?? bookingRecord.value.package_price ?? '0.00',
             description: bookingRecord.value.package.description || 'Selected package',
         });
@@ -2224,18 +2250,18 @@ const removeContact = async (contact) => {
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <a
-                                v-if="bookingRecord.invoice?.public_url"
-                                :href="bookingRecord.invoice.public_url"
+                                v-if="bookingRecord.invoice?.pdf_url"
+                                :href="bookingRecord.invoice.pdf_url"
                                 target="_blank"
                                 rel="noreferrer"
-                                class="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
+                                :class="invoicePreviewButtonClass"
                             >
                                 Preview
                             </a>
-                            <button type="submit" class="rounded border border-blue-700 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving || !invoiceCanEdit">
+                            <button type="submit" :class="invoiceSaveButtonClass" :disabled="saving || !invoiceCanEdit">
                                 {{ saving ? 'Saving...' : (bookingRecord.invoice ? 'Save & close' : 'Save invoice') }}
                             </button>
-                            <button type="button" class="rounded bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving || !bookingRecord.invoice" @click="sendInvoice">
+                            <button type="button" :class="invoiceApproveButtonClass" :disabled="saving || !bookingRecord.invoice" @click="sendInvoice">
                                 {{ saving ? 'Sending...' : 'Approve & email' }}
                             </button>
                         </div>

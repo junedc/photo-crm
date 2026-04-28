@@ -2359,6 +2359,7 @@ class BookingController extends Controller
                 ? max(1, $firstInstallment->due_date->diffInDays($secondInstallment->due_date))
                 : 30,
             'public_url' => route('invoices.show', $invoice),
+            'pdf_url' => route('admin.bookings.invoice.pdf', $invoice->booking),
             'update_url' => route('admin.bookings.invoice.update', $invoice->booking),
             'send_url' => route('admin.bookings.invoice.send', $invoice->booking),
             'installments' => $invoice->installments->map(fn (InvoiceInstallment $installment) => [

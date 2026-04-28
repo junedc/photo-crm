@@ -122,7 +122,7 @@
                             @endforeach
                         @endif
                     </td>
-                    <td class="text-right">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
+                    <td class="text-right">{{ number_format((float) ($item['quantity'] ?? 0), 0) }}</td>
                     <td class="text-right">{{ number_format((float) ($item['unit_price'] ?? 0), 2) }}</td>
                     <td class="text-right">{{ $item['discount_label'] ?? '-' }}</td>
                     <td class="text-right">{{ number_format((float) ($item['amount'] ?? 0), 2) }}</td>
