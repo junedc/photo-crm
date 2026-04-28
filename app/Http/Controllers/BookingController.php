@@ -783,7 +783,12 @@ class BookingController extends Controller
             return redirect()->route('admin.bookings.show', $booking)->withErrors(['booking' => $message]);
         }
 
-        $booking->loadMissing('documents');
+        $booking->loadMissing(['documents', 'tasks.clientPortalUpdates']);
+
+        foreach ($booking->tasks as $task) {
+            $this->deleteStoredTaskFiles($task);
+            $task->delete();
+        }
 
         foreach ($booking->documents as $document) {
             if ($document->file_path) {
@@ -2551,6 +2556,27 @@ class BookingController extends Controller
             'user_file' => 'User File',
             'other' => 'Other',
         ];
+    }
+
+    private function deleteStoredTaskFiles(Task $task): void
+    {
+        foreach ((array) ($task->attachments ?? []) as $attachment) {
+            $path = $attachment['path'] ?? null;
+
+            if ($path) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        foreach ($task->clientPortalUpdates as $update) {
+            foreach ((array) ($update->attachments ?? []) as $attachment) {
+                $path = $attachment['path'] ?? null;
+
+                if ($path) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+        }
     }
 
     private function normalizeClientDesignData(?array $designData): ?array
