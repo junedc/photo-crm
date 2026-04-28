@@ -467,10 +467,11 @@
                         Open SSH
                     </a>
                     @php($artisanCommands = [
+                        'Goto Laravel' => 'cd /home/u838520432/domains/memoshot.com/laravel_app',
                         'Clear cache' => '/opt/alt/php84/usr/bin/php artisan optimize:clear',
                         'Clear link' => 'rm -f /home/u838520432/domains/memoshot.com/public_html/storage',
                         'Storage link' => 'ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage',
-                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate --force'
+                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate'
                        
                     ])
                     <div class="flex flex-wrap gap-2">
