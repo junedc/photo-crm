@@ -111,6 +111,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/customers/create', [CustomerController::class, 'create'])->name('customers.create');
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
         Route::get('/vendors', [VendorController::class, 'index'])->name('vendors.index');
+        Route::get('/vendors/create', [VendorController::class, 'create'])->name('vendors.create');
+        Route::get('/vendors/{vendor}', [VendorController::class, 'show'])->name('vendors.show');
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
         Route::get('/campaigns/create', [CampaignController::class, 'create'])->name('campaigns.create');
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
@@ -198,6 +200,12 @@ Route::delete('/settings/inventory-item-categories/{inventoryItemCategory}', [Se
 Route::post('/settings/expense-categories', [SettingsController::class, 'storeExpenseCategory'])->name('settings.expense-categories.store');
 Route::put('/settings/expense-categories/{expenseCategory}', [SettingsController::class, 'updateExpenseCategory'])->name('settings.expense-categories.update');
 Route::delete('/settings/expense-categories/{expenseCategory}', [SettingsController::class, 'destroyExpenseCategory'])->name('settings.expense-categories.destroy');
+Route::post('/settings/service-offerings', [SettingsController::class, 'storeServiceOffering'])->name('settings.service-offerings.store');
+Route::put('/settings/service-offerings/{serviceOffering}', [SettingsController::class, 'updateServiceOffering'])->name('settings.service-offerings.update');
+Route::delete('/settings/service-offerings/{serviceOffering}', [SettingsController::class, 'destroyServiceOffering'])->name('settings.service-offerings.destroy');
+Route::post('/settings/event-types', [SettingsController::class, 'storeEventType'])->name('settings.event-types.store');
+Route::put('/settings/event-types/{eventType}', [SettingsController::class, 'updateEventType'])->name('settings.event-types.update');
+Route::delete('/settings/event-types/{eventType}', [SettingsController::class, 'destroyEventType'])->name('settings.event-types.destroy');
 Route::post('/settings/task-statuses', [SettingsController::class, 'storeTaskStatus'])->name('settings.maintenance.tasks.store');
         Route::put('/settings/task-statuses/{status}', [SettingsController::class, 'updateTaskStatus'])->name('settings.maintenance.tasks.update');
         Route::delete('/settings/task-statuses/{status}', [SettingsController::class, 'destroyTaskStatus'])->name('settings.maintenance.tasks.destroy');
@@ -211,10 +219,13 @@ Route::post('/settings/task-statuses', [SettingsController::class, 'storeTaskSta
         Route::post('/access-control/guests', [UserRoleController::class, 'storeGuestAccess'])->name('access.guests.store');
         Route::delete('/access-control/guests/{user}', [UserRoleController::class, 'destroyGuestAccess'])->name('access.guests.destroy');
         Route::put('/admin/bookings/{booking}', [BookingController::class, 'update'])->name('admin.bookings.update');
+        Route::delete('/admin/bookings/{booking}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
         Route::get('/admin/bookings/{booking}/quote-pdf', [BookingController::class, 'quotePdf'])->name('admin.bookings.quote-pdf');
         Route::get('/admin/bookings/{booking}/invoice-pdf', [InvoiceController::class, 'pdf'])->name('admin.bookings.invoice.pdf');
         Route::post('/admin/bookings/{booking}/documents', [BookingController::class, 'storeDocument'])->name('admin.bookings.documents.store');
         Route::delete('/admin/bookings/{booking}/documents/{document}', [BookingController::class, 'destroyDocument'])->name('admin.bookings.documents.destroy');
+        Route::post('/admin/bookings/{booking}/contacts', [BookingController::class, 'storeContact'])->name('admin.bookings.contacts.store');
+        Route::delete('/admin/bookings/{booking}/contacts/{contact}', [BookingController::class, 'destroyContact'])->name('admin.bookings.contacts.destroy');
         Route::post('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'store'])->name('admin.bookings.invoice.store');
         Route::put('/admin/bookings/{booking}/invoice', [InvoiceController::class, 'update'])->name('admin.bookings.invoice.update');
         Route::post('/admin/bookings/{booking}/invoice/installments/{installment}/manual-payment', [InvoiceController::class, 'recordManualPayment'])->name('admin.bookings.invoice.installments.manual-payment');

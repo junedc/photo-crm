@@ -30,8 +30,8 @@ class EmailTrackingController extends Controller
                 'tenant' => $this->serializeTenant($tenant),
                 'routes' => [
                     ...$this->baseRoutes(),
-                    'emailTracking' => route('email-tracking.index'),
-                    'bulkDelete' => route('email-tracking.bulk-destroy'),
+                    'emailTracking' => route('email-tracking.index', [], false),
+                    'bulkDelete' => route('email-tracking.bulk-destroy', [], false),
                 ],
                 'emailLogs' => $logs->map(fn (EmailLog $log) => $this->serializeLog($log))->values()->all(),
             ],
@@ -52,7 +52,7 @@ class EmailTrackingController extends Controller
             ], 422);
         }
 
-        return $this->savedResponse(request(), 'Email resent.', $this->serializeLog($resentLog), route('email-tracking.index'));
+        return $this->savedResponse(request(), 'Email resent.', $this->serializeLog($resentLog), route('email-tracking.index', [], false));
     }
 
     public function bulkDestroy(CurrentTenant $currentTenant, Request $request): JsonResponse|RedirectResponse
@@ -69,7 +69,7 @@ class EmailTrackingController extends Controller
             ->whereIn('id', $data['email_log_ids'])
             ->delete();
 
-        return $this->deletedResponse($request, 'Selected emails deleted.', route('email-tracking.index'));
+        return $this->deletedResponse($request, 'Selected emails deleted.', route('email-tracking.index', [], false));
     }
 
     private function serializeLog(EmailLog $log): array
@@ -104,7 +104,7 @@ class EmailTrackingController extends Controller
             'sent_at_sort' => $log->sent_at?->timestamp ?? 0,
             'sent_at_label' => DateFormatter::dateTime($log->sent_at, 'Not sent'),
             'mailable_class' => $log->mailable_class,
-            'resend_url' => route('email-tracking.resend', $log),
+            'resend_url' => route('email-tracking.resend', $log, false),
         ];
     }
 
@@ -131,25 +131,25 @@ class EmailTrackingController extends Controller
     private function baseRoutes(): array
     {
         return [
-            'login' => route('login'),
-            'dashboard' => route('dashboard'),
-            'calendar' => route('admin.calendar.index'),
-            'packages' => route('packages.index'),
-            'equipment' => route('equipment.index'),
-            'addons' => route('addons.index'),
-            'discounts' => route('discounts.index'),
-            'bookings' => route('admin.bookings.index'),
-            'quotes' => route('admin.quotes.index'),
-            'invoices' => route('admin.invoices.index'),
-            'leads' => route('leads.index'),
-            'customers' => route('customers.index'),
-            'campaigns' => route('campaigns.index'),
-            'tasks' => route('tasks.index'),
-            'users' => route('users.index'),
-            'roles' => route('roles.index'),
-            'access' => route('access.index'),
-            'settings' => route('settings.index'),
-            'logout' => route('logout'),
+            'login' => route('login', [], false),
+            'dashboard' => route('dashboard', [], false),
+            'calendar' => route('admin.calendar.index', [], false),
+            'packages' => route('packages.index', [], false),
+            'equipment' => route('equipment.index', [], false),
+            'addons' => route('addons.index', [], false),
+            'discounts' => route('discounts.index', [], false),
+            'bookings' => route('admin.bookings.index', [], false),
+            'quotes' => route('admin.quotes.index', [], false),
+            'invoices' => route('admin.invoices.index', [], false),
+            'leads' => route('leads.index', [], false),
+            'customers' => route('customers.index', [], false),
+            'campaigns' => route('campaigns.index', [], false),
+            'tasks' => route('tasks.index', [], false),
+            'users' => route('users.index', [], false),
+            'roles' => route('roles.index', [], false),
+            'access' => route('access.index', [], false),
+            'settings' => route('settings.index', [], false),
+            'logout' => route('logout', [], false),
         ];
     }
 

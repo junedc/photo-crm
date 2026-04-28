@@ -6,6 +6,7 @@ use App\Mail\CustomerBookingCreatedMail;
 use App\Mail\InvoiceIssuedMail;
 use App\Mail\LoginVerificationCodeMail;
 use App\Mail\TaskAssignedMail;
+use App\Mail\TaskResponseReceivedMail;
 use App\Mail\ClientPortalCodeMail;
 use App\Mail\ClientPortalInviteMail;
 use App\Mail\PlatformSubscriptionPaidMail;
@@ -17,15 +18,15 @@ return [
     'mailables' => [
         LoginVerificationCodeMail::class => [
             'title' => 'Login verification code',
-            'track' => false,
+            'track' => true,
         ],
         ClientPortalInviteMail::class => [
             'title' => 'Client portal access',
-            'track' => false,
+            'track' => true,
         ],
         ClientPortalCodeMail::class => [
             'title' => 'Client portal code',
-            'track' => false,
+            'track' => true,
         ],
         SuperAdminLoginCodeMail::class => [
             'title' => 'Super admin login code',
@@ -45,6 +46,10 @@ return [
         ],
         TaskAssignedMail::class => [
             'title' => 'Task assignment',
+            'track' => true,
+        ],
+        TaskResponseReceivedMail::class => [
+            'title' => 'Customer task update',
             'track' => true,
         ],
         CampaignMail::class => [

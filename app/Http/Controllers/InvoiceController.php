@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -222,7 +223,25 @@ class InvoiceController extends Controller
 
     private function defaultInvoiceLineDescription(Booking $booking): string
     {
-        return trim(($booking->customer_name ?: 'Customer').' booking package');
+        $booking->loadMissing(['package.equipment', 'package.addOns']);
+
+        $packageName = trim((string) ($booking->package?->name ?: 'Booking package'));
+        $hoursLabel = filled($booking->total_hours) ? ' - '.number_format((float) $booking->total_hours, 2).' hrs' : '';
+        $packageHeading = $packageName.$hoursLabel;
+        $inclusions = collect([
+            ...$booking->package?->equipment?->pluck('name')->filter()->all() ?? [],
+            ...$booking->package?->addOns?->pluck('name')->filter()->all() ?? [],
+        ])
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($inclusions->isEmpty()) {
+            return $packageHeading;
+        }
+
+        return $packageHeading.' inclusions:'."\n".implode("\n", $inclusions->map(fn ($item) => '- '.$item)->all());
     }
 
     public function show(CurrentTenant $currentTenant, Request $request, Invoice $invoice): View
@@ -248,7 +267,7 @@ class InvoiceController extends Controller
         abort_unless($booking->tenant_id === $currentTenant->id(), 404);
 
         $invoice = $booking->invoice()
-            ->with(['installments', 'booking.package', 'booking.addOns', 'booking.discount'])
+            ->with(['installments', 'booking.package', 'booking.addOns', 'booking.equipment', 'booking.discount'])
             ->firstOrFail();
 
         $tenant = $currentTenant->get();
@@ -264,8 +283,10 @@ class InvoiceController extends Controller
             'tenant' => $tenant,
             'booking' => $booking,
             'invoice' => $invoice,
+            'logo_data_uri' => $this->imageDataUri($tenant?->logo_path),
             'business_lines' => $businessLines,
             'line_description' => $invoice->line_description ?: $this->defaultInvoiceLineDescription($booking),
+            'invoice_items' => $this->invoicePdfItems($booking),
             'amounts_are_label' => $this->amountsAreLabel($invoice->amounts_are ?: 'tax_exclusive'),
             'tax_rate_label' => $this->taxRateLabel($invoice->tax_rate),
         ])->setPaper('a4');
@@ -554,6 +575,129 @@ class InvoiceController extends Controller
             'gst_free_income' => 'GST Free Income',
             'gst_on_income' => 'GST on Income',
         ][$value] ?? 'No tax';
+    }
+
+    private function invoicePdfItems(Booking $booking): array
+    {
+        $booking->loadMissing(['package', 'addOns.inventoryItemCategory', 'equipment', 'discount']);
+
+        $items = [];
+        $packageAmount = (float) ($booking->package_price ?? 0);
+
+        if ($booking->package || $packageAmount > 0) {
+            $items[] = [
+                'type' => 'package',
+                'name' => $booking->package?->name ?: 'Package',
+                'description' => $booking->package?->description ?: $this->defaultInvoiceLineDescription($booking),
+                'description_lines' => [],
+                'price' => $packageAmount,
+                'quantity' => 1,
+                'discount_label' => 'No discount',
+                'amount' => $packageAmount,
+            ];
+        }
+
+        foreach ($booking->equipment as $equipment) {
+            $items[] = [
+                'type' => 'equipment',
+                'name' => $equipment->name,
+                'description' => $equipment->description ?: ($equipment->category ?: 'Equipment'),
+                'description_lines' => [],
+                'price' => (float) ($equipment->daily_rate ?? 0),
+                'quantity' => 1,
+                'discount_label' => $this->invoicePdfDiscountLabel(
+                    $equipment->pivot?->discount_type,
+                    $equipment->pivot?->discount_value,
+                    (float) ($equipment->pivot?->discount_percentage ?? 0),
+                ),
+                'amount' => (float) $equipment->discountedDailyRateForBooking(
+                    $equipment->pivot?->discount_type,
+                    $equipment->pivot?->discount_value,
+                    (float) ($equipment->pivot?->discount_percentage ?? 0),
+                ),
+            ];
+        }
+
+        foreach ($booking->addOns as $addOn) {
+            $items[] = [
+                'type' => 'add_on',
+                'name' => $addOn->name,
+                'description' => $addOn->description ?: ($addOn->inventoryItemCategory?->name ?: 'Add-on'),
+                'description_lines' => array_values(array_filter([
+                    $addOn->duration ? 'Duration: '.$addOn->duration : null,
+                    filled($addOn->description) ? trim((string) $addOn->description) : null,
+                ])),
+                'price' => (float) ($addOn->unit_price ?? 0),
+                'quantity' => 1,
+                'discount_label' => $this->invoicePdfDiscountLabel(
+                    $addOn->pivot?->discount_type,
+                    $addOn->pivot?->discount_value,
+                    (float) ($addOn->pivot?->discount_percentage ?? 0),
+                ),
+                'amount' => (float) $addOn->discountedUnitPriceForBookingSelection(
+                    $addOn->pivot?->discount_type,
+                    $addOn->pivot?->discount_value,
+                    (float) ($addOn->pivot?->discount_percentage ?? 0),
+                ),
+            ];
+        }
+
+        if ((float) ($booking->travel_fee ?? 0) > 0) {
+            $items[] = [
+                'type' => 'travel_fee',
+                'name' => 'Travel Fee',
+                'description' => 'Travel fee for '.number_format((float) ($booking->travel_distance_km ?? 0), 2).' km',
+                'description_lines' => [],
+                'price' => (float) $booking->travel_fee,
+                'quantity' => 1,
+                'discount_label' => 'No discount',
+                'amount' => (float) $booking->travel_fee,
+            ];
+        }
+
+        if ((float) ($booking->discount_amount ?? 0) > 0) {
+            $items[] = [
+                'type' => 'booking_discount',
+                'name' => 'Booking Discount',
+                'description' => $booking->discount
+                    ? $booking->discount->code.' - '.$booking->discount->name
+                    : 'Applied booking discount',
+                'description_lines' => [],
+                'price' => -(float) $booking->discount_amount,
+                'quantity' => 1,
+                'discount_label' => 'Included',
+                'amount' => -(float) $booking->discount_amount,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function invoicePdfDiscountLabel(mixed $discountType = null, mixed $discountValue = null, float $legacyPercentage = 0): string
+    {
+        if ($discountType === 'amount' && (float) ($discountValue ?? 0) > 0) {
+            return '$'.number_format((float) $discountValue, 2);
+        }
+
+        $percentage = (float) ($legacyPercentage > 0 ? $legacyPercentage : ($discountValue ?? 0));
+
+        if ($percentage > 0) {
+            return number_format($percentage, 2).'%';
+        }
+
+        return 'No discount';
+    }
+
+    private function imageDataUri(?string $path): ?string
+    {
+        if ($path === null || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $content = Storage::disk('public')->get($path);
+        $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode($content);
     }
 
     private function serializeInvoiceListRecord(Invoice $invoice): array

@@ -197,7 +197,7 @@ const confirmDeleteCustomer = async () => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete customer?"
-        :message="`Delete customer ${customerRecord.full_name}? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${customerRecord.full_name}?`"
         confirm-label="Delete customer"
         :loading="deleting"
         @cancel="showDeleteConfirm = false"

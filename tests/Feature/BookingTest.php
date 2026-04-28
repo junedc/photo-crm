@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Booking;
 use App\Models\Discount;
 use App\Models\Equipment;
+use App\Models\Invoice;
 use App\Models\InventoryItem;
 use App\Models\Lead;
 use App\Models\Package;
@@ -849,6 +850,101 @@ class BookingTest extends TestCase
         $this->assertSame('pending', $booking->status);
     }
 
+    public function test_admin_can_choose_global_or_package_discount_source(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Discount Booth',
+            'description' => 'Package with booking discounts.',
+            'base_price' => 1000,
+            'is_active' => true,
+        ]);
+        $addOn = InventoryItem::query()->create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'ADD-DISC',
+            'name' => 'Discount Add-On',
+            'quantity' => 1,
+            'unit_price' => 200,
+            'category' => 'add-on',
+            'maintenance_status' => 'ready',
+        ]);
+        $globalDiscount = Discount::query()->create([
+            'tenant_id' => $tenant->id,
+            'code' => 'GLOBAL10',
+            'name' => 'Global 10 percent',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'discount_type' => 'percentage',
+            'discount_value' => 10,
+        ]);
+        $packageDiscount = Discount::query()->create([
+            'tenant_id' => $tenant->id,
+            'code' => 'PACKAGE20',
+            'name' => 'Package 20 percent',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'discount_type' => 'percentage',
+            'discount_value' => 20,
+        ]);
+        $packageDiscount->packages()->sync([$package->id]);
+
+        $this->actingAs($user)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/bookings', [
+                'package_id' => $package->id,
+                'add_on_ids' => [$addOn->id],
+                'discount_id' => $globalDiscount->id,
+                'booking_discount_source' => 'global',
+                'customer_name' => 'Global Discount Customer',
+                'customer_email' => 'global@example.com',
+                'customer_phone' => '0400000100',
+                'event_type' => 'Wedding',
+                'venue' => 'Global Venue',
+                'event_date' => now()->addDays(10)->toDateString(),
+                'start_time' => '13:00',
+                'end_time' => '17:00',
+                'total_hours' => '4.00',
+                'event_location' => 'Global Location',
+                'travel_fee' => '50.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('record.booking_discount_source', 'global')
+            ->assertJsonPath('record.discount_amount', '125.00');
+
+        $this->actingAs($user)
+            ->postJson('http://'.$tenant->slug.'.memoshot.test/bookings', [
+                'package_id' => $package->id,
+                'add_on_ids' => [$addOn->id],
+                'discount_id' => $packageDiscount->id,
+                'booking_discount_source' => 'package',
+                'customer_name' => 'Package Discount Customer',
+                'customer_email' => 'package@example.com',
+                'customer_phone' => '0400000101',
+                'event_type' => 'Wedding',
+                'venue' => 'Package Venue',
+                'event_date' => now()->addDays(11)->toDateString(),
+                'start_time' => '13:00',
+                'end_time' => '17:00',
+                'total_hours' => '4.00',
+                'event_location' => 'Package Location',
+                'travel_fee' => '50.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('record.booking_discount_source', 'package')
+            ->assertJsonPath('record.discount_amount', '200.00');
+
+        $this->assertDatabaseHas('bookings', [
+            'customer_email' => 'global@example.com',
+            'booking_discount_source' => 'global',
+            'discount_amount' => 125,
+        ]);
+        $this->assertDatabaseHas('bookings', [
+            'customer_email' => 'package@example.com',
+            'booking_discount_source' => 'package',
+            'discount_amount' => 200,
+        ]);
+    }
+
     public function test_admin_can_create_market_stall_booking_with_equipment_and_add_ons(): void
     {
         [$tenant, $user] = $this->tenantUser();
@@ -901,6 +997,7 @@ class BookingTest extends TestCase
                 'customer_email' => 'stall@example.com',
                 'customer_phone' => '0400000088',
                 'event_type' => 'Others',
+                'venue' => 'Saturday Farmers Market',
                 'event_date' => now()->addDays(12)->toDateString(),
                 'start_time' => '09:00',
                 'end_time' => '15:00',
@@ -925,6 +1022,79 @@ class BookingTest extends TestCase
         $this->assertSame('Saturday Farmers Market', $booking->entry_name);
         $this->assertSame([$equipment->id], $booking->equipment()->pluck('equipment.id')->all());
         $this->assertSame([$addOn->id], $booking->addOns()->pluck('inventory_items.id')->all());
+    }
+
+    public function test_admin_can_delete_booking_without_paid_invoice(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Delete Booth',
+            'base_price' => 500,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'Delete Customer',
+            'customer_email' => 'delete@example.com',
+            'customer_phone' => '0400000200',
+            'event_date' => now()->addDays(15)->toDateString(),
+            'event_location' => 'Delete Location',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->deleteJson('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Booking deleted.');
+
+        $this->assertDatabaseMissing('bookings', [
+            'id' => $booking->id,
+        ]);
+    }
+
+    public function test_admin_cannot_delete_booking_with_paid_invoice(): void
+    {
+        [$tenant, $user] = $this->tenantUser();
+        $package = Package::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Paid Delete Booth',
+            'base_price' => 500,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'tenant_id' => $tenant->id,
+            'package_id' => $package->id,
+            'customer_name' => 'Paid Invoice Customer',
+            'customer_email' => 'paid-delete@example.com',
+            'customer_phone' => '0400000201',
+            'event_date' => now()->addDays(16)->toDateString(),
+            'event_location' => 'Paid Invoice Location',
+            'status' => 'pending',
+        ]);
+
+        Invoice::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'invoice_number' => 'INV-PAID-DELETE',
+            'token' => 'invoice-paid-delete',
+            'total_amount' => 500,
+            'amount_paid' => 100,
+            'status' => 'partially_paid',
+            'issued_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->deleteJson('http://'.$tenant->slug.'.memoshot.test/admin/bookings/'.$booking->id)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This booking has a paid invoice and cannot be deleted.');
+
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+        ]);
     }
 
     /**

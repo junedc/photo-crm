@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError } from '../validation';
 
@@ -15,6 +16,8 @@ const roles = ref([...(props.data.roles ?? [])]);
 const editingRole = ref(null);
 const showModal = ref(false);
 const form = ref({ name: '', description: '', screen_access: [] });
+const roleToDelete = ref(null);
+const showDeleteConfirm = ref(false);
 
 const openCreate = () => {
     editingRole.value = null;
@@ -60,9 +63,24 @@ const saveRole = async () => {
     closeModal();
 };
 
-const removeRole = async (role) => {
-    await deleteRecord({ url: role.delete_url });
-    roles.value = roles.value.filter((entry) => entry.id !== role.id);
+const askRemoveRole = (role) => {
+    roleToDelete.value = role;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveRole = () => {
+    roleToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeRole = async () => {
+    if (!roleToDelete.value?.delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: roleToDelete.value.delete_url });
+    roles.value = roles.value.filter((entry) => entry.id !== roleToDelete.value.id);
+    cancelRemoveRole();
 };
 </script>
 
@@ -100,7 +118,7 @@ const removeRole = async (role) => {
                     <span class="text-sm text-stone-300">{{ role.users_count }}</span>
                     <div class="flex items-center gap-2">
                         <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="openEdit(role)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeRole(role)">Delete</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveRole(role)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -146,4 +164,14 @@ const removeRole = async (role) => {
             </form>
         </div>
     </transition>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete role?"
+        :message="`Are you sure you want to delete the record ${roleToDelete?.name || 'this role'}?`"
+        confirm-label="Delete role"
+        :loading="saving"
+        @cancel="cancelRemoveRole"
+        @confirm="removeRole"
+    />
 </template>

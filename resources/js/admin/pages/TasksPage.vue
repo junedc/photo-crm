@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError } from '../validation';
 
@@ -19,6 +20,8 @@ const bookings = computed(() => props.data.bookings ?? []);
 const editingTask = ref(null);
 const showModal = ref(false);
 const form = ref(buildForm());
+const taskToDelete = ref(null);
+const showDeleteConfirm = ref(false);
 
 function buildForm(task = null) {
     return {
@@ -118,9 +121,24 @@ const saveTask = async () => {
     closeModal();
 };
 
-const removeTask = async (task) => {
-    await deleteRecord({ url: task.delete_url });
-    tasks.value = tasks.value.filter((entry) => entry.id !== task.id);
+const askRemoveTask = (task) => {
+    taskToDelete.value = task;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveTask = () => {
+    taskToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeTask = async () => {
+    if (!taskToDelete.value?.delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: taskToDelete.value.delete_url });
+    tasks.value = tasks.value.filter((entry) => entry.id !== taskToDelete.value.id);
+    cancelRemoveTask();
 };
 
 onMounted(() => {
@@ -170,7 +188,7 @@ onMounted(() => {
                     <p class="truncate text-sm text-stone-400">{{ task.remarks || 'No remarks' }}</p>
                     <div class="flex items-center gap-2">
                         <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="openEdit(task)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeTask(task)">Delete</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveTask(task)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -282,4 +300,14 @@ onMounted(() => {
             </form>
         </div>
     </transition>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete task?"
+        :message="`Are you sure you want to delete the record ${taskToDelete?.task_name || 'this task'}?`"
+        confirm-label="Delete task"
+        :loading="saving"
+        @cancel="cancelRemoveTask"
+        @confirm="removeTask"
+    />
 </template>

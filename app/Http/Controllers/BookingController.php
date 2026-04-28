@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\AdminBookingCreatedMail;
 use App\Mail\CustomerBookingCreatedMail;
 use App\Models\Booking;
+use App\Models\BookingContact;
 use App\Models\BookingDocument;
 use App\Models\ClientPortalAccess;
 use App\Models\Customer;
@@ -122,6 +123,7 @@ class BookingController extends Controller
                 ->unique()
                 ->sort()
                 ->values(),
+            'eventTypes' => $this->eventTypes($tenant),
             'discounts' => $this->availableDiscounts(),
             'leadToken' => null,
             'termsUrl' => route('bookings.terms'),
@@ -232,10 +234,10 @@ class BookingController extends Controller
                     ->where('tenant_id', $tenantId)
                     ->where('is_active', true)),
             ],
-            'customer_name' => ['required', 'string', 'max:255'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
-            'event_type' => ['required', Rule::in($this->eventTypes())],
+            'event_type' => ['required', Rule::in($this->eventTypes(app(CurrentTenant::class)->get()))],
             'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
@@ -257,6 +259,9 @@ class BookingController extends Controller
                 Rule::exists('discounts', 'id')->where(fn ($query) => $query
                     ->where('tenant_id', $tenantId)),
             ],
+            'booking_discount_source' => ['nullable', Rule::in(['none', 'package', 'global', 'custom'])],
+            'booking_discount_type' => ['nullable', Rule::in(['percentage', 'amount'])],
+            'booking_discount_value' => ['nullable', 'numeric', 'min:0'],
             'add_on_ids' => ['nullable', 'array'],
             'add_on_ids.*' => [
                 'integer',
@@ -297,6 +302,18 @@ class BookingController extends Controller
             $data['equipment_discount_types'] ?? [],
             $data['equipment_discount_values'] ?? [],
         );
+        $isEntryBooking = in_array((string) ($data['booking_kind'] ?? 'customer'), ['market_stall', 'sponsored'], true);
+
+        if (! $isEntryBooking && blank($data['customer_name'] ?? null)) {
+            throw ValidationException::withMessages([
+                'customer_name' => 'The customer name field is required.',
+            ]);
+        }
+
+        if ($isEntryBooking && blank($data['customer_name'] ?? null)) {
+            $data['customer_name'] = $data['entry_name'] ?? '';
+        }
+
         $package = $this->resolvePackageForSelection($data);
         $this->ensurePackageTimingSelection($package, $data);
         $selectedEquipment = $this->resolveEquipmentSelection($equipmentIds);
@@ -310,8 +327,20 @@ class BookingController extends Controller
         $data['booking_kind'] = $data['booking_kind'] ?? 'customer';
         $data['customer_id'] = $this->resolveCustomer($data)->id;
         $data['package_price'] = $this->resolvePackagePrice($data, $package, ! $request->expectsJson());
-        $data['discount_id'] = null;
-        $data['discount_amount'] = 0;
+        [$discountId, $discountAmount, $discountType, $discountValue, $discountSource] = $this->resolveAdminBookingDiscount(
+            $data,
+            $package,
+            (float) $data['package_price'],
+            $addOnIds,
+            $equipmentIds,
+            $addOnDiscountSelections,
+            $equipmentDiscountSelections,
+        );
+        $data['discount_id'] = $discountId;
+        $data['discount_amount'] = $discountAmount;
+        $data['booking_discount_type'] = $discountType;
+        $data['booking_discount_value'] = $discountValue;
+        $data['booking_discount_source'] = $discountSource;
 
         $booking = Booking::query()->create($data);
         $booking->addOns()->sync($this->bookingItemSyncPayload($addOnIds, $addOnDiscountSelections));
@@ -369,7 +398,7 @@ class BookingController extends Controller
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
-            'event_type' => ['required', Rule::in($this->eventTypes())],
+            'event_type' => ['required', Rule::in($this->eventTypes(app(CurrentTenant::class)->get()))],
             'venue' => ['required', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
@@ -516,6 +545,7 @@ class BookingController extends Controller
     public function update(Request $request, Booking $booking): RedirectResponse|JsonResponse
     {
         $tenantId = app(CurrentTenant::class)->id();
+        $tenant = app(CurrentTenant::class)->get();
         $isFullEdit = $request->hasAny([
             'booking_kind',
             'package_id',
@@ -530,6 +560,9 @@ class BookingController extends Controller
             'total_hours',
             'event_location',
             'discount_id',
+            'booking_discount_source',
+            'booking_discount_type',
+            'booking_discount_value',
             'add_on_ids',
             'equipment_ids',
         ]);
@@ -567,10 +600,10 @@ class BookingController extends Controller
                         ->where('tenant_id', $tenantId)
                         ->where('is_active', true)),
                 ],
-                'customer_name' => ['required', 'string', 'max:255'],
+                'customer_name' => ['nullable', 'string', 'max:255'],
                 'customer_email' => ['required', 'email', 'max:255'],
                 'customer_phone' => ['required', 'string', 'max:50'],
-                'event_type' => ['required', Rule::in($this->eventTypes())],
+                'event_type' => ['required', Rule::in($this->eventTypes($tenant))],
                 'venue' => ['nullable', 'string', 'max:255'],
                 'event_date' => ['required', 'date'],
                 'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
@@ -592,6 +625,9 @@ class BookingController extends Controller
                     Rule::exists('discounts', 'id')->where(fn ($query) => $query
                         ->where('tenant_id', $tenantId)),
                 ],
+                'booking_discount_source' => ['nullable', Rule::in(['none', 'package', 'global', 'custom'])],
+                'booking_discount_type' => ['nullable', Rule::in(['percentage', 'amount'])],
+                'booking_discount_value' => ['nullable', 'numeric', 'min:0'],
                 'add_on_ids' => ['nullable', 'array'],
                 'add_on_ids.*' => [
                     'integer',
@@ -617,6 +653,18 @@ class BookingController extends Controller
                 'start_time.regex' => 'Start hour must be on the hour or half hour.',
                 'end_time.regex' => 'End hour must be on the hour or half hour.',
             ]);
+
+            $isEntryBooking = in_array((string) ($data['booking_kind'] ?? 'customer'), ['market_stall', 'sponsored'], true);
+
+            if (! $isEntryBooking && blank($data['customer_name'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'customer_name' => 'The customer name field is required.',
+                ]);
+            }
+
+            if ($isEntryBooking && blank($data['customer_name'] ?? null)) {
+                $data['customer_name'] = $data['entry_name'] ?? '';
+            }
 
             $status = $this->workspaceStatusById($tenantId, TenantStatuses::SCOPE_BOOKING, $data['booking_status_id']);
             $data['booking_status_id'] = $status?->id;
@@ -654,9 +702,20 @@ class BookingController extends Controller
             $bookingData['booking_kind'] = $bookingData['booking_kind'] ?? 'customer';
             $bookingData['customer_id'] = $this->resolveCustomer($bookingData)->id;
             $bookingData['package_price'] = $this->resolvePackagePrice($bookingData, $package, true);
-            [$discountId, $discountAmount] = $this->resolveDiscountSelection($bookingData, $package, $bookingData['package_price']);
+            [$discountId, $discountAmount, $discountType, $discountValue, $discountSource] = $this->resolveAdminBookingDiscount(
+                $bookingData,
+                $package,
+                (float) $bookingData['package_price'],
+                $addOnIds,
+                $equipmentIds,
+                $addOnDiscountSelections,
+                $equipmentDiscountSelections,
+            );
             $bookingData['discount_id'] = $discountId;
             $bookingData['discount_amount'] = $discountAmount;
+            $bookingData['booking_discount_type'] = $discountType;
+            $bookingData['booking_discount_value'] = $discountValue;
+            $bookingData['booking_discount_source'] = $discountSource;
 
             DB::transaction(function () use ($booking, $bookingData, $addOnIds, $equipmentIds, $addOnDiscountSelections, $equipmentDiscountSelections): void {
                 $booking->update($bookingData);
@@ -677,6 +736,41 @@ class BookingController extends Controller
         }
 
         return redirect()->route('admin.bookings.show', $booking)->with('status', 'Booking updated successfully.');
+    }
+
+    public function destroy(CurrentTenant $currentTenant, Booking $booking): JsonResponse|RedirectResponse
+    {
+        abort_unless($currentTenant->id() === $booking->tenant_id, 404);
+
+        if ($this->bookingInvoiceAmountLocked($booking)) {
+            $message = 'This booking has a paid invoice and cannot be deleted.';
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                ], 422);
+            }
+
+            return redirect()->route('admin.bookings.show', $booking)->withErrors(['booking' => $message]);
+        }
+
+        $booking->loadMissing('documents');
+
+        foreach ($booking->documents as $document) {
+            if ($document->file_path) {
+                Storage::disk('public')->delete($document->file_path);
+            }
+        }
+
+        $booking->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Booking deleted.',
+            ]);
+        }
+
+        return redirect()->route('admin.bookings.index')->with('status', 'Booking deleted.');
     }
 
     public function storeDocument(CurrentTenant $currentTenant, Request $request, Booking $booking): JsonResponse
@@ -734,6 +828,71 @@ class BookingController extends Controller
 
         return response()->json([
             'message' => 'Document deleted.',
+        ]);
+    }
+
+    public function storeContact(CurrentTenant $currentTenant, Request $request, Booking $booking): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'source_type' => ['required', Rule::in(['manual', 'customer', 'vendor'])],
+            'source_id' => ['nullable', 'integer'],
+            'name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $sourceId = filled($data['source_id'] ?? null) ? (int) $data['source_id'] : null;
+        if ($data['source_type'] === 'customer' && $sourceId) {
+            Customer::query()
+                ->where('tenant_id', $tenant->id)
+                ->findOrFail($sourceId);
+        }
+        if ($data['source_type'] === 'vendor' && $sourceId) {
+            TenantVendor::query()
+                ->where('tenant_id', $tenant->id)
+                ->findOrFail($sourceId);
+        }
+
+        $contact = BookingContact::query()->create([
+            'tenant_id' => $tenant->id,
+            'booking_id' => $booking->id,
+            'source_type' => $data['source_type'],
+            'source_id' => $sourceId,
+            'name' => trim((string) $data['name']),
+            'company_name' => filled($data['company_name'] ?? null) ? trim((string) $data['company_name']) : null,
+            'role' => filled($data['role'] ?? null) ? trim((string) $data['role']) : null,
+            'email' => filled($data['email'] ?? null) ? strtolower(trim((string) $data['email'])) : null,
+            'phone' => filled($data['phone'] ?? null) ? trim((string) $data['phone']) : null,
+            'notes' => filled($data['notes'] ?? null) ? trim((string) $data['notes']) : null,
+        ]);
+
+        return response()->json([
+            'message' => 'Contact added.',
+            'record' => $this->serializeBookingContact($contact),
+        ]);
+    }
+
+    public function destroyContact(CurrentTenant $currentTenant, Booking $booking, BookingContact $contact): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless(
+            $tenant
+            && $booking->tenant_id === $tenant->id
+            && $contact->tenant_id === $tenant->id
+            && $contact->booking_id === $booking->id,
+            404
+        );
+
+        $contact->delete();
+
+        return response()->json([
+            'message' => 'Contact removed.',
         ]);
     }
 
@@ -821,7 +980,7 @@ class BookingController extends Controller
     private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
     {
         $tenant = $currentTenant->get();
-        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'clientPortalTaskUpdates.task', 'documents.uploader']);
+        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts']);
         $taskStatuses = $tenant ? $this->taskStatuses($tenant) : collect();
 
         return view('admin.app', [
@@ -859,6 +1018,7 @@ class BookingController extends Controller
                     'expenses' => route('expenses.index'),
                     'expenseStore' => route('expenses.store'),
                     'documentStore' => route('admin.bookings.documents.store', $booking),
+                    'contactStore' => route('admin.bookings.contacts.store', $booking),
                     'settings' => route('settings.index'),
                     'logout' => route('logout'),
                 ],
@@ -866,7 +1026,7 @@ class BookingController extends Controller
                 'bookingStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_BOOKING) : [],
                 'quoteResponseStatusOptions' => $tenant ? $this->workspaceStatusOptions($tenant, TenantStatuses::SCOPE_QUOTE_RESPONSE) : [],
                 'bookingKinds' => $this->bookingKinds(),
-                'eventTypes' => $this->eventTypes(),
+                'eventTypes' => $this->eventTypes($tenant),
                 'defaultDepositPercentage' => (float) ($tenant?->invoice_deposit_percentage ?? config('invoicing.deposit_percentage', 30)),
                 'booking' => $this->serializeBooking($booking),
                 'taskAssignees' => $tenant ? TaskAssignees::optionsForTenant($tenant, $booking)->values()->all() : [],
@@ -882,6 +1042,28 @@ class BookingController extends Controller
                             'label' => $vendor->company_name
                                 ? sprintf('%s (%s)', $vendor->name, $vendor->company_name)
                                 : $vendor->name,
+                            'name' => $vendor->name,
+                            'company_name' => $vendor->company_name,
+                            'email' => $vendor->email,
+                            'phone' => $vendor->phone ?: $vendor->mobile_number,
+                            'role' => $vendor->service_type,
+                        ])
+                        ->values()
+                        ->all()
+                    : [],
+                'customerOptions' => $tenant
+                    ? Customer::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->orderBy('full_name')
+                        ->get()
+                        ->map(fn (Customer $customer) => [
+                            'id' => $customer->id,
+                            'label' => $customer->full_name,
+                            'name' => $customer->full_name,
+                            'company_name' => null,
+                            'email' => $customer->email,
+                            'phone' => $customer->phone,
+                            'role' => 'Customer',
                         ])
                         ->values()
                         ->all()
@@ -915,7 +1097,7 @@ class BookingController extends Controller
                 ],
                 ...$this->adminBookingCreateProps(
                     $tenant,
-                    Package::query()->where('is_active', true)->with('hourlyPrices')->latest()->get(),
+                    Package::query()->where('is_active', true)->with(['hourlyPrices', 'addOns:id'])->latest()->get(),
                     Equipment::query()->latest()->get(),
                     InventoryItem::query()->where('category', 'add-on')->latest()->get(),
                 ),
@@ -928,7 +1110,7 @@ class BookingController extends Controller
         $tenant = $currentTenant->get();
         $packages = Package::query()
             ->where('is_active', true)
-            ->with('hourlyPrices')
+            ->with(['hourlyPrices', 'addOns:id'])
             ->latest()
             ->get();
         $equipment = Equipment::query()->latest()->get();
@@ -973,7 +1155,7 @@ class BookingController extends Controller
                     'logout' => route('logout'),
                 ],
                 'bookingKinds' => $this->bookingKinds(),
-                'eventTypes' => $this->eventTypes(),
+                'eventTypes' => $this->eventTypes($tenant),
                 ...$this->adminBookingCreateProps($tenant, $packages, $equipment, $addOns),
             ],
         ]);
@@ -996,6 +1178,7 @@ class BookingController extends Controller
                     'hours' => number_format((float) $hourlyPrice->hours, 2, '.', ''),
                     'price' => number_format((float) $hourlyPrice->price, 2, '.', ''),
                 ])->values()->all(),
+                'add_on_ids' => $package->addOns->pluck('id')->values()->all(),
             ])->values()->all(),
             'equipmentOptions' => $equipment->map(fn (Equipment $item) => [
                 'id' => $item->id,
@@ -1027,7 +1210,7 @@ class BookingController extends Controller
         $eventDateTo = trim((string) $request->query('event_date_to', ''));
 
         return Booking::query()
-            ->with(['package', 'addOns', 'equipment', 'discount', 'bookingStatus'])
+            ->with(['package', 'addOns', 'equipment', 'discount', 'bookingStatus', 'invoice'])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
                     $nested
@@ -1188,6 +1371,9 @@ class BookingController extends Controller
             'status' => $booking->status,
             'status_label' => $booking->bookingStatus?->label() ?? str($booking->status)->replace('_', ' ')->title()->toString(),
             'show_url' => route('admin.bookings.show', $booking),
+            'delete_url' => route('admin.bookings.destroy', $booking),
+            'delete_blocked' => $this->bookingInvoiceAmountLocked($booking),
+            'delete_blocked_message' => 'This booking has a paid invoice and cannot be deleted.',
         ];
     }
 
@@ -1210,7 +1396,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user', 'clientPortalTaskUpdates.task', 'documents.uploader']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'package.equipment', 'package.addOns', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts']);
         $clientPortalAccess = ClientPortalAccess::query()
             ->where('tenant_id', $booking->tenant_id)
             ->where('customer_email', strtolower((string) $booking->customer_email))
@@ -1248,6 +1434,9 @@ class BookingController extends Controller
             'discount_id' => $booking->discount_id ? (string) $booking->discount_id : '',
             'package_price' => number_format($packagePrice, 2, '.', ''),
             'discount_amount' => number_format((float) ($booking->discount_amount ?? 0), 2, '.', ''),
+            'booking_discount_source' => $booking->booking_discount_source ?: ($booking->discount_id ? 'package' : 'none'),
+            'booking_discount_type' => $booking->booking_discount_type ?: 'amount',
+            'booking_discount_value' => number_format((float) ($booking->booking_discount_value ?? 0), 2, '.', ''),
             'event_type' => $booking->event_type,
             'event_type_label' => $booking->event_type ? str($booking->event_type)->title()->toString() : null,
             'venue' => $booking->venue,
@@ -1287,6 +1476,8 @@ class BookingController extends Controller
                 'description' => $package->description,
                 'price' => number_format($packagePrice, 2, '.', ''),
                 'photo_url' => $package->photo_path ? Storage::disk('public')->url($package->photo_path) : null,
+                'equipment_names' => $package->equipment->pluck('name')->filter()->values()->all(),
+                'add_on_names' => $package->addOns->pluck('name')->filter()->values()->all(),
             ] : null,
             'addons' => $booking->addOns->map(fn (InventoryItem $item) => [
                 'id' => $item->id,
@@ -1364,12 +1555,35 @@ class BookingController extends Controller
                 ])
                 ->all(),
             'documents' => $this->serializeBookingDocuments($booking),
+            'contacts' => $booking->contacts
+                ->sortByDesc(fn (BookingContact $contact) => $contact->created_at)
+                ->values()
+                ->map(fn (BookingContact $contact) => $this->serializeBookingContact($contact))
+                ->all(),
             'task_assignees' => $booking->tenant ? TaskAssignees::optionsForTenant($booking->tenant, $booking)->values()->all() : [],
             'invoice' => $booking->invoice ? $this->serializeInvoice($booking->invoice) : null,
             'show_url' => route('admin.bookings.show', $booking),
             'update_url' => route('admin.bookings.update', $booking),
             'invoice_create_url' => route('admin.bookings.invoice.store', $booking),
             'grant_client_access_url' => route('admin.bookings.client-access.grant', $booking),
+        ];
+    }
+
+    private function serializeBookingContact(BookingContact $contact): array
+    {
+        return [
+            'id' => $contact->id,
+            'source_type' => $contact->source_type,
+            'source_label' => str($contact->source_type)->replace('_', ' ')->title()->toString(),
+            'source_id' => $contact->source_id,
+            'name' => $contact->name,
+            'company_name' => $contact->company_name,
+            'role' => $contact->role,
+            'email' => $contact->email,
+            'phone' => $contact->phone,
+            'notes' => $contact->notes,
+            'created_at_label' => DateFormatter::dateTime($contact->created_at),
+            'delete_url' => route('admin.bookings.contacts.destroy', [$contact->booking_id, $contact]),
         ];
     }
 
@@ -1515,9 +1729,20 @@ class BookingController extends Controller
         return $tenant ? TenantStatuses::findWorkspaceStatusById($tenant, $scope, $id) : null;
     }
 
-    private function eventTypes(): array
+    private function eventTypes(?Tenant $tenant): array
     {
-        return ['Wedding', 'Birthday', 'Anniversary', 'Others'];
+        if (! $tenant instanceof Tenant) {
+            return Tenant::defaultEventTypes();
+        }
+
+        $eventTypes = $tenant->eventTypes()
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $eventTypes !== [] ? $eventTypes : Tenant::defaultEventTypes();
     }
 
     private function resolveLead(?string $leadToken): ?Lead
@@ -1639,6 +1864,160 @@ class BookingController extends Controller
         ];
     }
 
+    private function resolveAdminBookingDiscount(
+        array $data,
+        ?Package $package,
+        float $packagePrice,
+        array $addOnIds,
+        array $equipmentIds,
+        array $addOnDiscountSelections,
+        array $equipmentDiscountSelections,
+    ): array {
+        $source = $data['booking_discount_source'] ?? null;
+        $manualType = ($data['booking_discount_type'] ?? 'amount') === 'percentage' ? 'percentage' : 'amount';
+        $manualValue = max(0, (float) ($data['booking_discount_value'] ?? 0));
+
+        if ($manualType === 'percentage') {
+            $manualValue = min(100, $manualValue);
+        }
+
+        if ($source === null) {
+            $source = $manualValue > 0 ? 'custom' : ((int) ($data['discount_id'] ?? 0) > 0 ? 'package' : 'none');
+        }
+
+        if ($source === 'none') {
+            return [
+                null,
+                '0.00',
+                null,
+                '0.00',
+                null,
+            ];
+        }
+
+        if ($source === 'custom' && $manualValue > 0) {
+            $subtotal = $this->bookingDiscountBaseAmount(
+                $packagePrice,
+                $addOnIds,
+                $equipmentIds,
+                $addOnDiscountSelections,
+                $equipmentDiscountSelections,
+                (float) ($data['travel_fee'] ?? 0),
+            );
+            $discountAmount = $manualType === 'percentage'
+                ? $subtotal * ($manualValue / 100)
+                : $manualValue;
+
+            return [
+                null,
+                number_format(min($subtotal, $discountAmount), 2, '.', ''),
+                $manualType,
+                number_format($manualValue, 2, '.', ''),
+                'custom',
+            ];
+        }
+
+        if ($source === 'custom') {
+            return [
+                null,
+                '0.00',
+                null,
+                '0.00',
+                null,
+            ];
+        }
+
+        if ($source === 'global') {
+            [$discountId, $discountAmount] = $this->resolveGlobalDiscountSelection(
+                $data,
+                $this->bookingDiscountBaseAmount(
+                    $packagePrice,
+                    $addOnIds,
+                    $equipmentIds,
+                    $addOnDiscountSelections,
+                    $equipmentDiscountSelections,
+                    (float) ($data['travel_fee'] ?? 0),
+                ),
+            );
+
+            return [
+                $discountId,
+                $discountAmount,
+                null,
+                '0.00',
+                $discountId ? 'global' : null,
+            ];
+        }
+
+        [$discountId, $discountAmount] = $this->resolveDiscountSelection($data, $package, $packagePrice);
+
+        return [
+            $discountId,
+            $discountAmount,
+            null,
+            '0.00',
+            $discountId ? 'package' : null,
+        ];
+    }
+
+    private function resolveGlobalDiscountSelection(array $data, float $bookingSubtotal): array
+    {
+        $discountId = isset($data['discount_id']) ? (int) $data['discount_id'] : null;
+
+        if (! $discountId) {
+            return [null, '0.00'];
+        }
+
+        $discount = Discount::query()->find($discountId);
+
+        if (! $discount instanceof Discount) {
+            throw ValidationException::withMessages([
+                'discount_id' => 'Please choose a valid discount.',
+            ]);
+        }
+
+        if (! app(BookingDiscountResolver::class)->isActive($discount)) {
+            return [null, '0.00'];
+        }
+
+        $discountAmount = $discount->discount_type === 'percentage'
+            ? $bookingSubtotal * (((float) $discount->discount_value) / 100)
+            : (float) $discount->discount_value;
+
+        return [
+            $discount->id,
+            number_format(min($bookingSubtotal, $discountAmount), 2, '.', ''),
+        ];
+    }
+
+    private function bookingDiscountBaseAmount(
+        float $packagePrice,
+        array $addOnIds,
+        array $equipmentIds,
+        array $addOnDiscountSelections,
+        array $equipmentDiscountSelections,
+        float $travelFee,
+    ): float {
+        $addOnTotal = InventoryItem::query()
+            ->whereIn('id', $addOnIds)
+            ->get()
+            ->sum(fn (InventoryItem $item) => $item->discountedUnitPriceForBookingSelection(
+                $addOnDiscountSelections[(int) $item->id]['discount_type'] ?? 'percentage',
+                $addOnDiscountSelections[(int) $item->id]['discount_value'] ?? 0,
+                (float) ($addOnDiscountSelections[(int) $item->id]['discount_percentage'] ?? 0),
+            ));
+        $equipmentTotal = Equipment::query()
+            ->whereIn('id', $equipmentIds)
+            ->get()
+            ->sum(fn (Equipment $item) => $item->discountedDailyRateForBooking(
+                $equipmentDiscountSelections[(int) $item->id]['discount_type'] ?? 'percentage',
+                $equipmentDiscountSelections[(int) $item->id]['discount_value'] ?? 0,
+                (float) ($equipmentDiscountSelections[(int) $item->id]['discount_percentage'] ?? 0),
+            ));
+
+        return max(0, $packagePrice + (float) $addOnTotal + (float) $equipmentTotal + $travelFee);
+    }
+
     private function normalizedItemDiscountSelections(array $discountTypes, array $discountValues): array
     {
         return collect($discountValues)
@@ -1725,10 +2104,19 @@ class BookingController extends Controller
         ksort($currentAddOnDiscounts);
         ksort($currentEquipmentDiscounts);
 
+        $requestedBookingDiscountValue = round((float) ($data['booking_discount_value'] ?? 0), 2);
+        $currentBookingDiscountValue = round((float) ($booking->booking_discount_value ?? 0), 2);
+        $requestedBookingDiscountType = $requestedBookingDiscountValue > 0 ? (string) ($data['booking_discount_type'] ?? 'amount') : '';
+        $currentBookingDiscountType = $currentBookingDiscountValue > 0 ? (string) ($booking->booking_discount_type ?? 'amount') : '';
+        $currentBookingDiscountSource = $booking->booking_discount_source ?: ($booking->discount_id ? 'package' : 'none');
+
         return (int) ($data['package_id'] ?? 0) !== (int) ($booking->package_id ?? 0)
             || (int) ($data['package_hourly_price_id'] ?? 0) !== (int) ($currentPackageHourlyPriceId ?? 0)
             || number_format((float) ($data['total_hours'] ?? 0), 2, '.', '') !== number_format((float) ($booking->total_hours ?? 0), 2, '.', '')
             || (int) ($data['discount_id'] ?? 0) !== (int) ($booking->discount_id ?? 0)
+            || (string) ($data['booking_discount_source'] ?? 'none') !== $currentBookingDiscountSource
+            || $requestedBookingDiscountType !== $currentBookingDiscountType
+            || number_format((float) ($data['booking_discount_value'] ?? 0), 2, '.', '') !== number_format((float) ($booking->booking_discount_value ?? 0), 2, '.', '')
             || $requestedAddOnIds !== $currentAddOnIds
             || $requestedEquipmentIds !== $currentEquipmentIds
             || $requestedAddOnDiscounts !== $currentAddOnDiscounts

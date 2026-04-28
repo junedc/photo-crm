@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { autoAttachGoogleAddressInputs } from '../../googleAddressAutocomplete';
 import { firstError, hasFieldErrors, isBlank, mergeFieldErrors, requiredMessage } from '../validation';
@@ -20,8 +21,10 @@ const invoiceErrors = ref({});
 const taskErrors = ref({});
 const expenseErrors = ref({});
 const documentErrors = ref({});
+const contactErrors = ref({});
 const manualPaymentErrors = ref({});
 const tasks = ref([...(props.data.booking?.tasks ?? [])]);
+const contacts = ref([...(props.data.booking?.contacts ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 const quoteResponseStatusOptions = computed(() => props.data.quoteResponseStatusOptions ?? []);
@@ -73,6 +76,9 @@ const buildEditForm = (record) => ({
     event_location: record?.event_location ?? '',
     notes: record?.notes ?? '',
     discount_id: record?.discount_id ? String(record.discount_id) : '',
+    booking_discount_source: record?.booking_discount_source ?? (record?.discount_id ? 'package' : 'none'),
+    booking_discount_type: record?.booking_discount_type ?? 'amount',
+    booking_discount_value: record?.booking_discount_value ?? '',
     equipment_ids: [...(record?.equipment_ids ?? [])],
     add_on_ids: [...(record?.add_on_ids ?? [])],
     equipment_discount_types: { ...(record?.equipment_discount_types ?? {}) },
@@ -122,6 +128,18 @@ const buildDocumentForm = () => ({
     file: null,
 });
 const documentForm = ref(buildDocumentForm());
+const buildContactForm = () => ({
+    source_type: 'manual',
+    source_id: '',
+    name: '',
+    company_name: '',
+    role: '',
+    email: '',
+    phone: '',
+    notes: '',
+});
+const contactForm = ref(buildContactForm());
+const showContactEditor = ref(false);
 const todayInput = () => new Date().toISOString().slice(0, 10);
 const buildManualPaymentForm = () => ({
     payment_method: 'bank_transfer',
@@ -130,6 +148,25 @@ const buildManualPaymentForm = () => ({
     payment_notes: '',
 });
 const manualPaymentForm = ref(buildManualPaymentForm());
+const pendingDelete = ref(null);
+const showDeleteConfirm = ref(false);
+const defaultInvoiceDescription = (record) => {
+    const packageName = record?.package?.name || record?.package_name || 'Booking package';
+    const hoursLabel = record?.total_hours ? ` - ${Number(record.total_hours).toFixed(2)} hrs` : '';
+    const packageHeading = `${packageName}${hoursLabel}`;
+    const equipmentNames = record?.package?.equipment_names ?? [];
+    const addOnNames = record?.package?.add_on_names ?? [];
+    const inclusions = [...equipmentNames, ...addOnNames]
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .filter((item, index, array) => array.indexOf(item) === index);
+
+    if (!inclusions.length) {
+        return packageHeading;
+    }
+
+    return `${packageHeading} inclusions:\n${inclusions.map((item) => `- ${item}`).join('\n')}`;
+};
 const addDaysInput = (date, days) => {
     const next = new Date(`${date}T00:00:00`);
     next.setDate(next.getDate() + days);
@@ -140,7 +177,7 @@ const buildInvoiceForm = (invoice = null) => ({
     invoice_number: invoice?.invoice_number ?? '',
     issue_date: invoice?.issued_at ?? todayInput(),
     amounts_are: invoice?.amounts_are ?? 'tax_exclusive',
-    line_description: invoice?.line_description ?? `${props.data.booking?.customer_name ?? 'Customer'} booking package`,
+    line_description: invoice?.line_description ?? defaultInvoiceDescription(bookingRecord.value ?? props.data.booking),
     tax_rate: invoice?.tax_rate ?? 'gst_free_income',
     installment_count: String(invoice?.installment_count ?? 3),
     deposit_type: 'percentage',
@@ -166,12 +203,14 @@ const invoiceValidationErrors = computed(() => mergeFieldErrors(invoiceErrors.va
 const taskValidationErrors = computed(() => mergeFieldErrors(taskErrors.value, fieldErrors.value));
 const expenseValidationErrors = computed(() => mergeFieldErrors(expenseErrors.value, fieldErrors.value));
 const documentValidationErrors = computed(() => mergeFieldErrors(documentErrors.value, fieldErrors.value));
+const contactValidationErrors = computed(() => mergeFieldErrors(contactErrors.value, fieldErrors.value));
 const manualPaymentValidationErrors = computed(() => mergeFieldErrors(manualPaymentErrors.value, fieldErrors.value));
 const packages = computed(() => props.data.packages ?? []);
 const equipmentOptions = computed(() => props.data.equipmentOptions ?? []);
 const addOnOptions = computed(() => props.data.addOnOptions ?? []);
 const discountOptions = computed(() => props.data.discountOptions ?? []);
 const vendorOptions = computed(() => props.data.vendorOptions ?? []);
+const customerOptions = computed(() => props.data.customerOptions ?? []);
 const userOptions = computed(() => props.data.userOptions ?? []);
 const expenseCategoryOptions = computed(() => props.data.expenseCategoryOptions ?? []);
 const taskAssignees = computed(() => bookingRecord.value.task_assignees ?? props.data.taskAssignees ?? []);
@@ -190,7 +229,7 @@ const selectedPackage = computed(() =>
     packages.value.find((entry) => String(entry.id) === String(editForm.value.package_id ?? '')) ?? null,
 );
 const selectedPackageHourlyPrices = computed(() => selectedPackage.value?.hourly_prices ?? []);
-const availableDiscountOptions = computed(() => {
+const packageDiscountOptions = computed(() => {
     const packageId = Number(editForm.value.package_id ?? 0);
     const equipmentIds = new Set((editForm.value.equipment_ids ?? []).map((id) => Number(id)));
 
@@ -200,6 +239,17 @@ const availableDiscountOptions = computed(() => {
 
         return packageMatch || equipmentMatch;
     });
+});
+const availableDiscountOptions = computed(() => {
+    if (editForm.value.booking_discount_source === 'global') {
+        return discountOptions.value;
+    }
+
+    if (editForm.value.booking_discount_source === 'package') {
+        return packageDiscountOptions.value;
+    }
+
+    return [];
 });
 const combinedOptionalItems = computed(() => [
     ...equipmentOptions.value.map((item) => ({
@@ -293,6 +343,17 @@ const documentTypeOptions = [
     { value: 'user_file', label: 'User File' },
     { value: 'other', label: 'Other' },
 ];
+const contactSourceOptions = computed(() => {
+    if (contactForm.value.source_type === 'vendor') {
+        return vendorOptions.value;
+    }
+
+    if (contactForm.value.source_type === 'customer') {
+        return customerOptions.value;
+    }
+
+    return [];
+});
 const taskAssigneeGroups = computed(() => {
     return taskAssignees.value.reduce((groups, option) => {
         const group = option.group ?? 'Other';
@@ -304,7 +365,89 @@ const overviewInitialTotal = computed(() => (
     (Number(bookingRecord.value.booking_total || 0) + Number(bookingRecord.value.discount_amount || 0)).toFixed(2)
 ));
 const invoiceLineAmount = computed(() => Number(bookingRecord.value.invoice?.total_amount ?? bookingRecord.value.booking_total ?? 0));
-const invoiceSubtotal = computed(() => invoiceLineAmount.value.toFixed(2));
+const invoiceItemsPreview = computed(() => {
+    const rows = [];
+
+    if (bookingRecord.value.package_id || bookingRecord.value.package_price) {
+        rows.push({
+            id: `package-${bookingRecord.value.package_id ?? 'selected'}`,
+            type: 'package',
+            item: bookingRecord.value.package?.name || bookingRecord.value.package_name || 'Booking package',
+            description: invoiceForm.value.line_description,
+            quantity: '1.00',
+            price: bookingRecord.value.package_price || '0.00',
+            discount: '0.00',
+            taxAmount: '0.00',
+            amount: bookingRecord.value.package_price || '0.00',
+        });
+    }
+
+    (bookingRecord.value.equipment ?? []).forEach((item) => {
+        rows.push({
+            id: `equipment-${item.id}`,
+            type: 'equipment',
+            item: item.name || 'Equipment',
+            description: item.description || item.category || 'Selected equipment',
+            quantity: '1.00',
+            price: item.original_price || item.price || '0.00',
+            discount: itemDiscountLabel('equipment_ids', item.id),
+            taxAmount: '0.00',
+            amount: item.price || '0.00',
+        });
+    });
+
+    (bookingRecord.value.addons ?? []).forEach((item) => {
+        rows.push({
+            id: `addon-${item.id}`,
+            type: 'add_on',
+            item: item.name || 'Add-On',
+            description: item.description || item.duration || 'Selected add-on',
+            quantity: '1.00',
+            price: item.original_price || item.price || '0.00',
+            discount: itemDiscountLabel('add_on_ids', item.id),
+            taxAmount: '0.00',
+            amount: item.price || '0.00',
+        });
+    });
+
+    if (Number(bookingRecord.value.travel_fee || 0) > 0) {
+        rows.push({
+            id: 'travel-fee',
+            type: 'travel_fee',
+            item: 'Travel Fee',
+            description: bookingRecord.value.travel_distance_km
+                ? `${bookingRecord.value.travel_distance_km} km`
+                : 'Travel charge',
+            quantity: '1.00',
+            price: bookingRecord.value.travel_fee,
+            discount: '0.00',
+            taxAmount: '0.00',
+            amount: bookingRecord.value.travel_fee,
+        });
+    }
+
+    if (Number(bookingRecord.value.discount_amount || 0) > 0) {
+        rows.push({
+            id: 'booking-discount',
+            type: 'booking_discount',
+            item: 'Booking Discount',
+            description: bookingRecord.value.discount
+                ? `${bookingRecord.value.discount.code} - ${bookingRecord.value.discount.name}`
+                : 'Applied booking discount',
+            quantity: '1.00',
+            price: bookingRecord.value.discount_amount,
+            discount: 'Included',
+            taxAmount: '0.00',
+            amount: `-${bookingRecord.value.discount_amount}`,
+        });
+    }
+
+    return rows;
+});
+const invoiceSubtotal = computed(() => invoiceItemsPreview.value
+    .filter((item) => item.type !== 'booking_discount')
+    .reduce((total, item) => total + Number(item.amount || 0), 0)
+    .toFixed(2));
 const invoiceTaxRateDisabled = computed(() => invoiceForm.value.amounts_are === 'no_tax');
 const invoiceGstAmount = computed(() => {
     if (invoiceTaxRateDisabled.value || invoiceForm.value.tax_rate !== 'gst_on_income') {
@@ -413,6 +556,7 @@ const syncBooking = (record) => {
     editForm.value = buildEditForm(record);
     invoiceForm.value = buildInvoiceForm(record.invoice);
     tasks.value = [...(record.tasks ?? [])];
+    contacts.value = [...(record.contacts ?? [])];
     window.history.replaceState({}, '', record.show_url);
 };
 
@@ -485,6 +629,45 @@ watch(() => editForm.value.package_id, () => {
     }
 });
 
+const askDelete = ({ kind, label, onConfirm }) => {
+    pendingDelete.value = { kind, label, onConfirm };
+    showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+    pendingDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const confirmDelete = async () => {
+    if (!pendingDelete.value?.onConfirm) {
+        return;
+    }
+
+    await pendingDelete.value.onConfirm();
+    cancelDelete();
+};
+
+watch(() => editForm.value.equipment_ids, () => {
+    if (!availableDiscountOptions.value.some((entry) => String(entry.id) === String(editForm.value.discount_id ?? ''))) {
+        editForm.value.discount_id = '';
+    }
+}, { deep: true });
+
+watch(() => editForm.value.booking_discount_source, (source) => {
+    if (source === 'custom' || source === 'none') {
+        editForm.value.discount_id = '';
+    }
+
+    if (source === 'package' || source === 'global' || source === 'none') {
+        editForm.value.booking_discount_value = '';
+    }
+
+    if (!availableDiscountOptions.value.some((entry) => String(entry.id) === String(editForm.value.discount_id ?? ''))) {
+        editForm.value.discount_id = '';
+    }
+});
+
 watch(() => editForm.value.package_hourly_price_id, () => {
     syncDurationFromPackageTiming();
     syncEndTime();
@@ -507,6 +690,27 @@ watch(() => invoiceForm.value.amounts_are, (value) => {
     if (!invoiceForm.value.tax_rate) {
         invoiceForm.value.tax_rate = 'gst_free_income';
     }
+});
+
+watch(() => contactForm.value.source_type, () => {
+    contactForm.value = {
+        ...buildContactForm(),
+        source_type: contactForm.value.source_type,
+    };
+});
+
+watch(() => contactForm.value.source_id, (value) => {
+    const source = contactSourceOptions.value.find((option) => String(option.id) === String(value ?? ''));
+
+    if (!source) {
+        return;
+    }
+
+    contactForm.value.name = source.name ?? source.label ?? '';
+    contactForm.value.company_name = source.company_name ?? '';
+    contactForm.value.role = source.role ?? '';
+    contactForm.value.email = source.email ?? '';
+    contactForm.value.phone = source.phone ?? '';
 });
 
 watch(resolvedDefaultTaskStatusId, (value) => {
@@ -819,16 +1023,22 @@ const saveTask = async () => {
 };
 
 const removeTask = async (task) => {
-    await deleteRecord({ url: task.delete_url });
-    tasks.value = tasks.value.filter((entry) => entry.id !== task.id);
-    bookingRecord.value = {
-        ...bookingRecord.value,
-        tasks: [...tasks.value],
-    };
+    askDelete({
+        kind: 'task',
+        label: task.task_name || 'this task',
+        onConfirm: async () => {
+            await deleteRecord({ url: task.delete_url });
+            tasks.value = tasks.value.filter((entry) => entry.id !== task.id);
+            bookingRecord.value = {
+                ...bookingRecord.value,
+                tasks: [...tasks.value],
+            };
 
-    if (editingTask.value?.id === task.id) {
-        cancelTaskEdit();
-    }
+            if (editingTask.value?.id === task.id) {
+                cancelTaskEdit();
+            }
+        },
+    });
 };
 
 const startExpenseCreate = () => {
@@ -994,11 +1204,78 @@ const removeDocument = async (document) => {
         return;
     }
 
-    await deleteRecord({ url: document.delete_url });
-    bookingRecord.value = {
-        ...bookingRecord.value,
-        documents: (bookingRecord.value.documents ?? []).filter((entry) => entry.id !== document.id),
-    };
+    askDelete({
+        kind: 'document',
+        label: document.title || document.file_name || 'this document',
+        onConfirm: async () => {
+            await deleteRecord({ url: document.delete_url });
+            bookingRecord.value = {
+                ...bookingRecord.value,
+                documents: (bookingRecord.value.documents ?? []).filter((entry) => entry.id !== document.id),
+            };
+        },
+    });
+};
+
+const startContactCreate = () => {
+    showContactEditor.value = true;
+    contactErrors.value = {};
+    contactForm.value = buildContactForm();
+};
+
+const cancelContactCreate = () => {
+    showContactEditor.value = false;
+    contactErrors.value = {};
+    contactForm.value = buildContactForm();
+};
+
+const saveContact = async () => {
+    const errors = {};
+
+    if (isBlank(contactForm.value.name)) {
+        errors.name = requiredMessage('Contact name');
+    }
+
+    contactErrors.value = errors;
+
+    if (hasFieldErrors(errors)) {
+        return;
+    }
+
+    try {
+        const record = await submitForm({
+            url: props.data.routes.contactStore,
+            method: 'post',
+            data: { ...contactForm.value },
+        });
+
+        contacts.value = [record, ...contacts.value];
+        bookingRecord.value = {
+            ...bookingRecord.value,
+            contacts: [...contacts.value],
+        };
+        cancelContactCreate();
+        activeTab.value = 'contacts';
+    } catch {}
+};
+
+const removeContact = async (contact) => {
+    if (!contact?.delete_url) {
+        return;
+    }
+
+    askDelete({
+        kind: 'contact',
+        label: contact.name || 'this contact',
+        onConfirm: async () => {
+            await deleteRecord({ url: contact.delete_url });
+            contacts.value = contacts.value.filter((entry) => entry.id !== contact.id);
+            bookingRecord.value = {
+                ...bookingRecord.value,
+                contacts: [...contacts.value],
+            };
+        },
+    });
 };
 </script>
 
@@ -1098,45 +1375,77 @@ const removeDocument = async (document) => {
                             <option v-for="entry in packages" :key="entry.id" :value="String(entry.id)">{{ entry.name }} - ${{ entry.display_price }}</option>
                         </select>
                     </div>
-                    <div v-if="selectedPackageHourlyPrices.length">
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Package Timing</label>
-                        <select v-model="editForm.package_hourly_price_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
-                            <option v-for="option in selectedPackageHourlyPrices" :key="option.id" :value="String(option.id)">{{ Number(option.hours).toFixed(2) }} hrs - ${{ option.price }}</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Discount</label>
-                        <select v-model="editForm.discount_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
-                            <option value="">No discount</option>
-                            <option v-for="discount in availableDiscountOptions" :key="discount.id" :value="String(discount.id)">{{ discount.code }} - {{ discount.name }}</option>
-                        </select>
+                    <div class="xl:col-span-4">
+                        <div class="grid gap-3 lg:grid-cols-4">
+                            <div v-if="selectedPackageHourlyPrices.length">
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Package Timing</label>
+                                <select v-model="editForm.package_hourly_price_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
+                                    <option v-for="option in selectedPackageHourlyPrices" :key="option.id" :value="String(option.id)">{{ Number(option.hours).toFixed(2) }} hrs - ${{ option.price }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Discount Source</label>
+                            <select v-model="editForm.booking_discount_source" class="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
+                                <option value="package">Package discount</option>
+                                <option value="global">Global discount</option>
+                                <option value="custom">Custom discount</option>
+                                <option value="none">No discount</option>
+                            </select>
+                            </div>
+                            <div v-if="editForm.booking_discount_source === 'package' || editForm.booking_discount_source === 'global'" class="lg:col-span-2">
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Saved Discount</label>
+                                <select v-model="editForm.discount_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
+                                <option value="">No discount</option>
+                                <option v-for="discount in availableDiscountOptions" :key="discount.id" :value="String(discount.id)">{{ discount.code }} - {{ discount.name }}</option>
+                            </select>
+                            </div>
+                            <div v-if="editForm.booking_discount_source === 'custom'">
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Type</label>
+                                <select v-model="editForm.booking_discount_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="invoiceAmountLocked">
+                                <option value="percentage">Percentage</option>
+                                <option value="amount">Price</option>
+                            </select>
+                            </div>
+                            <div v-if="editForm.booking_discount_source === 'custom'">
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Discount Value</label>
+                                <input v-model="editForm.booking_discount_value" type="number" min="0" :max="editForm.booking_discount_type === 'percentage' ? 100 : undefined" step="0.01" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :placeholder="editForm.booking_discount_type === 'percentage' ? '0.00%' : '$0.00'" :disabled="invoiceAmountLocked">
+                            </div>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
-                        <select v-model="editForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
-                            <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Date</label>
-                        <input v-model="editForm.event_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'event_date') ? 'border-rose-300/60' : ''" @click="openDatePicker" @keydown.prevent>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Start Hour</label>
-                        <input v-model="editForm.start_time" type="time" step="1800" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'start_time') ? 'border-rose-300/60' : ''">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>
-                        <input v-model="editForm.end_time" type="time" step="1800" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Duration</label>
-                        <input v-model="editForm.total_hours" type="number" min="0.25" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :class="firstError(editValidationErrors, 'total_hours') ? 'border-rose-300/60' : ''" :disabled="invoiceAmountLocked">
+                    <div class="xl:col-span-4">
+                        <div class="grid gap-3 lg:grid-cols-5">
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Date</label>
+                                <input v-model="editForm.event_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'event_date') ? 'border-rose-300/60' : ''" @click="openDatePicker" @keydown.prevent>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Start Hour</label>
+                                <input v-model="editForm.start_time" type="time" step="1800" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'start_time') ? 'border-rose-300/60' : ''">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>
+                                <input v-model="editForm.end_time" type="time" step="1800" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Duration</label>
+                                <input v-model="editForm.total_hours" type="number" min="0.25" step="0.25" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50" :class="firstError(editValidationErrors, 'total_hours') ? 'border-rose-300/60' : ''" :disabled="invoiceAmountLocked">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Type</label>
+                                <select v-model="editForm.event_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                                    <option v-for="eventType in data.eventTypes" :key="eventType" :value="eventType">{{ eventType }}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="xl:col-span-4">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Location</label>
                         <input v-model="editForm.event_location" data-google-address type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'event_location') ? 'border-rose-300/60' : ''">
+                    </div>
+                    <div class="xl:col-span-4">
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
+                        <textarea v-model="editForm.notes" rows="3" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" />
                     </div>
                     <div class="xl:col-span-4">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Items</label>
@@ -1188,10 +1497,6 @@ const removeDocument = async (document) => {
                             </button>
                         </div>
                     </div>
-                    <div class="xl:col-span-4">
-                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
-                        <textarea v-model="editForm.notes" rows="3" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" />
-                    </div>
                 </div>
             </form>
 
@@ -1201,11 +1506,12 @@ const removeDocument = async (document) => {
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'invoice' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'invoice'">Invoice</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'expenses' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'expenses'">Expense</button>
                 <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'documents' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'documents'">Document</button>
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium transition" :class="activeTab === 'contacts' ? 'bg-rose-300 text-slate-950' : 'text-stone-300 hover:bg-white/5'" @click="activeTab = 'contacts'">Contacts</button>
             </div>
 
             <div v-if="!isEditing && activeTab === 'overview'" class="space-y-3">
-                <div class="grid gap-2.5 sm:grid-cols-3">
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                <div class="grid gap-2.5 lg:grid-cols-12">
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-4">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Quote Number</p>
                         <div class="mt-1.5 flex flex-wrap items-center gap-2">
                             <p class="text-sm font-semibold text-white">{{ bookingRecord.quote_number || 'Not assigned' }}</p>
@@ -1220,7 +1526,7 @@ const removeDocument = async (document) => {
                             Responded {{ bookingRecord.customer_responded_at_label }}
                         </p>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-3">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Status</p>
                         <div class="mt-1.5 flex flex-wrap items-center gap-2">
                             <span
@@ -1231,11 +1537,15 @@ const removeDocument = async (document) => {
                             </span>
                         </div>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-5">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Location</p>
                         <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.event_location || 'Not set' }}</p>
                     </div>
-                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-3">
+                    <div class="grid gap-2.5 lg:col-span-12 lg:grid-cols-4">
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking Type</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.booking_kind_label || bookingKindLabel(bookingRecord.booking_kind) }}</p>
+                        </div>
                         <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">{{ bookingRecord.booking_kind === 'customer' ? 'Customer Name' : 'Entry Name' }}</p>
                             <p class="mt-1.5 text-sm font-semibold text-white">{{ bookingRecord.display_name || bookingRecord.customer_name }}</p>
@@ -1249,11 +1559,11 @@ const removeDocument = async (document) => {
                             <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
                         </div>
                     </div>
-                    <div v-if="bookingRecord.entry_description" class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 sm:col-span-2">
+                    <div v-if="bookingRecord.entry_description" class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-12">
                         <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Entry Description</p>
                         <p class="mt-1.5 text-sm leading-5 text-stone-300">{{ bookingRecord.entry_description }}</p>
                     </div>
-                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-2">
+                    <div class="grid gap-2.5 lg:col-span-12 lg:grid-cols-2">
                         <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Client Portal Access</p>
                             <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.client_portal_access_granted ? 'Granted' : 'Not granted yet' }}</p>
@@ -1269,10 +1579,16 @@ const removeDocument = async (document) => {
                             <p class="mt-1.5 text-sm font-medium text-stone-200">
                                 {{ bookingRecord.discount ? `${bookingRecord.discount.code} - ${bookingRecord.discount.name}` : 'No discount selected' }}
                             </p>
+                            <p class="mt-1 text-xs text-stone-400">
+                                {{ bookingRecord.booking_discount_source === 'global' ? 'Global discount' : bookingRecord.booking_discount_source === 'custom' ? 'Custom discount' : bookingRecord.booking_discount_source === 'none' ? 'No discount' : 'Package discount' }}
+                            </p>
+                            <p v-if="bookingRecord.booking_discount_value && Number(bookingRecord.booking_discount_value) > 0" class="mt-1 text-xs text-stone-300">
+                                Booking discount: {{ bookingRecord.booking_discount_type === 'percentage' ? `${bookingRecord.booking_discount_value}%` : `$${bookingRecord.booking_discount_value}` }}
+                            </p>
                             <p class="mt-1 text-xs text-emerald-200">-${{ bookingRecord.discount_amount }}</p>
                         </div>
                     </div>
-                    <div class="grid gap-2.5 sm:col-span-2 lg:grid-cols-5">
+                    <div class="grid gap-2.5 lg:col-span-12 lg:grid-cols-5">
                         <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Type</p>
                             <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_type_label || 'Not set' }}</p>
@@ -1293,6 +1609,10 @@ const removeDocument = async (document) => {
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Duration</p>
                             <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.total_hours }}</p>
                         </div>
+                    </div>
+                    <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-8 xl:col-span-6">
+                        <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Notes</p>
+                        <p class="mt-1.5 text-sm leading-5 text-stone-300">{{ bookingRecord.notes || 'No notes' }}</p>
                     </div>
                 </div>
 
@@ -1749,6 +2069,114 @@ const removeDocument = async (document) => {
                 </div>
             </div>
 
+            <div v-if="!isEditing && activeTab === 'contacts'" class="space-y-3">
+                <div class="overflow-hidden rounded-xl border border-white/10 bg-slate-950/50">
+                    <div class="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <div>
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Contact List</p>
+                            <p class="mt-1 text-sm text-stone-300">Customer, vendor, and manual contacts for this booking.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ contacts.length }}</span>
+                            <button type="button" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" @click="startContactCreate">
+                                Add Contact
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="contacts.length" class="overflow-x-auto border-t border-white/10">
+                        <div class="min-w-[980px]">
+                            <div class="grid grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_13rem_10rem_minmax(0,1fr)_6rem] gap-2 border-b border-white/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                                <span>Source</span>
+                                <span>Name</span>
+                                <span>Company / Role</span>
+                                <span>Email</span>
+                                <span>Phone</span>
+                                <span>Notes</span>
+                                <span></span>
+                            </div>
+                            <div v-for="contact in contacts" :key="contact.id" class="grid grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_13rem_10rem_minmax(0,1fr)_6rem] items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0">
+                                <p class="text-sm text-cyan-100">{{ contact.source_label }}</p>
+                                <p class="truncate text-sm font-medium text-white">{{ contact.name }}</p>
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm text-stone-300">{{ contact.company_name || 'No company' }}</p>
+                                    <p class="truncate text-xs text-stone-500">{{ contact.role || 'No role' }}</p>
+                                </div>
+                                <a v-if="contact.email" :href="`mailto:${contact.email}`" class="truncate text-sm text-cyan-100 hover:text-cyan-50">{{ contact.email }}</a>
+                                <p v-else class="text-sm text-stone-500">No email</p>
+                                <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="truncate text-sm text-stone-300 hover:text-white">{{ contact.phone }}</a>
+                                <p v-else class="text-sm text-stone-500">No phone</p>
+                                <p class="truncate text-sm text-stone-400">{{ contact.notes || 'No notes' }}</p>
+                                <button type="button" class="rounded-lg border border-rose-300/20 px-2.5 py-1 text-xs font-medium text-rose-200 transition hover:bg-rose-300/10" @click="removeContact(contact)">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <p v-else class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">No contacts have been added to this booking yet.</p>
+                </div>
+
+                <div v-if="showContactEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm" @click.self="cancelContactCreate">
+                    <div class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#132035] shadow-2xl shadow-black/40">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Add Contact</p>
+                                <p class="mt-1 text-sm text-stone-300">Choose a customer, choose a vendor, or type the contact manually.</p>
+                            </div>
+                            <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelContactCreate">Close</button>
+                        </div>
+                        <form class="max-h-[80vh] overflow-y-auto p-4" novalidate @submit.prevent="saveContact">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Source</label>
+                                    <select v-model="contactForm.source_type" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="manual">Manual</option>
+                                        <option value="customer">Customer</option>
+                                        <option value="vendor">Vendor</option>
+                                    </select>
+                                </div>
+                                <div v-if="contactForm.source_type !== 'manual'">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">{{ contactForm.source_type === 'vendor' ? 'Vendor' : 'Customer' }}</label>
+                                    <select v-model="contactForm.source_id" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                        <option value="">Select {{ contactForm.source_type }}</option>
+                                        <option v-for="option in contactSourceOptions" :key="option.id" :value="String(option.id)">{{ option.label }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Name</label>
+                                    <input v-model="contactForm.name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(contactValidationErrors, 'name') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Company</label>
+                                    <input v-model="contactForm.company_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Role</label>
+                                    <input v-model="contactForm.role" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Email</label>
+                                    <input v-model="contactForm.email" type="email" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="firstError(contactValidationErrors, 'email') ? 'border-rose-300/60' : ''">
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Phone</label>
+                                    <input v-model="contactForm.phone" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
+                                    <textarea v-model="contactForm.notes" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-end gap-2 border-t border-white/10 pt-4">
+                                <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-stone-300 transition hover:bg-white/5" @click="cancelContactCreate">Cancel</button>
+                                <button type="submit" class="rounded-lg bg-cyan-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving">
+                                    {{ saving ? 'Saving...' : 'Add contact' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="isEditing || activeTab === 'invoice'" class="mt-3">
                 <form class="overflow-hidden rounded-xl border border-white/10 bg-[#f4f5f7] text-slate-950 shadow-xl shadow-black/10" novalidate @submit.prevent="createInvoice">
                     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300/80 bg-white px-4 py-3">
@@ -1834,23 +2262,46 @@ const removeDocument = async (document) => {
                                     <div class="border-r border-slate-300 px-2 py-3 text-right">Tax amount</div>
                                     <div class="px-2 py-3 text-right">Amount</div>
                                 </div>
-                                <div class="grid grid-cols-[2.4rem_1.1fr_2fr_7rem_8rem_7rem_8rem_8rem_8rem] border-t border-slate-300 text-sm text-slate-950">
+                                <div
+                                    v-for="row in invoiceItemsPreview"
+                                    :key="row.id"
+                                    class="grid grid-cols-[2.4rem_1.1fr_2fr_7rem_8rem_7rem_8rem_8rem_8rem] border-t border-slate-300 text-sm text-slate-950"
+                                >
                                     <div class="border-r border-slate-300 px-2 py-3 text-center text-slate-400">::</div>
-                                    <div class="border-r border-slate-300 px-2 py-3">{{ bookingRecord.package?.name || bookingRecord.package_name || 'Booking' }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3">{{ row.item }}</div>
                                     <div class="border-r border-slate-300 p-1.5">
-                                        <textarea v-model="invoiceForm.line_description" rows="2" class="w-full resize-none rounded border border-transparent bg-white px-2 py-1 text-sm text-slate-950 outline-none focus:border-blue-500" :disabled="!invoiceCanEdit" :class="firstError(invoiceValidationErrors, 'line_description') ? 'border-red-500' : ''" />
+                                        <textarea
+                                            v-if="row.type === 'package'"
+                                            v-model="invoiceForm.line_description"
+                                            rows="2"
+                                            class="w-full resize-none rounded border border-transparent bg-white px-2 py-1 text-sm text-slate-950 outline-none focus:border-blue-500"
+                                            :disabled="!invoiceCanEdit"
+                                            :class="firstError(invoiceValidationErrors, 'line_description') ? 'border-red-500' : ''"
+                                        />
+                                        <div v-else class="px-2 py-1 text-sm text-slate-700">
+                                            {{ row.description }}
+                                        </div>
                                     </div>
-                                    <div class="border-r border-slate-300 px-2 py-3 text-right">1.00</div>
-                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ invoiceSubtotal }}</div>
-                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ bookingRecord.discount_amount || '0.00' }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ row.quantity }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ row.price }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ row.discount }}</div>
                                     <div class="border-r border-slate-300 p-1.5">
-                                        <select v-model="invoiceForm.tax_rate" class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500" :disabled="!invoiceCanEdit || invoiceTaxRateDisabled" :class="firstError(invoiceValidationErrors, 'tax_rate') ? 'border-red-500' : ''">
+                                        <select
+                                            v-if="row.type === 'package'"
+                                            v-model="invoiceForm.tax_rate"
+                                            class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                            :disabled="!invoiceCanEdit || invoiceTaxRateDisabled"
+                                            :class="firstError(invoiceValidationErrors, 'tax_rate') ? 'border-red-500' : ''"
+                                        >
                                             <option v-if="invoiceTaxRateDisabled" value="">No tax</option>
                                             <option v-for="option in taxRateOptions" v-else :key="option.value" :value="option.value">{{ option.label }}</option>
                                         </select>
+                                        <div v-else class="px-2 py-1 text-sm text-slate-700">
+                                            {{ invoiceTaxRateDisabled ? 'No tax' : taxRateOptions.find((option) => option.value === invoiceForm.tax_rate)?.label || '' }}
+                                        </div>
                                     </div>
-                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ invoiceGstAmount }}</div>
-                                    <div class="px-2 py-3 text-right font-semibold">{{ invoiceTotalAmount }}</div>
+                                    <div class="border-r border-slate-300 px-2 py-3 text-right">{{ row.type === 'package' ? invoiceGstAmount : '0.00' }}</div>
+                                    <div class="px-2 py-3 text-right font-semibold">{{ row.amount }}</div>
                                 </div>
                             </div>
                         </div>
@@ -1983,4 +2434,14 @@ const removeDocument = async (document) => {
             </div>
         </div>
     </section>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        :title="pendingDelete?.kind === 'document' ? 'Delete document?' : pendingDelete?.kind === 'contact' ? 'Delete contact?' : 'Delete task?'"
+        :message="`Are you sure you want to delete the record ${pendingDelete?.label || 'this record'}?`"
+        :confirm-label="pendingDelete?.kind === 'document' ? 'Delete document' : pendingDelete?.kind === 'contact' ? 'Delete contact' : 'Delete task'"
+        :loading="saving"
+        @cancel="cancelDelete"
+        @confirm="confirmDelete"
+    />
 </template>

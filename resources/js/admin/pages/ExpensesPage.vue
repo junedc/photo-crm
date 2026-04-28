@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError, hasFieldErrors, isBlank, mergeFieldErrors, requiredMessage } from '../validation';
 
@@ -28,6 +29,8 @@ const showCameraCapture = ref(false);
 const cameraVideo = ref(null);
 const cameraCanvas = ref(null);
 const cameraError = ref('');
+const expenseToDelete = ref(null);
+const showDeleteConfirm = ref(false);
 let cameraStream = null;
 const {
     saving,
@@ -313,7 +316,19 @@ const saveExpense = async () => {
     } catch {}
 };
 
-const removeExpense = async (expense) => {
+const askRemoveExpense = (expense) => {
+    expenseToDelete.value = expense;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveExpense = () => {
+    expenseToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeExpense = async () => {
+    const expense = expenseToDelete.value;
+
     if (!expense?.delete_url) {
         return;
     }
@@ -325,6 +340,8 @@ const removeExpense = async (expense) => {
         if (editingExpenseId.value === expense.id) {
             closeModal();
         }
+
+        cancelRemoveExpense();
     } catch {}
 };
 
@@ -391,7 +408,7 @@ onBeforeUnmount(() => {
                 <a v-if="expense.receipt_url" :href="expense.receipt_url" target="_blank" rel="noreferrer" class="truncate text-sm font-medium text-cyan-200 hover:text-cyan-100">View receipt</a>
                 <p v-else class="text-sm text-stone-500">No receipt</p>
                 <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="openEditModal(expense)">Edit</button>
-                <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeExpense(expense)">Delete</button>
+                <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveExpense(expense)">Delete</button>
             </div>
             <div v-if="loading" class="border-t border-white/10 px-3 py-3 text-sm text-stone-400">
                 Loading expenses...
@@ -524,4 +541,14 @@ onBeforeUnmount(() => {
             </div>
         </div>
     </div>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete expense?"
+        :message="`Are you sure you want to delete the record ${expenseToDelete?.expense_name || 'this expense'}?`"
+        confirm-label="Delete expense"
+        :loading="saving"
+        @cancel="cancelRemoveExpense"
+        @confirm="removeExpense"
+    />
 </template>

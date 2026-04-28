@@ -235,7 +235,7 @@ const confirmRemoveEquipment = () => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete equipment?"
-        :message="`Delete equipment &quot;${equipmentRecord.name}&quot;? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${equipmentRecord.name}?`"
         confirm-label="Delete equipment"
         @cancel="showDeleteConfirm = false"
         @confirm="confirmRemoveEquipment"

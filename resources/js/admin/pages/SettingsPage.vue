@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { autoAttachGoogleAddressInputs } from '../../googleAddressAutocomplete';
 import { firstError, hasFieldErrors, isBlank, mergeFieldErrors, requiredMessage, validEmail } from '../validation';
@@ -31,6 +32,8 @@ const maintenanceRecords = ref({
     equipment: [...(props.data.maintenance?.equipment ?? [])],
     inventory_item_category: [...(props.data.maintenance?.inventory_item_category ?? [])],
     expense_category: [...(props.data.maintenance?.expense_category ?? [])],
+    service_offered: [...(props.data.maintenance?.service_offered ?? [])],
+    event_type: [...(props.data.maintenance?.event_type ?? [])],
     campaign: [...(props.data.maintenance?.campaign ?? [])],
     support: [...(props.data.maintenance?.support ?? [])],
     referral: [...(props.data.maintenance?.referral ?? [])],
@@ -46,6 +49,8 @@ const maintenanceDrafts = ref({
     equipment: '',
     inventory_item_category: '',
     expense_category: '',
+    service_offered: '',
+    event_type: '',
     campaign: '',
     support: '',
     referral: '',
@@ -61,6 +66,8 @@ const maintenanceSortOrders = ref({
     equipment: 1,
     inventory_item_category: 1,
     expense_category: 1,
+    service_offered: 1,
+    event_type: 1,
     campaign: 1,
     support: 1,
     referral: 1,
@@ -76,6 +83,8 @@ const maintenanceEditing = ref({
     equipment: null,
     inventory_item_category: null,
     expense_category: null,
+    service_offered: null,
+    event_type: null,
     campaign: null,
     support: null,
     referral: null,
@@ -136,6 +145,8 @@ const fontForm = ref({
     style: 'normal',
 });
 const fontErrors = ref({});
+const pendingDelete = ref(null);
+const showDeleteConfirm = ref(false);
 const maintenanceSections = computed(() => [
     { key: 'invoice', label: props.data.maintenanceLabels?.invoice ?? 'Invoice Status' },
     { key: 'invoice_installment', label: props.data.maintenanceLabels?.invoice_installment ?? 'Invoice Installment Status' },
@@ -146,6 +157,8 @@ const maintenanceSections = computed(() => [
     { key: 'equipment', label: props.data.maintenanceLabels?.equipment ?? 'Equipment Status' },
     { key: 'inventory_item_category', label: props.data.maintenanceLabels?.inventory_item_category ?? 'Inventory Item Category' },
     { key: 'expense_category', label: props.data.maintenanceLabels?.expense_category ?? 'Expense Category' },
+    { key: 'service_offered', label: props.data.maintenanceLabels?.service_offered ?? 'Services Offered' },
+    { key: 'event_type', label: props.data.maintenanceLabels?.event_type ?? 'Event Type' },
     { key: 'campaign', label: props.data.maintenanceLabels?.campaign ?? 'Campaign Status' },
     { key: 'support', label: props.data.maintenanceLabels?.support ?? 'Support Status' },
     { key: 'referral', label: props.data.maintenanceLabels?.referral ?? 'Referral Status' },
@@ -203,6 +216,25 @@ const fontVariantLabel = (font) => {
     }
 
     return 'Regular';
+};
+
+const askDelete = ({ kind, label, onConfirm }) => {
+    pendingDelete.value = { kind, label, onConfirm };
+    showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+    pendingDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const confirmDelete = async () => {
+    if (!pendingDelete.value?.onConfirm) {
+        return;
+    }
+
+    await pendingDelete.value.onConfirm();
+    cancelDelete();
 };
 
 const saveWorkspace = async () => {
@@ -389,14 +421,20 @@ const removeFont = async (font) => {
         return;
     }
 
-    try {
-        await deleteFontRecord({ url: font.delete_url });
-        tenantFonts.value = tenantFonts.value.filter((entry) => entry.id !== font.id);
-        tenantRecord.value = {
-            ...tenantRecord.value,
-            fonts: tenantFonts.value,
-        };
-    } catch {}
+    askDelete({
+        kind: 'font',
+        label: font.family || font.file_name || 'this font',
+        onConfirm: async () => {
+            try {
+                await deleteFontRecord({ url: font.delete_url });
+                tenantFonts.value = tenantFonts.value.filter((entry) => entry.id !== font.id);
+                tenantRecord.value = {
+                    ...tenantRecord.value,
+                    fonts: tenantFonts.value,
+                };
+            } catch {}
+        },
+    });
 };
 
 const beginEditStatus = (scope, record) => {
@@ -426,6 +464,8 @@ const saveStatus = async (scope) => {
     const isTask = scope === 'task';
     const isInventoryItemCategory = scope === 'inventory_item_category';
     const isExpenseCategory = scope === 'expense_category';
+    const isServiceOffering = scope === 'service_offered';
+    const isEventType = scope === 'event_type';
     const existing = maintenanceRecords.value[scope].find((entry) => entry.id === editingId);
 
     try {
@@ -434,7 +474,7 @@ const saveStatus = async (scope) => {
                 ...(canEditStatusName(scope) ? { name } : {}),
                 sort_order: sortOrder,
             }
-            : (isInventoryItemCategory || isExpenseCategory
+            : (isInventoryItemCategory || isExpenseCategory || isServiceOffering || isEventType
                 ? { name, sort_order: sortOrder }
                 : (isTask
                     ? { name, sort_order: sortOrder }
@@ -442,8 +482,12 @@ const saveStatus = async (scope) => {
         const record = await submitMaintenanceForm({
             url: editingId
                 ? existing?.update_url
-                : (isInventoryItemCategory || isExpenseCategory
-                    ? (isInventoryItemCategory ? props.data.routes.inventoryItemCategoryStore : props.data.routes.expenseCategoryStore)
+                : (isInventoryItemCategory || isExpenseCategory || isServiceOffering || isEventType
+                    ? (isInventoryItemCategory
+                        ? props.data.routes.inventoryItemCategoryStore
+                        : (isExpenseCategory
+                            ? props.data.routes.expenseCategoryStore
+                            : (isServiceOffering ? props.data.routes.serviceOfferingStore : props.data.routes.eventTypeStore)))
                     : (isTask ? props.data.routes.maintenanceTaskStore : props.data.routes.maintenanceStore)),
             method: editingId ? 'put' : 'post',
             data: payload,
@@ -468,14 +512,20 @@ const removeStatus = async (scope, record) => {
         return;
     }
 
-    try {
-        await deleteMaintenanceRecord({ url: record.delete_url });
-        maintenanceRecords.value[scope] = maintenanceRecords.value[scope].filter((entry) => entry.id !== record.id);
-        if (maintenanceEditing.value[scope] === record.id) {
-            resetMaintenanceDraft(scope);
-        }
-        maintenanceSortOrders.value[scope] = nextMaintenanceSortOrder(scope);
-    } catch {}
+    askDelete({
+        kind: 'status',
+        label: record.name || 'this status',
+        onConfirm: async () => {
+            try {
+                await deleteMaintenanceRecord({ url: record.delete_url });
+                maintenanceRecords.value[scope] = maintenanceRecords.value[scope].filter((entry) => entry.id !== record.id);
+                if (maintenanceEditing.value[scope] === record.id) {
+                    resetMaintenanceDraft(scope);
+                }
+                maintenanceSortOrders.value[scope] = nextMaintenanceSortOrder(scope);
+            } catch {}
+        },
+    });
 };
 
 onMounted(() => {
@@ -808,4 +858,14 @@ onMounted(() => {
 
         </div>
     </section>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        :title="pendingDelete?.kind === 'font' ? 'Delete font?' : 'Delete status?'"
+        :message="`Are you sure you want to delete the record ${pendingDelete?.label || 'this record'}?`"
+        :confirm-label="pendingDelete?.kind === 'font' ? 'Delete font' : 'Delete status'"
+        :loading="fontSaving || maintenanceSaving"
+        @cancel="cancelDelete"
+        @confirm="confirmDelete"
+    />
 </template>

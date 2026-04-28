@@ -22,6 +22,9 @@ class Booking extends Model
         'package_price',
         'discount_id',
         'discount_amount',
+        'booking_discount_type',
+        'booking_discount_value',
+        'booking_discount_source',
         'booking_kind',
         'entry_name',
         'entry_description',
@@ -53,6 +56,7 @@ class Booking extends Model
             'event_date' => 'date',
             'package_price' => 'decimal:2',
             'discount_amount' => 'decimal:2',
+            'booking_discount_value' => 'decimal:2',
             'total_hours' => 'decimal:2',
             'travel_distance_km' => 'decimal:2',
             'travel_fee' => 'decimal:2',
@@ -151,5 +155,10 @@ class Booking extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(BookingDocument::class)->latest();
+    }
+
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(BookingContact::class)->latest();
     }
 }
