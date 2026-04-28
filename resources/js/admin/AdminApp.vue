@@ -29,6 +29,7 @@ import CampaignDetailPage from './pages/CampaignDetailPage.vue';
 import EmailTrackingPage from './pages/EmailTrackingPage.vue';
 import ExpensesPage from './pages/ExpensesPage.vue';
 import TasksPage from './pages/TasksPage.vue';
+import TaskDetailPage from './pages/TaskDetailPage.vue';
 import DiscountsPage from './pages/DiscountsPage.vue';
 import DiscountCreatePage from './pages/DiscountCreatePage.vue';
 import DiscountDetailPage from './pages/DiscountDetailPage.vue';
@@ -83,6 +84,7 @@ const pages = {
     'email-tracking': EmailTrackingPage,
     expenses: ExpensesPage,
     tasks: TasksPage,
+    'tasks-detail': TaskDetailPage,
     discounts: DiscountsPage,
     'discounts-create': DiscountCreatePage,
     'discounts-detail': DiscountDetailPage,

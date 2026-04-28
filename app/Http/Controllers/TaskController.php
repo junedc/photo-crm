@@ -35,6 +35,7 @@ class TaskController extends Controller
                 ...$this->baseRoutes(),
                 'store' => route('tasks.store'),
                 'tasks' => route('tasks.index'),
+                'create' => route('tasks.create'),
             ],
             'tasks' => Task::query()
                 ->with(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates'])
@@ -43,6 +44,74 @@ class TaskController extends Controller
                 ->get()
                 ->map(fn (Task $task) => $this->serializeTask($task))
                 ->values(),
+            'assigneeOptions' => TaskAssignees::optionsForTenant($tenant)
+                ->values(),
+            'taskStatuses' => $this->taskStatuses($tenant)
+                ->values(),
+            'bookings' => Booking::query()
+                ->with('customer')
+                ->latest('event_date')
+                ->latest('created_at')
+                ->get()
+                ->map(fn (Booking $booking) => [
+                    'id' => $booking->id,
+                    'display_name' => $booking->entry_name ?: $booking->customer_name,
+                    'quote_number' => $booking->quote_number,
+                    'event_date_label' => DateFormatter::date($booking->event_date),
+                    'customer_assignee' => TaskAssignees::customerOption($tenant, $booking),
+                ])
+                ->values(),
+        ]);
+    }
+
+    public function create(CurrentTenant $currentTenant): View
+    {
+        $tenant = $this->requireTenant($currentTenant);
+
+        return $this->renderAdminPage('tasks-detail', [
+            'tenant' => $this->serializeTenant($tenant),
+            'routes' => [
+                ...$this->baseRoutes(),
+                'tasks' => route('tasks.index'),
+                'create' => route('tasks.create'),
+                'store' => route('tasks.store'),
+            ],
+            'task' => null,
+            'assigneeOptions' => TaskAssignees::optionsForTenant($tenant)
+                ->values(),
+            'taskStatuses' => $this->taskStatuses($tenant)
+                ->values(),
+            'bookings' => Booking::query()
+                ->with('customer')
+                ->latest('event_date')
+                ->latest('created_at')
+                ->get()
+                ->map(fn (Booking $booking) => [
+                    'id' => $booking->id,
+                    'display_name' => $booking->entry_name ?: $booking->customer_name,
+                    'quote_number' => $booking->quote_number,
+                    'event_date_label' => DateFormatter::date($booking->event_date),
+                    'customer_assignee' => TaskAssignees::customerOption($tenant, $booking),
+                ])
+                ->values(),
+        ]);
+    }
+
+    public function show(CurrentTenant $currentTenant, Task $task): View
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        $this->assertTenantTask($tenant, $task);
+        $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates']);
+
+        return $this->renderAdminPage('tasks-detail', [
+            'tenant' => $this->serializeTenant($tenant),
+            'routes' => [
+                ...$this->baseRoutes(),
+                'tasks' => route('tasks.index'),
+                'create' => route('tasks.create'),
+                'store' => route('tasks.store'),
+            ],
+            'task' => $this->serializeTask($task),
             'assigneeOptions' => TaskAssignees::optionsForTenant($tenant)
                 ->values(),
             'taskStatuses' => $this->taskStatuses($tenant)
@@ -252,6 +321,7 @@ class TaskController extends Controller
                 ->all(),
             'customer_response_count' => $task->clientPortalUpdates->count(),
             'created_at' => DateFormatter::date($task->created_at),
+            'show_url' => route('tasks.show', $task),
             'update_url' => route('tasks.update', $task),
             'delete_url' => route('tasks.destroy', $task),
             'dismiss_notification_url' => route('tasks.notifications.dismiss', $task),

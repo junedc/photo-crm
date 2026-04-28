@@ -119,6 +119,8 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/email-tracking', [EmailTrackingController::class, 'index'])->name('email-tracking.index');
         Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
+        Route::get('/tasks/create', [TaskController::class, 'create'])->name('tasks.create');
+        Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
         Route::get('/discounts', [DiscountController::class, 'index'])->name('discounts.index');
         Route::get('/discounts/create', [DiscountController::class, 'create'])->name('discounts.create');
         Route::get('/discounts/{discount}', [DiscountController::class, 'show'])->name('discounts.show');
