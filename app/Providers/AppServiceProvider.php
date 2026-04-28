@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Tenancy\CurrentTenant;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,6 +29,11 @@ class AppServiceProvider extends ServiceProvider
     {
         if (parse_url((string) config('app.url'), PHP_URL_SCHEME) === 'https') {
             URL::forceScheme('https');
+        }
+
+        $overrideEmail = trim((string) config('mail.override_to', ''));
+        if ($overrideEmail !== '') {
+            Mail::alwaysTo($overrideEmail);
         }
     }
 }

@@ -151,6 +151,21 @@ class ClientPortalController extends Controller
         ]);
         $request->session()->regenerate();
 
+        $this->createAdminNotificationsForPortalActivity(
+            $currentTenant->get(),
+            $verification->access->booking,
+            'client_portal_signed_in',
+            'Client signed in to portal',
+            sprintf(
+                '%s signed in to the client portal.',
+                $verification->access->customer_name ?: $verification->access->customer_email
+            ),
+            [
+                'customer_email' => $verification->access->customer_email,
+                'client_portal_access_id' => $verification->access->id,
+            ],
+        );
+
         return redirect()->route('client.portal.index');
     }
 
@@ -420,6 +435,23 @@ class ClientPortalController extends Controller
             ],
         );
 
+        $this->createAdminNotificationsForPortalActivity(
+            $tenant,
+            $booking,
+            'client_portal_design_saved',
+            'Client saved design draft',
+            sprintf(
+                '%s saved the design draft for %s.',
+                $booking->customer_name ?: $booking->customer_email,
+                $booking->quote_number ?: 'booking #'.$booking->id
+            ),
+            [
+                'design_id' => $design->id,
+                'design_title' => $design->title,
+                'customer_email' => $booking->customer_email,
+            ],
+        );
+
         return response()->json([
             'message' => 'Draft saved.',
             'record' => [
@@ -444,6 +476,23 @@ class ClientPortalController extends Controller
         ]);
 
         $path = $data['image']->store("client-portal-designs/{$tenant->id}/{$booking->id}", 'public');
+
+        $this->createAdminNotificationsForPortalActivity(
+            $tenant,
+            $booking,
+            'client_portal_design_asset_uploaded',
+            'Client uploaded design image',
+            sprintf(
+                '%s uploaded a design image for %s.',
+                $booking->customer_name ?: $booking->customer_email,
+                $booking->quote_number ?: 'booking #'.$booking->id
+            ),
+            [
+                'asset_path' => $path,
+                'asset_name' => basename($path),
+                'customer_email' => $booking->customer_email,
+            ],
+        );
 
         return response()->json([
             'message' => 'Image uploaded.',
@@ -547,6 +596,32 @@ class ClientPortalController extends Controller
                     'attachment_count' => $attachmentCount,
                     'has_note' => $hasNote,
                 ],
+            ]);
+        }
+    }
+
+    private function createAdminNotificationsForPortalActivity(
+        Tenant $tenant,
+        ?Booking $booking,
+        string $type,
+        string $title,
+        string $message,
+        array $payload = [],
+    ): void {
+        $recipients = $tenant->users()
+            ->wherePivot('role', '!=', 'guest')
+            ->get(['users.id']);
+
+        foreach ($recipients as $recipient) {
+            TenantNotification::query()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $recipient->id,
+                'booking_id' => $booking?->id,
+                'task_id' => null,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'payload' => $payload,
             ]);
         }
     }

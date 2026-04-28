@@ -15,6 +15,7 @@ use App\Models\ExpenseCategory;
 use App\Models\InventoryItem;
 use App\Models\Invoice;
 use App\Models\InvoiceInstallment;
+use App\Models\ClientPortalDesign;
 use App\Models\Lead;
 use App\Models\Package;
 use App\Models\PackageHourlyPrice;
@@ -75,6 +76,34 @@ class BookingController extends Controller
     public function adminCreate(CurrentTenant $currentTenant): View
     {
         return $this->renderAdminBookingCreatePage($currentTenant);
+    }
+
+    public function designDraft(CurrentTenant $currentTenant, Booking $booking): View
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant && $booking->tenant_id === $tenant->id, 404);
+
+        $booking->loadMissing(['package', 'clientPortalDesign']);
+        $design = $booking->clientPortalDesign;
+        abort_unless($design instanceof ClientPortalDesign, 404);
+
+        $fonts = $tenant->fonts()
+            ->get()
+            ->map(fn (TenantFont $font): array => $this->serializeTenantFont($font))
+            ->values()
+            ->all();
+
+        return view('admin.booking-design', [
+            'tenant' => $tenant,
+            'booking' => $booking,
+            'design' => [
+                'id' => $design->id,
+                'title' => $design->title,
+                'last_saved_at_label' => DateFormatter::dateTime($design->last_saved_at),
+                'design_data' => $this->normalizeClientDesignData($design->design_data),
+            ],
+            'fonts' => $fonts,
+        ]);
     }
 
     public function quotePdf(CurrentTenant $currentTenant, Booking $booking)
@@ -980,7 +1009,7 @@ class BookingController extends Controller
     private function renderAdminBookingDetailPage(CurrentTenant $currentTenant, Booking $booking): View
     {
         $tenant = $currentTenant->get();
-        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts']);
+        $booking->loadMissing(['package.addOns', 'customer', 'addOns', 'equipment', 'discount', 'invoice.installments', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts', 'clientPortalDesign']);
         $taskStatuses = $tenant ? $this->taskStatuses($tenant) : collect();
 
         return view('admin.app', [
@@ -1396,7 +1425,7 @@ class BookingController extends Controller
 
     private function serializeBooking(Booking $booking): array
     {
-        $booking->loadMissing(['discount', 'package.hourlyPrices', 'package.equipment', 'package.addOns', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts']);
+        $booking->loadMissing(['discount', 'package.hourlyPrices', 'package.equipment', 'package.addOns', 'customer', 'addOns', 'tasks.assignedUser', 'tasks.assigneeVendor', 'tasks.assigneeCustomer', 'tasks.status', 'tasks.clientPortalUpdates', 'expenses.vendor', 'expenses.expenseCategory', 'expenses.user', 'clientPortalTaskUpdates.task', 'documents.uploader', 'contacts', 'clientPortalDesign']);
         $clientPortalAccess = ClientPortalAccess::query()
             ->where('tenant_id', $booking->tenant_id)
             ->where('customer_email', strtolower((string) $booking->customer_email))
@@ -2457,6 +2486,25 @@ class BookingController extends Controller
             }
         }
 
+        if ($booking->clientPortalDesign) {
+            $documents->push([
+                'id' => 'design-draft-'.$booking->clientPortalDesign->id,
+                'title' => $booking->clientPortalDesign->title ?: 'Client design draft',
+                'document_type' => 'design_draft',
+                'document_type_label' => $this->bookingDocumentTypeLabels()['design_draft'],
+                'source_label' => 'Client design draft',
+                'uploaded_by_label' => $booking->clientPortalDesign->customer_email ?: $booking->customer_email,
+                'notes' => data_get($booking->clientPortalDesign->design_data, 'remarks') ?: 'Latest client-submitted design draft.',
+                'created_at_label' => DateFormatter::dateTime($booking->clientPortalDesign->last_saved_at ?: $booking->clientPortalDesign->created_at),
+                'created_at_sort' => optional($booking->clientPortalDesign->last_saved_at ?: $booking->clientPortalDesign->created_at)->toIso8601String(),
+                'file_name' => 'client-design-draft',
+                'file_size_label' => null,
+                'url' => route('admin.bookings.design-draft', $booking),
+                'delete_url' => null,
+                'can_delete' => false,
+            ]);
+        }
+
         foreach ($booking->documents as $document) {
             $documents->push($this->serializeBookingDocument($document));
         }
@@ -2498,10 +2546,47 @@ class BookingController extends Controller
             'quote' => 'Quote',
             'invoice' => 'Invoice',
             'receipt' => 'Receipt',
+            'design_draft' => 'Design Draft',
             'client_file' => 'Client File',
             'user_file' => 'User File',
             'other' => 'Other',
         ];
+    }
+
+    private function normalizeClientDesignData(?array $designData): ?array
+    {
+        if (! is_array($designData)) {
+            return $designData;
+        }
+
+        $designData['nodes'] = collect($designData['nodes'] ?? [])
+            ->filter(fn ($node) => is_array($node))
+            ->map(fn (array $node): array => [
+                'id' => $node['id'] ?? null,
+                'type' => $node['type'] ?? 'text',
+                'x' => (float) ($node['x'] ?? 120),
+                'y' => (float) ($node['y'] ?? 120),
+                'rotation' => (float) ($node['rotation'] ?? 0),
+                'scaleX' => (float) ($node['scaleX'] ?? 1),
+                'scaleY' => (float) ($node['scaleY'] ?? 1),
+                'width' => (float) ($node['width'] ?? 220),
+                'height' => (float) ($node['height'] ?? 60),
+                'text' => $node['text'] ?? 'Edit me',
+                'fontSize' => (float) ($node['fontSize'] ?? 42),
+                'fontFamily' => $node['fontFamily'] ?? 'Helvetica',
+                'fontStyle' => $node['fontStyle'] ?? 'normal',
+                'fill' => $node['fill'] ?? '#0f172a',
+                'src' => $node['src'] ?? null,
+                'templateKind' => $node['templateKind'] ?? null,
+            ])
+            ->values()
+            ->all();
+
+        $designData['remarks'] = is_string($designData['remarks'] ?? null)
+            ? $designData['remarks']
+            : '';
+
+        return $designData;
     }
 
     private function humanFileSize(?int $bytes): ?string

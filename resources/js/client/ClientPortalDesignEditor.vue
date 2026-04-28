@@ -10,6 +10,8 @@ const props = defineProps({
     },
 });
 
+const isReadOnly = computed(() => props.data.mode === 'readonly');
+
 const saving = ref(false);
 const message = ref('');
 const error = ref('');
@@ -476,6 +478,10 @@ const toggleSelectedTextStyle = (style) => {
 };
 
 const saveDraft = async () => {
+    if (isReadOnly.value || !props.data.routes?.save) {
+        return;
+    }
+
     saving.value = true;
     message.value = '';
     error.value = '';
@@ -564,16 +570,16 @@ onMounted(() => {
 </script>
 
 <template>
-    <section class="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
+    <section class="grid gap-6" :class="isReadOnly ? 'xl:grid-cols-[18rem_minmax(0,1fr)]' : 'xl:grid-cols-[22rem_minmax(0,1fr)]'">
         <aside class="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <p class="text-[11px] uppercase tracking-[0.35em] text-cyan-200">Design Editor</p>
             <div class="mt-6 space-y-4">
                 <div>
                     <label class="mb-1 block text-[11px] uppercase tracking-[0.2em] text-stone-400">Draft Title</label>
-                    <input v-model="title" type="text" class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50">
+                    <input v-model="title" :readonly="isReadOnly" type="text" class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50" :class="isReadOnly ? 'cursor-default opacity-80' : ''">
                 </div>
 
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <div v-if="!isReadOnly" class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                     <button type="button" class="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" @click="addText">
                         Add Text
                     </button>
@@ -582,9 +588,9 @@ onMounted(() => {
                     </button>
                 </div>
 
-                <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onImageSelected">
+                <input v-if="!isReadOnly" ref="fileInput" type="file" accept="image/*" class="hidden" @change="onImageSelected">
 
-                <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-3.5">
+                <div v-if="!isReadOnly" class="rounded-2xl border border-white/10 bg-slate-950/50 p-3.5">
                     <div class="flex items-center justify-between gap-3">
                         <p class="text-sm font-semibold text-white">Selected Layer</p>
                         <button type="button" class="text-xs font-medium text-rose-200 transition hover:text-rose-100 disabled:opacity-40" :disabled="!selectedNode" @click="removeSelectedNode">
@@ -656,7 +662,7 @@ onMounted(() => {
                     <p v-else class="mt-4 text-sm text-stone-400">Select a text or image layer to edit its settings.</p>
                 </div>
 
-                <div>
+                <div v-if="!isReadOnly">
                     <label class="mb-1 block text-[11px] uppercase tracking-[0.2em] text-stone-400">Canvas Background</label>
                     <input :value="designState.backgroundColor" type="color" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-2 py-2" @input="replaceDesignState({ ...designState, backgroundColor: $event.target.value })">
                 </div>
@@ -669,18 +675,21 @@ onMounted(() => {
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <button type="button" class="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving" @click="saveDraft">
+                    <button v-if="!isReadOnly" type="button" class="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60" :disabled="saving" @click="saveDraft">
                         {{ saving ? 'Saving...' : 'Save Draft' }}
                     </button>
-                    <a :href="data.routes.portal" class="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-stone-100 transition hover:bg-white/5">
+                    <a v-if="!isReadOnly" :href="data.routes.portal" class="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-stone-100 transition hover:bg-white/5">
                         Back To Portal
+                    </a>
+                    <a v-if="isReadOnly" :href="data.routes.back" class="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-stone-100 transition hover:bg-white/5">
+                        Back To Booking
                     </a>
                 </div>
             </div>
         </aside>
 
         <section class="rounded-3xl border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/20">
-            <div class="mb-4 rounded-3xl border border-white/10 bg-white/[0.04] p-3">
+            <div v-if="!isReadOnly" class="mb-4 rounded-3xl border border-white/10 bg-white/[0.04] p-3">
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Canvas Tools</p>
@@ -771,7 +780,7 @@ onMounted(() => {
                                         fontFamily: node.fontFamily,
                                         fontStyle: node.fontStyle,
                                         fill: node.fill,
-                                        draggable: true,
+                                        draggable: !isReadOnly,
                                         width: node.width,
                                     }"
                                     @click="selectedId = node.id"
@@ -792,7 +801,7 @@ onMounted(() => {
                                         image: imageElements[node.id],
                                         width: node.width,
                                         height: node.height,
-                                        draggable: true,
+                                        draggable: !isReadOnly,
                                     }"
                                     @click="selectedId = node.id"
                                     @tap="selectedId = node.id"
@@ -800,7 +809,7 @@ onMounted(() => {
                                     @transformend="updateNode(node.id, { x: $event.target.x(), y: $event.target.y(), rotation: $event.target.rotation(), width: Math.max(80, node.width * $event.target.scaleX()), height: Math.max(80, node.height * $event.target.scaleY()), scaleX: 1, scaleY: 1 })"
                                 />
 
-                                <template v-if="selectedId === node.id">
+                                <template v-if="!isReadOnly && selectedId === node.id">
                                     <v-rect
                                         :config="{
                                             x: deleteHandlePosition(node).x,
@@ -831,6 +840,7 @@ onMounted(() => {
                             </template>
 
                             <v-transformer
+                                v-if="!isReadOnly"
                                 ref="transformerRef"
                                 :config="{
                                     rotateEnabled: true,
@@ -861,6 +871,8 @@ onMounted(() => {
                     rows="4"
                     maxlength="2000"
                     class="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+                    :readonly="isReadOnly"
+                    :class="isReadOnly ? 'cursor-default opacity-80' : ''"
                     placeholder="Example: Please use our family photo in the top frame and keep the event date larger near the bottom."
                     @input="replaceDesignState({ ...designState, remarks: $event.target.value })"
                 />

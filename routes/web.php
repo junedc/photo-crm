@@ -128,6 +128,7 @@ Route::middleware('tenant.required')->group(function () {
         Route::get('/admin/invoices', [InvoiceController::class, 'index'])->name('admin.invoices.index');
         Route::get('/admin/calendar', [BookingController::class, 'calendar'])->name('admin.calendar.index');
         Route::get('/admin/bookings/{booking}', [BookingController::class, 'show'])->name('admin.bookings.show');
+        Route::get('/admin/bookings/{booking}/design-draft', [BookingController::class, 'designDraft'])->name('admin.bookings.design-draft');
         Route::get('/support', [SupportController::class, 'index'])->name('support.index');
         Route::get('/support/{ticket}', [SupportController::class, 'show'])->name('support.show');
         Route::get('/referrals', [SupportController::class, 'referrals'])->name('referrals.index');
