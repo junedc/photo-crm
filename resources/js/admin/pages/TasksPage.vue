@@ -133,8 +133,8 @@ const removeTasks = async () => {
         </div>
 
         <div class="overflow-x-auto">
-            <div class="min-w-[1060px]">
-                <div class="grid grid-cols-[4.75rem_minmax(0,1.45fr)_8rem_10rem_13rem_7rem_8rem_8rem_14rem] gap-3 px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-stone-500">
+            <div class="min-w-[920px]">
+                <div class="grid grid-cols-[4.75rem_minmax(0,1.9fr)_8rem_10rem_13rem_7rem_8rem] gap-3 px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-stone-500">
                     <label class="flex items-center gap-2">
                         <input
                             type="checkbox"
@@ -144,19 +144,17 @@ const removeTasks = async () => {
                         >
                         <span>Select</span>
                     </label>
-                    <span>Task</span>
+                    <span>Task Name</span>
                     <span>Status</span>
                     <span>Assignee</span>
                     <span>Booking</span>
                     <span>Hours</span>
                     <span>Due</span>
-                    <span>Started</span>
-                    <span>Notes</span>
                 </div>
                 <div
                     v-for="task in filteredTasks"
                     :key="task.id"
-                    class="grid cursor-pointer grid-cols-[4.75rem_minmax(0,1.45fr)_8rem_10rem_13rem_7rem_8rem_8rem_14rem] items-center gap-3 border-t border-white/10 px-3 py-2 transition hover:bg-white/[0.03]"
+                    class="grid cursor-pointer grid-cols-[4.75rem_minmax(0,1.9fr)_8rem_10rem_13rem_7rem_8rem] items-center gap-3 border-t border-white/10 px-3 py-2 transition hover:bg-white/[0.03]"
                     :class="selectedTaskIds.includes(task.id) ? 'bg-white/[0.05]' : ''"
                     role="button"
                     tabindex="0"
@@ -179,8 +177,6 @@ const removeTasks = async () => {
                     <p class="truncate text-sm text-stone-300">{{ task.booking_label || 'General task' }}</p>
                     <p class="text-sm text-stone-300">{{ task.task_duration_hours || '0.00' }}</p>
                     <p class="text-sm text-stone-300">{{ task.due_date_label }}</p>
-                    <p class="text-sm text-stone-300">{{ task.date_started_label }}</p>
-                    <p class="truncate text-sm text-stone-400">{{ task.remarks || 'No remarks' }}</p>
                 </div>
                 <p v-if="filteredTasks.length === 0" class="border-t border-white/10 px-3 py-6 text-sm text-stone-400">
                     No tasks matched your search.
