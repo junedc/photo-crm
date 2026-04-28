@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\TenantStatuses;
 use Database\Factories\TenantFactory;
+use App\Models\EventType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,6 +22,8 @@ class Tenant extends Model
             TenantStatuses::seedDefaults($tenant);
             self::seedInventoryItemCategories($tenant);
             self::seedExpenseCategories($tenant);
+            self::seedServiceOfferings($tenant);
+            self::seedEventTypes($tenant);
         });
     }
 
@@ -108,6 +111,16 @@ class Tenant extends Model
         return $this->hasMany(ExpenseCategory::class)->orderBy('sort_order')->orderBy('name');
     }
 
+    public function serviceOfferings(): HasMany
+    {
+        return $this->hasMany(ServiceOffering::class)->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function eventTypes(): HasMany
+    {
+        return $this->hasMany(EventType::class)->orderBy('sort_order')->orderBy('name');
+    }
+
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);
@@ -186,6 +199,30 @@ class Tenant extends Model
         ];
     }
 
+    public static function defaultServiceOfferings(): array
+    {
+        return [
+            'Photography',
+            'Videography',
+            'DJ',
+            'Live Singer',
+            'MC | Emcee',
+            'Celebrant',
+            'Event Styling & Decors',
+            'Photo Booth Attendant',
+        ];
+    }
+
+    public static function defaultEventTypes(): array
+    {
+        return [
+            'Wedding',
+            'Birthday',
+            'Anniversary',
+            'Others',
+        ];
+    }
+
     public static function seedInventoryItemCategories(self $tenant): void
     {
         foreach (self::defaultInventoryItemCategories() as $index => $name) {
@@ -201,6 +238,28 @@ class Tenant extends Model
     {
         foreach (self::defaultExpenseCategories() as $index => $name) {
             $tenant->expenseCategories()->firstOrCreate([
+                'name' => $name,
+            ], [
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
+    public static function seedServiceOfferings(self $tenant): void
+    {
+        foreach (self::defaultServiceOfferings() as $index => $name) {
+            $tenant->serviceOfferings()->firstOrCreate([
+                'name' => $name,
+            ], [
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
+    public static function seedEventTypes(self $tenant): void
+    {
+        foreach (self::defaultEventTypes() as $index => $name) {
+            $tenant->eventTypes()->firstOrCreate([
                 'name' => $name,
             ], [
                 'sort_order' => $index + 1,

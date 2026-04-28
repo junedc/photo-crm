@@ -396,7 +396,7 @@ const confirmRemovePackage = () => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete package?"
-        :message="`Delete package &quot;${packageRecord.name}&quot;? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${packageRecord.name}?`"
         confirm-label="Delete package"
         @cancel="showDeleteConfirm = false"
         @confirm="confirmRemovePackage"

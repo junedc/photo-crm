@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError } from '../validation';
 
@@ -19,6 +20,9 @@ const bookings = computed(() => props.data.bookings ?? []);
 const editingTask = ref(null);
 const showModal = ref(false);
 const form = ref(buildForm());
+const taskAttachmentInput = ref(null);
+const taskToDelete = ref(null);
+const showDeleteConfirm = ref(false);
 
 function buildForm(task = null) {
     return {
@@ -31,6 +35,7 @@ function buildForm(task = null) {
         due_date: task?.due_date ?? '',
         date_started: task?.date_started ?? '',
         date_completed: task?.date_completed ?? '',
+        attachments: [],
     };
 }
 const selectedBooking = computed(() => bookings.value.find((booking) => String(booking.id) === String(form.value.booking_id ?? '')) ?? null);
@@ -78,6 +83,11 @@ const openTaskFromQuery = () => {
 const closeModal = () => {
     showModal.value = false;
     editingTask.value = null;
+    form.value = buildForm();
+
+    if (taskAttachmentInput.value) {
+        taskAttachmentInput.value.value = '';
+    }
 
     const url = new URL(window.location.href);
 
@@ -100,6 +110,9 @@ const saveTask = async () => {
     formData.append('due_date', form.value.due_date ?? '');
     formData.append('date_started', form.value.date_started ?? '');
     formData.append('date_completed', form.value.date_completed ?? '');
+    (form.value.attachments ?? []).forEach((file) => {
+        formData.append('attachments[]', file);
+    });
 
     if (editingTask.value) {
         formData.append('_method', 'PUT');
@@ -118,9 +131,28 @@ const saveTask = async () => {
     closeModal();
 };
 
-const removeTask = async (task) => {
-    await deleteRecord({ url: task.delete_url });
-    tasks.value = tasks.value.filter((entry) => entry.id !== task.id);
+const syncTaskAttachments = (event) => {
+    form.value.attachments = Array.from(event.target.files ?? []);
+};
+
+const askRemoveTask = (task) => {
+    taskToDelete.value = task;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveTask = () => {
+    taskToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeTask = async () => {
+    if (!taskToDelete.value?.delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: taskToDelete.value.delete_url });
+    tasks.value = tasks.value.filter((entry) => entry.id !== taskToDelete.value.id);
+    cancelRemoveTask();
 };
 
 onMounted(() => {
@@ -170,7 +202,7 @@ onMounted(() => {
                     <p class="truncate text-sm text-stone-400">{{ task.remarks || 'No remarks' }}</p>
                     <div class="flex items-center gap-2">
                         <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="openEdit(task)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeTask(task)">Delete</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveTask(task)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -243,6 +275,28 @@ onMounted(() => {
                         <textarea v-model="form.remarks" rows="3" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-300/50" :class="firstError(fieldErrors, 'remarks') ? 'border-rose-300/60' : ''" />
                         <p v-if="firstError(fieldErrors, 'remarks')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'remarks') }}</p>
                     </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Task Files</label>
+                        <input ref="taskAttachmentInput" type="file" multiple accept="image/*,video/*,.pdf" class="block w-full rounded-xl border border-dashed border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-stone-300 file:mr-3 file:rounded-full file:border-0 file:bg-sky-300/15 file:px-3 file:py-2 file:text-xs file:font-medium file:text-sky-100 hover:file:bg-sky-300/20" @change="syncTaskAttachments">
+                        <p class="mt-1 text-xs text-stone-400">Upload files the assignee should be able to view. New uploads are added to any files already on the task.</p>
+                        <p v-if="firstError(fieldErrors, 'attachments')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'attachments') }}</p>
+                        <p v-else-if="firstError(fieldErrors, 'attachments.0')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(fieldErrors, 'attachments.0') }}</p>
+                    </div>
+                    <div v-if="editingTask?.task_attachments?.length" class="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                        <p class="text-[11px] uppercase tracking-[0.24em] text-stone-400">Existing Files</p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <a
+                                v-for="attachment in editingTask.task_attachments"
+                                :key="`${editingTask.id}-${attachment.url}`"
+                                :href="attachment.url"
+                                target="_blank"
+                                rel="noreferrer"
+                                class="inline-flex items-center rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs font-medium text-sky-100 transition hover:bg-sky-300/15"
+                            >
+                                {{ attachment.name }}
+                            </a>
+                        </div>
+                    </div>
                     <div v-if="editingTask" class="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
@@ -282,4 +336,14 @@ onMounted(() => {
             </form>
         </div>
     </transition>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete task?"
+        :message="`Are you sure you want to delete the record ${taskToDelete?.task_name || 'this task'}?`"
+        confirm-label="Delete task"
+        :loading="saving"
+        @cancel="cancelRemoveTask"
+        @confirm="removeTask"
+    />
 </template>

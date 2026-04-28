@@ -147,7 +147,7 @@ const openSingleDeleteDialog = (entry) => {
     confirmDialog.value = {
         open: true,
         title: 'Delete lead?',
-        message: `Delete ${entry.customer_name || 'this lead'}? This cannot be undone.`,
+        message: `Are you sure you want to delete the record ${entry.customer_name || 'this lead'}?`,
         confirmLabel: 'Delete lead',
         leadIds: [entry.id],
         mode: 'single',
@@ -163,7 +163,7 @@ const openBulkDeleteDialog = () => {
     confirmDialog.value = {
         open: true,
         title: 'Delete selected leads?',
-        message: `Delete ${label}? This cannot be undone.`,
+        message: `Are you sure you want to delete the record ${label}?`,
         confirmLabel: selectedLeadIds.value.length === 1 ? 'Delete lead' : 'Delete leads',
         leadIds: [...selectedLeadIds.value],
         mode: 'bulk',

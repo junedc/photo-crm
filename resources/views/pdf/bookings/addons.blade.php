@@ -29,15 +29,12 @@
             padding: 10px 12px;
             border-bottom: 1px solid #d1d5db;
         }
-        .items-table tbody td {
-            padding: 12px;
-            vertical-align: top;
-            border-bottom: 1px solid #e5e7eb;
-        }
+        .items-table tbody td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         .items-table tbody tr:last-child td { border-bottom: none; }
         .text-right { text-align: right; }
-        .desc-title { font-size: 11px; font-weight: 700; color: #111827; margin-bottom: 4px; }
-        .desc-line { font-size: 10px; color: #4b5563; margin-bottom: 2px; }
+        .desc-title { font-weight: 700; color: #111827; }
+        .desc-line { margin-top: 3px; color: #6b7280; line-height: 1.35; }
+        .desc-line.bullet { padding-left: 10px; text-indent: -10px; }
         .summary-wrap { width: 100%; margin-top: 16px; }
         .summary-table { width: 38%; margin-left: auto; }
         .summary-table td { padding: 6px 0; font-size: 11px; }
@@ -109,8 +106,9 @@
             <tr>
                 <th style="width: 58%;">Description</th>
                 <th style="width: 12%;" class="text-right">Quantity</th>
-                <th style="width: 15%;" class="text-right">Unit Price</th>
-                <th style="width: 15%;" class="text-right">Amount {{ $currency_code }}</th>
+                <th style="width: 12%;" class="text-right">Unit Price</th>
+                <th style="width: 8%;" class="text-right">Discount</th>
+                <th style="width: 10%;" class="text-right">Amount {{ $currency_code }}</th>
             </tr>
         </thead>
         <tbody>
@@ -118,12 +116,15 @@
                 <tr>
                     <td>
                         <div class="desc-title">{{ $item['description_title'] }}</div>
-                        @foreach (($item['description_lines'] ?? []) as $line)
-                            <div class="desc-line">{{ $line }}</div>
-                        @endforeach
+                        @if (($item['type'] ?? null) !== 'add_on')
+                            @foreach (($item['description_lines'] ?? []) as $line)
+                                <div class="desc-line{{ str_starts_with($line, '- ') ? ' bullet' : '' }}">{{ $line }}</div>
+                            @endforeach
+                        @endif
                     </td>
                     <td class="text-right">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
                     <td class="text-right">{{ number_format((float) ($item['unit_price'] ?? 0), 2) }}</td>
+                    <td class="text-right">{{ $item['discount_label'] ?? '-' }}</td>
                     <td class="text-right">{{ number_format((float) ($item['amount'] ?? 0), 2) }}</td>
                 </tr>
             @endforeach

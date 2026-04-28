@@ -12,7 +12,7 @@ class BookingAddonsPdfGenerator
 {
     public function makeForBooking(Booking $booking): ?BookingAddonsPdfAttachment
     {
-        $booking->loadMissing('package', 'tenant', 'addOns', 'discount');
+        $booking->loadMissing('package', 'package.equipment', 'package.addOns', 'tenant', 'addOns', 'discount');
 
         $package = $booking->package;
         $addons = $booking->addOns;
@@ -38,14 +38,17 @@ class BookingAddonsPdfGenerator
         $items = collect([
             [
                 'description_title' => trim(($package->name ?? 'Package').($booking->total_hours ? ' · '.number_format((float) $booking->total_hours, 2).' hrs' : '')),
+                'type' => 'package',
                 'description_lines' => $this->packageDescriptionLines($booking),
                 'quantity' => 1,
                 'unit_price' => $packagePrice,
+                'discount_label' => '-',
                 'amount' => $packagePrice,
             ],
         ]);
 
         foreach ($addons as $addon) {
+            $addonUnitPrice = (float) ($addon->unit_price ?? 0);
             $addonPrice = (float) $addon->discountedUnitPriceForBookingSelection(
                 $addon->pivot?->discount_type,
                 $addon->pivot?->discount_value,
@@ -53,19 +56,26 @@ class BookingAddonsPdfGenerator
             );
 
             $items->push([
+                'type' => 'add_on',
                 'description_title' => $addon->name,
                 'description_lines' => array_values(array_filter([
                     $addon->duration ? 'Duration: '.$addon->duration : null,
                     filled($addon->description) ? trim((string) $addon->description) : null,
                 ])),
                 'quantity' => 1,
-                'unit_price' => $addonPrice,
+                'unit_price' => $addonUnitPrice,
+                'discount_label' => $this->discountLabel(
+                    $addon->pivot?->discount_type,
+                    $addon->pivot?->discount_value,
+                    (float) ($addon->pivot?->discount_percentage ?? 0),
+                ),
                 'amount' => $addonPrice,
             ]);
         }
 
         if ($travelFee > 0) {
             $items->push([
+                'type' => 'travel_fee',
                 'description_title' => 'Travel Fee',
                 'description_lines' => array_values(array_filter([
                     $booking->travel_distance_km !== null ? 'Distance: '.number_format((float) $booking->travel_distance_km, 2).' km' : null,
@@ -73,6 +83,7 @@ class BookingAddonsPdfGenerator
                 ])),
                 'quantity' => 1,
                 'unit_price' => $travelFee,
+                'discount_label' => '-',
                 'amount' => $travelFee,
             ]);
         }
@@ -106,6 +117,27 @@ class BookingAddonsPdfGenerator
 
     private function packageDescriptionLines(Booking $booking): array
     {
+        $equipmentNames = collect($booking->package?->equipment ?? [])
+            ->map(fn ($item) => trim((string) ($item->name ?? '')))
+            ->filter()
+            ->values();
+
+        $addOnNames = collect($booking->package?->addOns ?? [])
+            ->map(fn ($item) => trim((string) ($item->name ?? '')))
+            ->filter()
+            ->values();
+
+        $inclusions = $equipmentNames
+            ->concat($addOnNames)
+            ->unique()
+            ->values();
+
+        if ($inclusions->isNotEmpty()) {
+            return $inclusions
+                ->map(fn (string $item) => '- '.$item)
+                ->all();
+        }
+
         $lines = [];
 
         if (filled($booking->package?->description)) {
@@ -118,18 +150,6 @@ class BookingAddonsPdfGenerator
             }
         }
 
-        if (filled($booking->venue)) {
-            $lines[] = 'Venue: '.trim((string) $booking->venue);
-        }
-
-        if ($booking->event_date) {
-            $lines[] = 'Event date: '.Carbon::parse($booking->event_date)->format('d M Y');
-        }
-
-        if ($booking->start_time && $booking->end_time) {
-            $lines[] = 'Time: '.Carbon::parse($booking->start_time)->format('g:i A').' - '.Carbon::parse($booking->end_time)->format('g:i A');
-        }
-
         return $lines;
     }
 
@@ -139,10 +159,26 @@ class BookingAddonsPdfGenerator
 
         return array_values(array_filter([
             $tenant?->name ?: 'MemoShot',
+            filled($tenant?->abn) ? 'ABN: '.trim((string) $tenant->abn) : null,
             filled($tenant?->address) ? trim((string) $tenant->address) : null,
             filled($tenant?->contact_phone) ? trim((string) $tenant->contact_phone) : null,
             filled($tenant?->contact_email) ? trim((string) $tenant->contact_email) : null,
         ]));
+    }
+
+    private function discountLabel(mixed $discountType = null, mixed $discountValue = null, float $legacyPercentage = 0): string
+    {
+        if ($discountType === 'amount' && (float) ($discountValue ?? 0) > 0) {
+            return '$'.number_format((float) $discountValue, 2);
+        }
+
+        $percentage = (float) ($legacyPercentage > 0 ? $legacyPercentage : ($discountValue ?? 0));
+
+        if ($percentage > 0) {
+            return number_format($percentage, 2).'%';
+        }
+
+        return '-';
     }
 
     private function imageDataUri(?string $path): ?string

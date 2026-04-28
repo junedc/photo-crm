@@ -298,7 +298,7 @@ const assignedPackages = computed(() => discountRecord.value?.packages ?? []);
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete discount?"
-        :message="`Delete discount &quot;${discountRecord.code}&quot;? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${discountRecord.code}?`"
         confirm-label="Delete discount"
         @cancel="showDeleteConfirm = false"
         @confirm="confirmRemoveDiscount"

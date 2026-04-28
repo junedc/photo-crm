@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const { saving, submitForm } = useWorkspaceCrud();
 const emailLogs = ref([...(props.data.emailLogs ?? [])]);
 const selectedIds = ref([]);
 const activeLogId = ref(props.data.emailLogs?.[0]?.id ?? null);
+const showDeleteConfirm = ref(false);
 const tableColumnClass = 'grid-cols-[3rem_minmax(14rem,1.5fr)_8rem_8rem_11rem_10rem]';
 const sortState = ref({
     key: 'sent_at_sort',
@@ -106,6 +108,18 @@ const deleteSelected = async () => {
         return;
     }
 
+    showDeleteConfirm.value = true;
+};
+
+const cancelDeleteSelected = () => {
+    showDeleteConfirm.value = false;
+};
+
+const confirmDeleteSelected = async () => {
+    if (!selectedIds.value.length) {
+        return;
+    }
+
     try {
         await submitForm({
             url: props.data.routes.bulkDelete,
@@ -121,6 +135,7 @@ const deleteSelected = async () => {
         }
 
         selectedIds.value = [];
+        cancelDeleteSelected();
     } catch {}
 };
 </script>
@@ -249,4 +264,14 @@ const deleteSelected = async () => {
             <p v-else class="px-4 py-8 text-sm text-stone-400">Select an email from the list to inspect its recipient and content.</p>
         </div>
     </section>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete email logs?"
+        :message="`Are you sure you want to delete the record ${selectedIds.length === 1 ? 'this email log' : `these ${selectedIds.length} email logs`}?`"
+        confirm-label="Delete selected"
+        :loading="saving"
+        @cancel="cancelDeleteSelected"
+        @confirm="confirmDeleteSelected"
+    />
 </template>

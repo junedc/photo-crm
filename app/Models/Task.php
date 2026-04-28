@@ -32,6 +32,7 @@ class Task extends Model
         'date_completed',
         'notification_dismissed_at',
         'remarks',
+        'attachments',
     ];
 
     protected function casts(): array
@@ -43,6 +44,7 @@ class Task extends Model
             'date_started' => 'date',
             'date_completed' => 'date',
             'notification_dismissed_at' => 'datetime',
+            'attachments' => 'array',
         ];
     }
 

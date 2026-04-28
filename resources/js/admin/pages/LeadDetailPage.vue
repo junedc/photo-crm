@@ -229,7 +229,7 @@ onMounted(() => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete lead?"
-        :message="`Delete lead for ${leadRecord.customer_name}? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${leadRecord.customer_name}?`"
         confirm-label="Delete lead"
         :loading="deleting"
         @cancel="showDeleteConfirm = false"

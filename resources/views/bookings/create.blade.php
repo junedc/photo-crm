@@ -260,7 +260,7 @@
                                 <label class="mb-2 block text-sm text-stone-300" for="event-type">Event type <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <select id="event-type" name="event_type" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_type') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('event_type'))>Select event type</option>
-                                    @foreach (['Wedding', 'Birthday', 'Anniversary', 'Others'] as $eventType)
+                                    @foreach (($eventTypes ?? []) as $eventType)
                                         <option value="{{ $eventType }}" @selected(old('event_type') === $eventType)>{{ $eventType }}</option>
                                     @endforeach
                                 </select>

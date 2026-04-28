@@ -248,7 +248,7 @@ const confirmRemoveAddOn = () => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete add-on?"
-        :message="`Delete add-on &quot;${addonRecord.name}&quot;? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${addonRecord.name}?`"
         confirm-label="Delete add-on"
         @cancel="showDeleteConfirm = false"
         @confirm="confirmRemoveAddOn"

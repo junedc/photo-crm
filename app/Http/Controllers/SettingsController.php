@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryItemCategory;
+use App\Models\EventType;
 use App\Models\ExpenseCategory;
+use App\Models\ServiceOffering;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
 use App\Models\TenantFont;
@@ -85,6 +87,8 @@ class SettingsController extends Controller
                     'maintenanceTaskStore' => route('settings.maintenance.tasks.store'),
                     'inventoryItemCategoryStore' => route('settings.inventory-item-categories.store'),
                     'expenseCategoryStore' => route('settings.expense-categories.store'),
+                    'serviceOfferingStore' => route('settings.service-offerings.store'),
+                    'eventTypeStore' => route('settings.event-types.store'),
                     'tenantStripeWebhook' => route('stripe.webhook'),
                     'logout' => route('logout'),
                 ],
@@ -102,11 +106,15 @@ class SettingsController extends Controller
                     TenantStatuses::SCOPE_EMAIL_TRACKING => $this->serializeStatusRecords($tenant, TenantStatuses::SCOPE_EMAIL_TRACKING),
                     'inventory_item_category' => $this->serializeInventoryItemCategories($tenant),
                     'expense_category' => $this->serializeExpenseCategories($tenant),
+                    'service_offered' => $this->serializeServiceOfferings($tenant),
+                    'event_type' => $this->serializeEventTypes($tenant),
                 ],
                 'maintenanceLabels' => [
                     ...TenantStatuses::scopes(),
                     'inventory_item_category' => 'Inventory Item Category',
                     'expense_category' => 'Expense Category',
+                    'service_offered' => 'Services Offered',
+                    'event_type' => 'Event Type',
                 ],
             ],
         ]);
@@ -484,6 +492,64 @@ class SettingsController extends Controller
         ]);
     }
 
+    public function storeServiceOffering(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $serviceOffering = ServiceOffering::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'name' => trim((string) $data['name']),
+        ], [
+            'sort_order' => $data['sort_order'] ?? $this->nextServiceOfferingSortOrder($tenant),
+        ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $serviceOffering->sort_order !== (int) $data['sort_order']) {
+            $serviceOffering->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
+
+        return response()->json([
+            'message' => 'Service offering added.',
+            'record' => $this->serializeServiceOffering($serviceOffering),
+        ]);
+    }
+
+    public function storeEventType(CurrentTenant $currentTenant, Request $request): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $eventType = EventType::query()->firstOrCreate([
+            'tenant_id' => $tenant->id,
+            'name' => trim((string) $data['name']),
+        ], [
+            'sort_order' => $data['sort_order'] ?? $this->nextEventTypeSortOrder($tenant),
+        ]);
+
+        if (filled($data['sort_order'] ?? null) && (int) $eventType->sort_order !== (int) $data['sort_order']) {
+            $eventType->forceFill([
+                'sort_order' => (int) $data['sort_order'],
+            ])->save();
+        }
+
+        return response()->json([
+            'message' => 'Event type added.',
+            'record' => $this->serializeEventType($eventType),
+        ]);
+    }
+
     public function updateExpenseCategory(CurrentTenant $currentTenant, Request $request, ExpenseCategory $expenseCategory): JsonResponse
     {
         $tenant = $currentTenant->get();
@@ -505,6 +571,48 @@ class SettingsController extends Controller
         ]);
     }
 
+    public function updateServiceOffering(CurrentTenant $currentTenant, Request $request, ServiceOffering $serviceOffering): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $serviceOffering->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $serviceOffering->update([
+            'name' => trim((string) $data['name']),
+            'sort_order' => (int) $data['sort_order'],
+        ]);
+
+        return response()->json([
+            'message' => 'Service offering updated.',
+            'record' => $this->serializeServiceOffering($serviceOffering->fresh()),
+        ]);
+    }
+
+    public function updateEventType(CurrentTenant $currentTenant, Request $request, EventType $eventType): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $eventType->tenant_id === $tenant->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $eventType->update([
+            'name' => trim((string) $data['name']),
+            'sort_order' => (int) $data['sort_order'],
+        ]);
+
+        return response()->json([
+            'message' => 'Event type updated.',
+            'record' => $this->serializeEventType($eventType->fresh()),
+        ]);
+    }
+
     public function destroyExpenseCategory(CurrentTenant $currentTenant, ExpenseCategory $expenseCategory): JsonResponse
     {
         $tenant = $currentTenant->get();
@@ -521,6 +629,48 @@ class SettingsController extends Controller
 
         return response()->json([
             'message' => 'Expense category deleted.',
+        ]);
+    }
+
+    public function destroyServiceOffering(CurrentTenant $currentTenant, ServiceOffering $serviceOffering): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $serviceOffering->tenant_id === $tenant->id, 404);
+
+        $serviceName = $serviceOffering->name;
+
+        TenantVendor::query()
+            ->where('tenant_id', $tenant->id)
+            ->get()
+            ->each(function (TenantVendor $vendor) use ($serviceName): void {
+                $services = collect($vendor->services_offered ?? [])
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter(fn ($value) => $value !== '' && strcasecmp($value, $serviceName) !== 0)
+                    ->values()
+                    ->all();
+
+                $vendor->update([
+                    'services_offered' => $services,
+                    'service_type' => $services[0] ?? null,
+                ]);
+            });
+
+        $serviceOffering->delete();
+
+        return response()->json([
+            'message' => 'Service offering deleted.',
+        ]);
+    }
+
+    public function destroyEventType(CurrentTenant $currentTenant, EventType $eventType): JsonResponse
+    {
+        $tenant = $currentTenant->get();
+        abort_unless($tenant instanceof Tenant && $eventType->tenant_id === $tenant->id, 404);
+
+        $eventType->delete();
+
+        return response()->json([
+            'message' => 'Event type deleted.',
         ]);
     }
 
@@ -927,6 +1077,64 @@ class SettingsController extends Controller
     private function nextExpenseCategorySortOrder(Tenant $tenant): int
     {
         return ((int) $tenant->expenseCategories()->max('sort_order')) + 1;
+    }
+
+    private function serializeEventTypes(?Tenant $tenant)
+    {
+        if (! $tenant instanceof Tenant) {
+            return collect();
+        }
+
+        return $tenant->eventTypes()
+            ->get()
+            ->map(fn (EventType $eventType): array => $this->serializeEventType($eventType))
+            ->values();
+    }
+
+    private function serializeEventType(EventType $eventType): array
+    {
+        return [
+            'id' => $eventType->id,
+            'name' => $eventType->name,
+            'sort_order' => (int) ($eventType->sort_order ?? 0),
+            'system' => false,
+            'update_url' => route('settings.event-types.update', $eventType),
+            'delete_url' => route('settings.event-types.destroy', $eventType),
+        ];
+    }
+
+    private function nextEventTypeSortOrder(Tenant $tenant): int
+    {
+        return ((int) $tenant->eventTypes()->max('sort_order')) + 1;
+    }
+
+    private function serializeServiceOfferings(?Tenant $tenant)
+    {
+        if (! $tenant instanceof Tenant) {
+            return collect();
+        }
+
+        return $tenant->serviceOfferings()
+            ->get()
+            ->map(fn (ServiceOffering $serviceOffering): array => $this->serializeServiceOffering($serviceOffering))
+            ->values();
+    }
+
+    private function serializeServiceOffering(ServiceOffering $serviceOffering): array
+    {
+        return [
+            'id' => $serviceOffering->id,
+            'name' => $serviceOffering->name,
+            'sort_order' => (int) ($serviceOffering->sort_order ?? 0),
+            'system' => false,
+            'update_url' => route('settings.service-offerings.update', $serviceOffering),
+            'delete_url' => route('settings.service-offerings.destroy', $serviceOffering),
+        ];
+    }
+
+    private function nextServiceOfferingSortOrder(Tenant $tenant): int
+    {
+        return ((int) $tenant->serviceOfferings()->max('sort_order')) + 1;
     }
 
     private function serializeTaskStatus(TaskStatus $status): array

@@ -1,5 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
+import { useWorkspaceCrud } from '../useWorkspaceCrud';
 
 const props = defineProps({
     data: {
@@ -9,6 +11,7 @@ const props = defineProps({
 });
 
 const bookingList = ref([...(props.data.bookings ?? [])]);
+const { deleting, deleteRecord } = useWorkspaceCrud();
 const bookings = computed(() => bookingList.value);
 const bookingSearch = ref('');
 const bookingStatusFilter = ref('all');
@@ -17,6 +20,10 @@ const bookingDateFrom = ref('');
 const bookingDateTo = ref('');
 const pagination = ref(props.data.pagination ?? { total: bookings.value.length, has_more: false, next_page: null });
 const loadingMore = ref(false);
+const bookingToDelete = ref(null);
+const blockedDeleteMessage = ref('');
+const showDeleteConfirm = ref(false);
+const showBlockedDeleteDialog = ref(false);
 let requestId = 0;
 
 const bookingKinds = computed(() => props.data.bookingKinds ?? []);
@@ -72,6 +79,50 @@ watch([bookingSearch, bookingStatusFilter, bookingKindFilter, bookingDateFrom, b
 });
 
 const loadMoreBookings = () => pagination.value.next_page && fetchBookings(pagination.value.next_page, true);
+
+const openBooking = (entry) => {
+    if (!entry?.show_url) {
+        return;
+    }
+
+    window.location.href = entry.show_url;
+};
+
+const askDeleteBooking = (entry) => {
+    if (entry.delete_blocked) {
+        blockedDeleteMessage.value = entry.delete_blocked_message || 'This booking cannot be deleted.';
+        showBlockedDeleteDialog.value = true;
+        return;
+    }
+
+    bookingToDelete.value = entry;
+    showDeleteConfirm.value = true;
+};
+
+const cancelDeleteBooking = () => {
+    bookingToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const closeBlockedDeleteDialog = () => {
+    blockedDeleteMessage.value = '';
+    showBlockedDeleteDialog.value = false;
+};
+
+const confirmDeleteBooking = async () => {
+    if (!bookingToDelete.value?.delete_url) {
+        return;
+    }
+
+    const id = bookingToDelete.value.id;
+    await deleteRecord({ url: bookingToDelete.value.delete_url });
+    bookingList.value = bookingList.value.filter((entry) => entry.id !== id);
+    pagination.value = {
+        ...pagination.value,
+        total: Math.max(Number(pagination.value.total ?? bookingList.value.length + 1) - 1, 0),
+    };
+    cancelDeleteBooking();
+};
 </script>
 
 <template>
@@ -125,22 +176,27 @@ const loadMoreBookings = () => pagination.value.next_page && fetchBookings(pagin
                     <input v-model="bookingDateTo" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
                 </label>
             </div>
-            <div class="mt-3 hidden grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
+            <div class="mt-3 hidden grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem_8rem] gap-3 px-2 text-[11px] uppercase tracking-[0.2em] text-stone-500 lg:grid">
                 <span>Booking</span>
                 <span>Type</span>
                 <span>Date</span>
                 <span>Package</span>
                 <span>Total</span>
                 <span>Status</span>
+                <span>Actions</span>
             </div>
         </div>
 
         <div class="max-h-[70vh] overflow-y-auto">
-            <a
+            <div
                 v-for="entry in bookings"
                 :key="entry.id"
-                :href="entry.show_url"
-                class="grid w-full gap-3 border-b border-white/10 px-3 py-3 text-left transition hover:bg-white/[0.03] lg:grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem] lg:items-center"
+                class="grid w-full cursor-pointer gap-3 border-b border-white/10 px-3 py-3 text-left transition hover:bg-white/[0.03] lg:grid-cols-[minmax(0,1.2fr)_9rem_8rem_9rem_9rem_7rem_8rem] lg:items-center"
+                role="link"
+                tabindex="0"
+                @click="openBooking(entry)"
+                @keydown.enter.prevent="openBooking(entry)"
+                @keydown.space.prevent="openBooking(entry)"
             >
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.display_name || entry.customer_name }}</p>
@@ -169,7 +225,13 @@ const loadMoreBookings = () => pagination.value.next_page && fetchBookings(pagin
                         {{ statusLabel(entry.status) }}
                     </span>
                 </div>
-            </a>
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="mb-1 w-full text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Actions</p>
+                    <button type="button" class="rounded-lg border border-rose-300/20 px-2.5 py-1 text-xs font-medium text-rose-200 transition hover:bg-rose-300/10" @click.stop="askDeleteBooking(entry)">
+                        Delete
+                    </button>
+                </div>
+            </div>
 
             <div v-if="!bookings.length" class="rounded-2xl border border-dashed border-white/15 bg-stone-950/40 px-4 py-5 text-sm text-stone-400">
                 No bookings match the current filters.
@@ -182,4 +244,25 @@ const loadMoreBookings = () => pagination.value.next_page && fetchBookings(pagin
             </div>
         </div>
     </section>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete booking?"
+        :message="`Are you sure you want to delete the record ${bookingToDelete?.quote_number || bookingToDelete?.display_name || 'this booking'}?`"
+        confirm-label="Delete booking"
+        :loading="deleting"
+        @cancel="cancelDeleteBooking"
+        @confirm="confirmDeleteBooking"
+    />
+
+    <ConfirmDialog
+        :open="showBlockedDeleteDialog"
+        title="Booking cannot be deleted"
+        :message="blockedDeleteMessage"
+        confirm-label="Close"
+        tone="info"
+        :hide-cancel="true"
+        @cancel="closeBlockedDeleteDialog"
+        @confirm="closeBlockedDeleteDialog"
+    />
 </template>

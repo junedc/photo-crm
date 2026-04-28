@@ -304,7 +304,7 @@ const confirmRemoveCampaign = () => {
     <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete campaign?"
-        :message="`Delete campaign &quot;${campaignRecord.subject}&quot;? This cannot be undone.`"
+        :message="`Are you sure you want to delete the record ${campaignRecord.subject}?`"
         confirm-label="Delete campaign"
         @cancel="showDeleteConfirm = false"
         @confirm="confirmRemoveCampaign"

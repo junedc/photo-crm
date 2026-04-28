@@ -21,6 +21,8 @@ import CustomersPage from './pages/CustomersPage.vue';
 import CustomerCreatePage from './pages/CustomerCreatePage.vue';
 import CustomerDetailPage from './pages/CustomerDetailPage.vue';
 import VendorsPage from './pages/VendorsPage.vue';
+import VendorCreatePage from './pages/VendorCreatePage.vue';
+import VendorDetailPage from './pages/VendorDetailPage.vue';
 import CampaignsPage from './pages/CampaignsPage.vue';
 import CampaignCreatePage from './pages/CampaignCreatePage.vue';
 import CampaignDetailPage from './pages/CampaignDetailPage.vue';
@@ -73,6 +75,8 @@ const pages = {
     'customers-create': CustomerCreatePage,
     'customers-detail': CustomerDetailPage,
     vendors: VendorsPage,
+    'vendors-create': VendorCreatePage,
+    'vendors-detail': VendorDetailPage,
     campaigns: CampaignsPage,
     'campaigns-create': CampaignCreatePage,
     'campaigns-detail': CampaignDetailPage,

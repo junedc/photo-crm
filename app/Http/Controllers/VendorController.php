@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\TenantVendor;
+use Illuminate\Validation\Rule;
 use App\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,8 @@ class VendorController extends Controller
                         ->orWhere('address', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('mobile_number', 'like', "%{$search}%")
-                        ->orWhere('service_type', 'like', "%{$search}%");
+                        ->orWhere('service_type', 'like', "%{$search}%")
+                        ->orWhere('services_offered', 'like', "%{$search}%");
                 });
             })
             ->orderBy('company_name')
@@ -50,9 +52,71 @@ class VendorController extends Controller
                 'routes' => [
                     ...$this->baseRoutes(),
                     'vendors' => route('vendors.index'),
+                    'create' => route('vendors.create'),
                     'store' => route('vendors.store'),
                 ],
+                'serviceOfferingOptions' => $tenant->serviceOfferings()
+                    ->get()
+                    ->map(fn ($serviceOffering) => [
+                        'id' => $serviceOffering->id,
+                        'name' => $serviceOffering->name,
+                    ])
+                    ->values()
+                    ->all(),
                 'vendors' => $vendors,
+            ],
+        ]);
+    }
+
+    public function create(CurrentTenant $currentTenant): View
+    {
+        $tenant = $this->requireTenant($currentTenant);
+
+        return view('admin.app', [
+            'page' => 'vendors-create',
+            'props' => [
+                'tenant' => $this->serializeTenant($tenant),
+                'routes' => [
+                    ...$this->baseRoutes(),
+                    'vendors' => route('vendors.index'),
+                    'create' => route('vendors.create'),
+                    'store' => route('vendors.store'),
+                ],
+                'serviceOfferingOptions' => $tenant->serviceOfferings()
+                    ->get()
+                    ->map(fn ($serviceOffering) => [
+                        'id' => $serviceOffering->id,
+                        'name' => $serviceOffering->name,
+                    ])
+                    ->values()
+                    ->all(),
+            ],
+        ]);
+    }
+
+    public function show(CurrentTenant $currentTenant, TenantVendor $vendor): View
+    {
+        $tenant = $this->requireTenant($currentTenant);
+        abort_unless($vendor->tenant_id === $tenant->id, 404);
+
+        return view('admin.app', [
+            'page' => 'vendors-detail',
+            'props' => [
+                'tenant' => $this->serializeTenant($tenant),
+                'routes' => [
+                    ...$this->baseRoutes(),
+                    'vendors' => route('vendors.index'),
+                    'create' => route('vendors.create'),
+                ],
+                'serviceOfferingOptions' => $tenant->serviceOfferings()
+                    ->get()
+                    ->map(fn ($serviceOffering) => [
+                        'id' => $serviceOffering->id,
+                        'name' => $serviceOffering->name,
+                    ])
+                    ->values()
+                    ->all(),
+                'vendor' => $this->serializeVendor($vendor),
             ],
         ]);
     }
@@ -63,7 +127,7 @@ class VendorController extends Controller
 
         $vendor = TenantVendor::query()->create([
             'tenant_id' => $tenant->id,
-            ...$this->validateVendor($request),
+            ...$this->validateVendor($request, $tenant),
         ]);
 
         return response()->json([
@@ -77,7 +141,7 @@ class VendorController extends Controller
         $tenant = $this->requireTenant($currentTenant);
         abort_unless($vendor->tenant_id === $tenant->id, 404);
 
-        $vendor->update($this->validateVendor($request));
+        $vendor->update($this->validateVendor($request, $tenant));
 
         return response()->json([
             'message' => 'Vendor updated.',
@@ -114,8 +178,10 @@ class VendorController extends Controller
         return $tenant;
     }
 
-    private function validateVendor(Request $request): array
+    private function validateVendor(Request $request, Tenant $tenant): array
     {
+        $serviceOfferingNames = $tenant->serviceOfferings()->pluck('name')->all();
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'company_name' => ['nullable', 'string', 'max:255'],
@@ -124,7 +190,7 @@ class VendorController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
             'services_offered' => ['required', 'array', 'min:1'],
-            'services_offered.*' => ['required', 'string', 'max:120'],
+            'services_offered.*' => ['required', 'string', 'max:120', Rule::in($serviceOfferingNames)],
         ]);
 
         $services = collect($data['services_offered'] ?? [])
@@ -165,6 +231,7 @@ class VendorController extends Controller
             'services_offered_label' => collect($vendor->services_offered ?? [])->map(fn ($service) => (string) $service)->filter()->implode(', '),
             'is_active' => (bool) $vendor->is_active,
             'email' => $vendor->email,
+            'show_url' => route('vendors.show', $vendor),
             'update_url' => route('vendors.update', $vendor),
             'delete_url' => route('vendors.destroy', $vendor),
         ];

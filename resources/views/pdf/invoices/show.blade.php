@@ -1,22 +1,34 @@
 <!DOCTYPE html>
-@php use App\Support\DateFormatter; @endphp
+@php
+    use App\Support\DateFormatter;
+
+    $currencyCode = strtoupper((string) ($tenant?->stripe_currency ?: 'AUD'));
+    $invoiceDescriptionLines = collect(preg_split('/\r\n|\r|\n/', (string) ($line_description ?? '')) ?: [])
+        ->map(fn ($line) => trim((string) $line))
+        ->filter()
+        ->values();
+    $invoiceDescriptionTitle = $invoiceDescriptionLines->first() ?: ($booking->package?->name ?: 'Booking');
+    $invoiceDescriptionDetails = $invoiceDescriptionLines->slice(1)->values();
+@endphp
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <title>Invoice {{ $invoice->invoice_number ?: 'Draft' }}</title>
     <style>
-        @page { margin: 30px 34px; }
-        body { font-family: DejaVu Sans, sans-serif; color: #111827; font-size: 11px; line-height: 1.45; }
+        @page { margin: 24px 28px; }
+        body { font-family: DejaVu Sans, sans-serif; color: #111827; font-size: 10px; line-height: 1.3; }
         table { width: 100%; border-collapse: collapse; }
         .header-title { font-size: 24px; font-weight: 700; letter-spacing: 0.18em; color: #111827; }
+        .logo-wrap { width: 78px; height: 78px; }
+        .logo-wrap img { max-width: 78px; max-height: 78px; object-fit: contain; }
         .business-block { text-align: right; font-size: 10.5px; line-height: 1.6; color: #374151; }
         .meta-table td { vertical-align: top; padding: 0; }
-        .right-meta-table td { padding: 0 0 8px; vertical-align: top; }
+        .right-meta-table td { padding: 0 0 6px; vertical-align: top; }
         .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b7280; }
-        .value { margin-top: 3px; font-size: 11px; color: #111827; font-weight: 600; }
-        .section-gap { height: 18px; }
-        .panel { border: 1px solid #d1d5db; padding: 12px; }
-        .items-table { margin-top: 12px; border: 1px solid #d1d5db; }
+        .value { margin-top: 2px; font-size: 10.5px; color: #111827; font-weight: 600; }
+        .section-gap { height: 10px; }
+        .panel { border: 1px solid #d1d5db; padding: 8px 9px; }
+        .items-table { margin-top: 8px; border: 1px solid #d1d5db; }
         .items-table th {
             background: #f3f4f6;
             color: #4b5563;
@@ -24,25 +36,34 @@
             letter-spacing: 0.16em;
             text-transform: uppercase;
             text-align: left;
-            padding: 9px 10px;
+            padding: 6px 8px;
             border-bottom: 1px solid #d1d5db;
         }
-        .items-table td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        .items-table td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         .items-table tr:last-child td { border-bottom: none; }
         .text-right { text-align: right; }
-        .summary-table { width: 42%; margin-left: auto; margin-top: 16px; }
-        .summary-table td { padding: 6px 0; font-size: 11px; }
+        .summary-table { width: 36%; margin-left: auto; margin-top: 10px; }
+        .summary-table td { padding: 4px 0; font-size: 10px; }
         .summary-label { color: #4b5563; }
         .summary-value { text-align: right; color: #111827; }
-        .grand-total td { border-top: 1px solid #111827; padding-top: 8px; font-weight: 700; font-size: 12px; }
+        .grand-total td { border-top: 1px solid #111827; padding-top: 7px; font-weight: 700; font-size: 11px; }
         .muted { color: #6b7280; }
         .status { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 10px; font-weight: 700; }
+        .item-name { font-weight: 700; color: #111827; }
+        .item-description { margin-top: 3px; color: #6b7280; line-height: 1.35; }
+        .item-meta-block { margin-top: 6px; }
+        .item-meta { margin-top: 2px; color: #4b5563; font-size: 9.5px; line-height: 1.3; }
     </style>
 </head>
 <body>
     <table>
         <tr>
             <td style="width: 56%; vertical-align: top;">
+                @if ($logo_data_uri)
+                    <div class="logo-wrap" style="margin-bottom: 10px;">
+                        <img src="{{ $logo_data_uri }}" alt="{{ $tenant?->name ?: 'Logo' }}">
+                    </div>
+                @endif
                 <div class="header-title">INVOICE</div>
                 <div style="margin-top: 10px;" class="muted">Generated invoice PDF</div>
             </td>
@@ -78,7 +99,7 @@
                 <div class="panel">
                     <div class="label">Bill To</div>
                     <div class="value">{{ $booking->customer_name ?: 'Not provided' }}</div>
-                    <div class="muted" style="margin-top: 4px;">{{ $booking->customer_email ?: 'No email' }}</div>
+                    <div class="muted" style="margin-top: 3px;">{{ $booking->customer_email ?: 'No email' }}</div>
                     <div class="muted">{{ $booking->customer_phone ?: 'No phone' }}</div>
                 </div>
             </td>
@@ -86,7 +107,19 @@
                 <div class="panel">
                     <div class="label">Booking</div>
                     <div class="value">{{ $booking->quote_number ?: 'No quote number' }}</div>
-                    <div class="muted" style="margin-top: 4px;">Event: {{ DateFormatter::date($booking->event_date) }}</div>
+                    <div class="muted" style="margin-top: 3px;">
+                        Event:
+                        {{ DateFormatter::date($booking->event_date) }}
+                        @if ($booking->start_time || $booking->end_time)
+                            <span style="margin-left: 8px;">
+                                Time:
+                                {{ DateFormatter::time($booking->start_time, 'Not set') }}
+                                @if ($booking->end_time)
+                                    - {{ DateFormatter::time($booking->end_time, 'Not set') }}
+                                @endif
+                            </span>
+                        @endif
+                    </div>
                     <div class="muted">Location: {{ $booking->event_location ?: 'Not provided' }}</div>
                 </div>
             </td>
@@ -97,19 +130,39 @@
         <thead>
             <tr>
                 <th>Description</th>
-                <th style="width: 18%;">Tax Rate</th>
-                <th style="width: 18%;" class="text-right">Amount</th>
+                <th style="width: 12%;" class="text-right">Quantity</th>
+                <th style="width: 14%;" class="text-right">Unit Price</th>
+                <th style="width: 12%;" class="text-right">Discount</th>
+                <th style="width: 14%;" class="text-right">Amount {{ $currencyCode }}</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td>
-                    <strong>{{ $booking->package?->name ?: 'Booking package' }}</strong>
-                    <div class="muted">{{ $line_description }}</div>
-                </td>
-                <td>{{ $tax_rate_label }}</td>
-                <td class="text-right">${{ number_format((float) $invoice->total_amount, 2) }}</td>
-            </tr>
+            @foreach ($invoice_items as $item)
+                <tr>
+                    <td>
+                        @if ($loop->first)
+                            <div class="item-name">{{ $invoiceDescriptionTitle }}</div>
+                            @foreach ($invoiceDescriptionDetails as $detailLine)
+                                <div class="item-description">{{ $detailLine }}</div>
+                            @endforeach
+                        @else
+                            <div class="item-name">{{ $item['name'] }}</div>
+                            @if (($item['type'] ?? null) !== 'add_on')
+                                @foreach (($item['description_lines'] ?? []) as $detailLine)
+                                    <div class="item-description">{{ $detailLine }}</div>
+                                @endforeach
+                            @endif
+                            @if (($item['type'] ?? null) !== 'add_on' && empty($item['description_lines'] ?? []) && filled($item['description'] ?? null))
+                                <div class="item-description">{{ $item['description'] ?: $line_description }}</div>
+                            @endif
+                        @endif
+                    </td>
+                    <td class="text-right">{{ number_format((float) $item['quantity'], 2) }}</td>
+                    <td class="text-right">${{ number_format((float) $item['price'], 2) }}</td>
+                    <td class="text-right">{{ $item['discount_label'] === 'No discount' ? '-' : $item['discount_label'] }}</td>
+                    <td class="text-right">${{ number_format((float) $item['amount'], 2) }}</td>
+                </tr>
+            @endforeach
         </tbody>
     </table>
 

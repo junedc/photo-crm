@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 import { firstError } from '../validation';
 
@@ -16,6 +17,8 @@ const roles = computed(() => props.data.roles ?? []);
 const editingUser = ref(null);
 const showModal = ref(false);
 const form = ref({ name: '', email: '', role_id: '' });
+const userToDelete = ref(null);
+const showDeleteConfirm = ref(false);
 
 const openCreate = () => {
     editingUser.value = null;
@@ -61,9 +64,24 @@ const saveUser = async () => {
     closeModal();
 };
 
-const removeUser = async (user) => {
-    await deleteRecord({ url: user.delete_url });
-    users.value = users.value.filter((entry) => entry.id !== user.id);
+const askRemoveUser = (user) => {
+    userToDelete.value = user;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveUser = () => {
+    userToDelete.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeUser = async () => {
+    if (!userToDelete.value?.delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: userToDelete.value.delete_url });
+    users.value = users.value.filter((entry) => entry.id !== userToDelete.value.id);
+    cancelRemoveUser();
 };
 </script>
 
@@ -101,7 +119,7 @@ const removeUser = async (user) => {
                     <span class="text-sm text-stone-400">{{ user.created_at }}</span>
                     <div class="flex items-center gap-2">
                         <button type="button" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/5" @click="openEdit(user)">Edit</button>
-                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeUser(user)">Delete</button>
+                        <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveUser(user)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -146,4 +164,14 @@ const removeUser = async (user) => {
             </form>
         </div>
     </transition>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete user?"
+        :message="`Are you sure you want to delete the record ${userToDelete?.name || userToDelete?.email || 'this user'}?`"
+        confirm-label="Delete user"
+        :loading="saving"
+        @cancel="cancelRemoveUser"
+        @confirm="removeUser"
+    />
 </template>

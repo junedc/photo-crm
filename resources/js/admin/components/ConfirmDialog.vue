@@ -28,6 +28,10 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    hideCancel: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 defineEmits(['cancel', 'confirm']);
@@ -50,7 +54,7 @@ defineEmits(['cancel', 'confirm']);
                     </div>
 
                     <div class="flex flex-wrap justify-end gap-3 border-t border-white/10 bg-slate-950/30 px-5 py-4">
-                        <button type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loading" @click="$emit('cancel')">
+                        <button v-if="!hideCancel" type="button" class="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loading" @click="$emit('cancel')">
                             {{ cancelLabel }}
                         </button>
                         <button type="button" class="rounded-xl px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60" :class="tone === 'danger' ? 'bg-rose-300 text-slate-950 hover:bg-rose-200' : 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'" :disabled="loading" @click="$emit('confirm')">

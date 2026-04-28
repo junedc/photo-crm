@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useWorkspaceCrud } from '../useWorkspaceCrud';
 
 const props = defineProps({
@@ -18,6 +19,8 @@ const guestForm = ref({
     email: '',
     role_id: '',
 });
+const guestToRemove = ref(null);
+const showDeleteConfirm = ref(false);
 const guestRoleOptions = computed(() => roles.value.filter((role) => (role.screen_access?.length ?? 0) > 0));
 const guestLoginUrl = computed(() => props.data.routes.login ?? '');
 
@@ -60,9 +63,24 @@ const grantGuestAccess = async () => {
     };
 };
 
-const removeGuestAccess = async (guest) => {
-    await deleteRecord({ url: guest.guest_delete_url });
-    guestUsers.value = guestUsers.value.filter((entry) => entry.id !== guest.id);
+const askRemoveGuestAccess = (guest) => {
+    guestToRemove.value = guest;
+    showDeleteConfirm.value = true;
+};
+
+const cancelRemoveGuestAccess = () => {
+    guestToRemove.value = null;
+    showDeleteConfirm.value = false;
+};
+
+const removeGuestAccess = async () => {
+    if (!guestToRemove.value?.guest_delete_url) {
+        return;
+    }
+
+    await deleteRecord({ url: guestToRemove.value.guest_delete_url });
+    guestUsers.value = guestUsers.value.filter((entry) => entry.id !== guestToRemove.value.id);
+    cancelRemoveGuestAccess();
 };
 
 const copyGuestLoginUrl = async () => {
@@ -194,7 +212,7 @@ const copyGuestLoginUrl = async () => {
                         </div>
                         <p class="text-sm text-stone-300">{{ guest.created_at }}</p>
                         <div class="flex justify-end">
-                            <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="removeGuestAccess(guest)">
+                            <button type="button" class="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/10" @click="askRemoveGuestAccess(guest)">
                                 Remove
                             </button>
                         </div>
@@ -204,4 +222,14 @@ const copyGuestLoginUrl = async () => {
             </section>
         </div>
     </section>
+
+    <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Remove guest access?"
+        :message="`Are you sure you want to delete the record ${guestToRemove?.name || guestToRemove?.email || 'this guest access'}?`"
+        confirm-label="Remove access"
+        :loading="saving"
+        @cancel="cancelRemoveGuestAccess"
+        @confirm="removeGuestAccess"
+    />
 </template>

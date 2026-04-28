@@ -61,17 +61,11 @@ const applyDiscount = (amount, discountType, discountValue) => {
     return numericAmount * (1 - (clampDiscountPercentage(discountValue) / 100));
 };
 const itemFinalPrice = (item) => formatMoney(applyDiscount(item.price_label, itemDiscountType(item), itemDiscountValue(item)));
-const combinedOptionalItems = computed(() => [
-    ...equipmentOptions.value.map((item) => ({
-        ...item,
-        selection_type: 'equipment',
-        selection_key: 'equipment_ids',
-        type_label: 'Equipment',
-        details_label: item.category || 'Equipment',
-        price_label: item.daily_rate,
-        selected: (createForm.value.equipment_ids ?? []).includes(item.id),
-    })),
-    ...addOnOptions.value.map((item) => ({
+const packageIncludedAddOnIds = computed(() => new Set((selectedPackage.value?.add_on_ids ?? []).map((id) => Number(id))));
+const availableAddOnItems = computed(() =>
+    addOnOptions.value
+        .filter((item) => !packageIncludedAddOnIds.value.has(Number(item.id)))
+        .map((item) => ({
         ...item,
         selection_type: 'add_on',
         selection_key: 'add_on_ids',
@@ -80,8 +74,8 @@ const combinedOptionalItems = computed(() => [
         price_label: item.price,
         selected: (createForm.value.add_on_ids ?? []).includes(item.id),
     })),
-]);
-const availableDiscountOptions = computed(() => {
+);
+const packageDiscountOptions = computed(() => {
     const packageId = Number(createForm.value.package_id ?? 0);
     const equipmentIds = new Set((createForm.value.equipment_ids ?? []).map((id) => Number(id)));
 
@@ -91,6 +85,17 @@ const availableDiscountOptions = computed(() => {
 
         return packageMatch || equipmentMatch;
     });
+});
+const availableDiscountOptions = computed(() => {
+    if (createForm.value.booking_discount_source === 'global') {
+        return discountOptions.value;
+    }
+
+    if (createForm.value.booking_discount_source === 'package') {
+        return packageDiscountOptions.value;
+    }
+
+    return [];
 });
 const selectedDiscount = computed(() =>
     availableDiscountOptions.value.find((entry) => String(entry.id) === String(createForm.value.discount_id ?? '')) ?? null,
@@ -103,9 +108,27 @@ const bookingKindLabelMap = {
 };
 
 const isEntryBooking = computed(() => createForm.value.booking_kind === 'market_stall' || createForm.value.booking_kind === 'sponsored');
+const isSponsoredBooking = computed(() => createForm.value.booking_kind === 'sponsored');
+const requiresContactFields = computed(() => !isEntryBooking.value || isSponsoredBooking.value || createForm.value.booking_kind === 'market_stall');
 const bookingKindLabel = (kind) => bookingKindLabelMap[kind] ?? 'Customer Booking';
 const packageLabel = (entry) => `${entry.name} - $${entry.display_price}`;
 const addOnSummary = (addOn) => [addOn.product_code, addOn.duration].filter(Boolean).join(' - ');
+const formatTimeDisplay = (value) => {
+    if (!value || !/^\d{2}:\d{2}$/.test(value)) {
+        return value || '';
+    }
+
+    const [hours, minutes] = value.split(':').map(Number);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+        return value;
+    }
+
+    const suffix = hours >= 12 ? 'PM' : 'AM';
+    const normalizedHour = hours % 12 || 12;
+
+    return `${String(normalizedHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${suffix}`;
+};
 const setItemDiscountType = (item, value) => {
     const key = itemDiscountTypeMapKey(item.selection_type);
     const normalizedValue = value === 'amount' ? 'amount' : 'percentage';
@@ -194,6 +217,9 @@ const resetCreateForm = () => {
         event_location: '',
         notes: '',
         discount_id: '',
+        booking_discount_source: 'package',
+        booking_discount_type: 'amount',
+        booking_discount_value: '',
         equipment_ids: [],
         add_on_ids: [],
         equipment_discount_types: {},
@@ -295,6 +321,8 @@ watch(() => createForm.value.package_id, () => {
     syncPackageTimingDefaults();
     syncDurationFromPackageTiming();
     syncEndTime();
+    createForm.value.add_on_ids = (createForm.value.add_on_ids ?? [])
+        .filter((id) => !packageIncludedAddOnIds.value.has(Number(id)));
 
     if (!availableDiscountOptions.value.some((entry) => String(entry.id) === String(createForm.value.discount_id ?? ''))) {
         createForm.value.discount_id = '';
@@ -306,6 +334,20 @@ watch(() => createForm.value.equipment_ids, () => {
         createForm.value.discount_id = '';
     }
 }, { deep: true });
+
+watch(() => createForm.value.booking_discount_source, (source) => {
+    if (source === 'custom' || source === 'none') {
+        createForm.value.discount_id = '';
+    }
+
+    if (source === 'package' || source === 'global' || source === 'none') {
+        createForm.value.booking_discount_value = '';
+    }
+
+    if (!availableDiscountOptions.value.some((entry) => String(entry.id) === String(createForm.value.discount_id ?? ''))) {
+        createForm.value.discount_id = '';
+    }
+});
 
 watch(() => createForm.value.package_hourly_price_id, () => {
     syncDurationFromPackageTiming();
@@ -349,15 +391,11 @@ const createBooking = async () => {
         errors[isEntryBooking.value ? 'entry_name' : 'customer_name'] = requiredMessage(subjectLabel);
     }
 
-    if (isEntryBooking.value && isBlank(createForm.value.customer_name)) {
-        errors.customer_name = requiredMessage('Invoice contact name');
-    }
-
-    if (isBlank(createForm.value.customer_email)) {
+    if (requiresContactFields.value && isBlank(createForm.value.customer_email)) {
         errors.customer_email = requiredMessage('Email');
     }
 
-    if (isBlank(createForm.value.customer_phone)) {
+    if (requiresContactFields.value && isBlank(createForm.value.customer_phone)) {
         errors.customer_phone = requiredMessage('Phone');
     }
 
@@ -422,15 +460,11 @@ const validateCreateWizardStep = (step) => {
             errors[subjectField] = requiredMessage(subjectLabel);
         }
 
-        if (isEntryBooking.value && isBlank(createForm.value.customer_name)) {
-            errors.customer_name = requiredMessage('Invoice contact name');
-        }
-
-        if (isBlank(createForm.value.customer_email)) {
+        if (requiresContactFields.value && isBlank(createForm.value.customer_email)) {
             errors.customer_email = requiredMessage('Email');
         }
 
-        if (isBlank(createForm.value.customer_phone)) {
+        if (requiresContactFields.value && isBlank(createForm.value.customer_phone)) {
             errors.customer_phone = requiredMessage('Phone');
         }
 
@@ -470,7 +504,7 @@ const validateCreateWizardStep = (step) => {
     createErrors.value = errors;
 
     const stepOneFields = isEntryBooking.value
-        ? [subjectField, 'customer_name', 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time']
+        ? [subjectField, ...(requiresContactFields.value ? ['customer_email', 'customer_phone'] : []), 'event_date', 'venue', 'start_time', 'total_hours', 'end_time']
         : [subjectField, 'customer_email', 'customer_phone', 'event_date', 'venue', 'start_time', 'total_hours', 'end_time', 'event_type'];
 
     const relevantFieldsByStep = {
@@ -562,6 +596,19 @@ const blockCreateSubmit = () => {};
                     <textarea v-model="createForm.entry_description" rows="2" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" />
                 </div>
 
+                <template v-if="isEntryBooking">
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Email Address</label>
+                        <input v-model="createForm.customer_email" type="email" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'customer_email') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(createValidationErrors, 'customer_email')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(createValidationErrors, 'customer_email') }}</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Mobile No</label>
+                        <input v-model="createForm.customer_phone" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'customer_phone') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(createValidationErrors, 'customer_phone')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(createValidationErrors, 'customer_phone') }}</p>
+                    </div>
+                </template>
+
                 <template v-if="!isEntryBooking">
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Email</label>
@@ -588,24 +635,6 @@ const blockCreateSubmit = () => {};
                     </select>
                 </div>
 
-                <div v-if="isEntryBooking" class="sm:col-span-2 xl:col-span-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Invoice Contact</p>
-                    <div class="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <div class="sm:col-span-2">
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Contact Name</label>
-                            <input v-model="createForm.customer_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'customer_name') ? 'border-rose-300/60' : ''">
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Email</label>
-                            <input v-model="createForm.customer_email" type="email" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'customer_email') ? 'border-rose-300/60' : ''">
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Phone</label>
-                            <input v-model="createForm.customer_phone" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'customer_phone') ? 'border-rose-300/60' : ''">
-                        </div>
-                    </div>
-                </div>
-
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Date</label>
                     <input v-model="createForm.event_date" type="date" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_date') ? 'border-rose-300/60' : ''" @click="openDatePicker" @keydown.prevent>
@@ -620,7 +649,7 @@ const blockCreateSubmit = () => {};
                 </div>
                 <div>
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">End Hour</label>
-                    <input :value="createForm.end_time" readonly type="text" class="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none" :class="firstError(createValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
+                    <input :value="formatTimeDisplay(createForm.end_time)" readonly type="text" class="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none" :class="firstError(createValidationErrors, 'end_time') ? 'border-rose-300/60' : ''">
                 </div>
             </div>
         </section>
@@ -647,53 +676,64 @@ const blockCreateSubmit = () => {};
                         </option>
                     </select>
                 </div>
-                <div class="mt-4">
-                    <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Discount</label>
-                    <select v-model="createForm.discount_id" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50">
-                        <option value="">No discount</option>
-                        <option v-for="discount in availableDiscountOptions" :key="discount.id" :value="String(discount.id)">
-                            {{ discountLabel(discount) }} - {{ discountValueLabel(discount) }}
-                        </option>
-                    </select>
+                <div class="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                    <p class="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Discount Source</p>
+                    <div class="mt-3 grid gap-3 lg:grid-cols-[12rem_minmax(0,1fr)]">
+                        <select v-model="createForm.booking_discount_source" class="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                            <option value="package">Package discount</option>
+                            <option value="global">Global discount</option>
+                            <option value="custom">Custom discount</option>
+                            <option value="none">No discount</option>
+                        </select>
+                        <select v-if="createForm.booking_discount_source === 'package' || createForm.booking_discount_source === 'global'" v-model="createForm.discount_id" class="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                            <option value="">No discount</option>
+                            <option v-for="discount in availableDiscountOptions" :key="discount.id" :value="String(discount.id)">
+                                {{ discountLabel(discount) }} - {{ discountValueLabel(discount) }}
+                            </option>
+                        </select>
+                        <select v-if="createForm.booking_discount_source === 'custom'" v-model="createForm.booking_discount_type" class="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                            <option value="percentage">Percentage</option>
+                            <option value="amount">Price</option>
+                        </select>
+                        <input v-if="createForm.booking_discount_source === 'custom'" v-model="createForm.booking_discount_value" type="number" min="0" :max="createForm.booking_discount_type === 'percentage' ? 100 : undefined" step="0.01" class="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50" :placeholder="createForm.booking_discount_type === 'percentage' ? '0.00%' : '$0.00'">
+                    </div>
                 </div>
             </div>
         </section>
 
         <section v-else-if="createWizardStep === 3" class="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div class="flex flex-wrap items-center gap-3">
-                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Optional Extras</p>
+                <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Optional Add-Ons</p>
                 <span class="text-stone-600">-</span>
-                <h4 class="text-sm font-semibold text-white">Equipment and add-ons</h4>
+                <h4 class="text-sm font-semibold text-white">Additional add-ons</h4>
             </div>
             <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div class="flex items-center justify-between gap-3">
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Assign Items</p>
-                    <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ (createForm.equipment_ids?.length ?? 0) + (createForm.add_on_ids?.length ?? 0) }}</span>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Assign Add-Ons</p>
+                    <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ createForm.add_on_ids?.length ?? 0 }}</span>
                 </div>
                 <div class="mt-4 overflow-hidden rounded-xl border border-white/10">
-                    <div class="grid grid-cols-[2.2rem_6.5rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                    <div class="grid grid-cols-[2.2rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                         <span></span>
-                        <span>Type</span>
-                        <span>Item</span>
+                        <span>Add-On</span>
                         <span>Details</span>
                         <span>Price</span>
                         <span>Discount</span>
                         <span>Final</span>
                     </div>
                     <button
-                        v-for="item in combinedOptionalItems"
+                        v-for="item in availableAddOnItems"
                         :key="`${item.selection_type}-${item.id}`"
                         type="button"
-                        class="grid w-full grid-cols-[2.2rem_6.5rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 border-t border-white/10 px-3 py-2.5 text-left text-sm transition"
-                        :class="item.selected ? (item.selection_type === 'equipment' ? 'bg-cyan-300/10 text-white' : 'bg-rose-300/10 text-white') : 'text-stone-300 hover:bg-white/[0.03]'"
+                        class="grid w-full grid-cols-[2.2rem_minmax(0,1.2fr)_9rem_6rem_9.5rem_7rem] gap-3 border-t border-white/10 px-3 py-2.5 text-left text-sm transition"
+                        :class="item.selected ? 'bg-rose-300/10 text-white' : 'text-stone-300 hover:bg-white/[0.03]'"
                         @click="toggleMultiSelect(item.selection_key, item.id)"
                     >
                         <span class="flex items-center justify-center">
-                            <span class="flex h-5 w-5 items-center justify-center rounded-md border text-[11px] font-semibold" :class="item.selected ? (item.selection_type === 'equipment' ? 'border-cyan-300/40 bg-cyan-300/20 text-cyan-100' : 'border-rose-300/40 bg-rose-300/20 text-rose-100') : 'border-white/10 text-stone-500'">
+                            <span class="flex h-5 w-5 items-center justify-center rounded-md border text-[11px] font-semibold" :class="item.selected ? 'border-rose-300/40 bg-rose-300/20 text-rose-100' : 'border-white/10 text-stone-500'">
                                 {{ item.selected ? '✓' : '' }}
                             </span>
                         </span>
-                        <span>{{ item.type_label }}</span>
                         <span class="truncate font-medium">{{ item.name }}</span>
                         <span>{{ item.details_label }}</span>
                         <span>${{ item.price_label }}</span>
@@ -724,7 +764,7 @@ const blockCreateSubmit = () => {};
                         </span>
                         <span>${{ itemFinalPrice(item) }}</span>
                     </button>
-                    <p v-if="!combinedOptionalItems.length" class="px-3 py-3 text-sm text-stone-400">No equipment or add-ons available.</p>
+                    <p v-if="!availableAddOnItems.length" class="px-3 py-3 text-sm text-stone-400">No additional add-ons available for the selected package.</p>
                 </div>
             </div>
         </section>
@@ -738,6 +778,7 @@ const blockCreateSubmit = () => {};
             <div class="mb-14">
                 <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Location</label>
                 <input v-model="createForm.event_location" data-google-address="true" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'event_location') ? 'border-rose-300/60' : ''">
+                <p v-if="firstError(createValidationErrors, 'event_location')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(createValidationErrors, 'event_location') }}</p>
             </div>
             <div>
                 <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Notes</label>
@@ -766,8 +807,8 @@ const blockCreateSubmit = () => {};
                     <div class="mt-3 space-y-2 text-sm text-stone-300">
                         <p><span class="text-stone-500">Date:</span> <span class="text-white">{{ createForm.event_date || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Venue:</span> <span class="text-white">{{ createForm.venue || 'Not entered' }}</span></p>
-                        <p><span class="text-stone-500">Start:</span> <span class="text-white">{{ createForm.start_time || 'Not entered' }}</span></p>
-                        <p><span class="text-stone-500">End:</span> <span class="text-white">{{ createForm.end_time || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">Start:</span> <span class="text-white">{{ formatTimeDisplay(createForm.start_time) || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">End:</span> <span class="text-white">{{ formatTimeDisplay(createForm.end_time) || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Duration:</span> <span class="text-white">{{ createForm.total_hours || '0.00' }} hrs</span></p>
                     </div>
                 </div>
@@ -776,7 +817,9 @@ const blockCreateSubmit = () => {};
                     <div class="mt-3 space-y-2 text-sm text-stone-300">
                         <p><span class="text-stone-500">Selected:</span> <span class="text-white">{{ selectedPackage?.name || 'No package selected' }}</span></p>
                         <p v-if="selectedHourlyPrice"><span class="text-stone-500">Timing:</span> <span class="text-white">{{ Number(selectedHourlyPrice.hours).toFixed(2) }} hrs - ${{ selectedHourlyPrice.price }}</span></p>
-                        <p><span class="text-stone-500">Discount:</span> <span class="text-white">{{ selectedDiscount ? `${discountLabel(selectedDiscount)} - ${discountValueLabel(selectedDiscount)}` : 'No discount' }}</span></p>
+                        <p><span class="text-stone-500">Discount source:</span> <span class="text-white">{{ createForm.booking_discount_source === 'global' ? 'Global discount' : createForm.booking_discount_source === 'custom' ? 'Custom discount' : createForm.booking_discount_source === 'none' ? 'No discount' : 'Package discount' }}</span></p>
+                        <p v-if="createForm.booking_discount_source === 'package' || createForm.booking_discount_source === 'global'"><span class="text-stone-500">Saved discount:</span> <span class="text-white">{{ selectedDiscount ? `${discountLabel(selectedDiscount)} - ${discountValueLabel(selectedDiscount)}` : 'No saved discount' }}</span></p>
+                        <p v-if="createForm.booking_discount_source === 'custom'"><span class="text-stone-500">Booking discount:</span> <span class="text-white">{{ createForm.booking_discount_value ? (createForm.booking_discount_type === 'percentage' ? `${formatMoney(createForm.booking_discount_value)}%` : `$${formatMoney(createForm.booking_discount_value)}`) : 'No booking discount' }}</span></p>
                     </div>
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -786,73 +829,49 @@ const blockCreateSubmit = () => {};
                         <p><span class="text-stone-500">Notes:</span> <span class="text-white">{{ createForm.notes || 'No notes added' }}</span></p>
                     </div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Quote Email</p>
-                    <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
-                        <input v-model="createForm.send_admin_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
-                        <span>
-                            <span class="block font-semibold text-white">Send new quote request email to admin</span>
-                            <span class="mt-1 block text-xs text-stone-400">Turn this off when you do not want the internal new quote request notification.</span>
-                        </span>
-                    </label>
-                    <label class="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
-                        <input v-model="createForm.send_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
-                        <span>
-                            <span class="block font-semibold text-white">Send quote email to customer</span>
-                            <span class="mt-1 block text-xs text-stone-400">Turn this off when you only want to save the booking internally.</span>
-                        </span>
-                    </label>
-                </div>
-            </div>
-            <div class="grid gap-4 lg:grid-cols-2">
-                <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Equipment</p>
-                        <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ selectedEquipment.length }}</span>
+                <div class="grid gap-4 lg:grid-cols-2 lg:col-span-2">
+                    <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Quote Email</p>
+                        <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
+                            <input v-model="createForm.send_admin_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
+                            <span>
+                                <span class="block font-semibold text-white">Send new quote request email to admin</span>
+                                <span class="mt-1 block text-xs text-stone-400">Turn this off when you do not want the internal new quote request notification.</span>
+                            </span>
+                        </label>
+                        <label class="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-stone-300 transition hover:bg-white/[0.04]">
+                            <input v-model="createForm.send_quote_email" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-950 text-rose-300 focus:ring-rose-300/40">
+                            <span>
+                                <span class="block font-semibold text-white">Send quote email to customer</span>
+                                <span class="mt-1 block text-xs text-stone-400">Turn this off when you only want to save the booking internally.</span>
+                            </span>
+                        </label>
                     </div>
-                    <div class="mt-3 overflow-hidden rounded-xl border border-white/10">
-                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                            <span>Item</span>
-                            <span>Category</span>
-                            <span>Price</span>
-                            <span>Discount</span>
-                            <span>Final</span>
+
+                    <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Add-Ons</p>
+                            <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ selectedAddOns.length }}</span>
                         </div>
-                        <div v-if="selectedEquipment.length">
-                            <div v-for="item in selectedEquipment" :key="`summary-equipment-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
-                                <span class="truncate text-white">{{ item.name }}</span>
-                                <span>{{ item.category || 'Equipment' }}</span>
-                                <span>${{ item.daily_rate }}</span>
-                                <span>{{ itemDiscountLabel('equipment', item.id) }}</span>
-                                <span>${{ formatMoney(applyDiscount(item.daily_rate, createForm.equipment_discount_types?.[String(item.id)] ?? 'percentage', createForm.equipment_discount_values?.[String(item.id)] ?? 0)) }}</span>
+                        <div class="mt-3 overflow-hidden rounded-xl border border-white/10">
+                            <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                                <span>Item</span>
+                                <span>Details</span>
+                                <span>Price</span>
+                                <span>Discount</span>
+                                <span>Final</span>
                             </div>
-                        </div>
-                        <p v-else class="px-3 py-3 text-sm text-stone-400">No equipment selected.</p>
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">Add-Ons</p>
-                        <span class="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-stone-300">{{ selectedAddOns.length }}</span>
-                    </div>
-                    <div class="mt-3 overflow-hidden rounded-xl border border-white/10">
-                        <div class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                            <span>Item</span>
-                            <span>Details</span>
-                            <span>Price</span>
-                            <span>Discount</span>
-                            <span>Final</span>
-                        </div>
-                        <div v-if="selectedAddOns.length">
-                            <div v-for="item in selectedAddOns" :key="`summary-addon-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
-                                <span class="truncate text-white">{{ item.name }}</span>
-                                <span>{{ addOnSummary(item) || 'Add-On' }}</span>
-                                <span>${{ item.price }}</span>
-                                <span>{{ itemDiscountLabel('add_on', item.id) }}</span>
-                                <span>${{ formatMoney(applyDiscount(item.price, createForm.add_on_discount_types?.[String(item.id)] ?? 'percentage', createForm.add_on_discount_values?.[String(item.id)] ?? 0)) }}</span>
+                            <div v-if="selectedAddOns.length">
+                                <div v-for="item in selectedAddOns" :key="`summary-addon-${item.id}`" class="grid grid-cols-[minmax(0,1fr)_8rem_6rem_7rem_7rem] gap-3 border-t border-white/10 px-3 py-2 text-sm text-stone-300">
+                                    <span class="truncate text-white">{{ item.name }}</span>
+                                    <span>{{ addOnSummary(item) || 'Add-On' }}</span>
+                                    <span>${{ item.price }}</span>
+                                    <span>{{ itemDiscountLabel('add_on', item.id) }}</span>
+                                    <span>${{ formatMoney(applyDiscount(item.price, createForm.add_on_discount_types?.[String(item.id)] ?? 'percentage', createForm.add_on_discount_values?.[String(item.id)] ?? 0)) }}</span>
+                                </div>
                             </div>
+                            <p v-else class="px-3 py-3 text-sm text-stone-400">No add-ons selected.</p>
                         </div>
-                        <p v-else class="px-3 py-3 text-sm text-stone-400">No add-ons selected.</p>
                     </div>
                 </div>
             </div>

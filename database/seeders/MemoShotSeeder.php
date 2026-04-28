@@ -79,6 +79,8 @@ class MemoShotSeeder extends Seeder
         TenantStatusSeeder::seedTenant($tenant);
         Tenant::seedInventoryItemCategories($tenant);
         Tenant::seedExpenseCategories($tenant);
+        Tenant::seedServiceOfferings($tenant);
+        Tenant::seedEventTypes($tenant);
 
         $packageStatusIds = collect(TenantStatuses::records($tenant, TenantStatuses::SCOPE_PACKAGE))
             ->mapWithKeys(fn (array $status): array => [$status['name'] => $status['id']]);
