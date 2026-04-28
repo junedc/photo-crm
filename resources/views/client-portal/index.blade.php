@@ -139,15 +139,28 @@
                                                     </div>
                                                 </dl>
 
-                                                @if (filled($task->remarks))
-                                                    <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                                                        <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Instructions</p>
-                                                        <p class="mt-2 text-sm leading-6 text-stone-200">{{ $task->remarks }}</p>
-                                                    </div>
-                                                @endif
+                                            @if (filled($task->remarks))
+                                                <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+                                                    <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Instructions</p>
+                                                    <p class="mt-2 text-sm leading-6 text-stone-200">{{ $task->remarks }}</p>
+                                                </div>
+                                            @endif
 
-                                                @if ($task->clientPortalUpdates->isNotEmpty())
-                                                    <div class="mt-3 space-y-2">
+                                            @if (! empty($task->attachments))
+                                                <div class="mt-3 space-y-2">
+                                                    <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Files From Team</p>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        @foreach ($task->attachments as $attachment)
+                                                            <a href="{{ $attachment['url'] ?? '#' }}" target="_blank" rel="noreferrer" class="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-300/15">
+                                                                {{ $attachment['name'] ?? 'Attachment' }}
+                                                            </a>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                            @endif
+
+                                            @if ($task->clientPortalUpdates->isNotEmpty())
+                                                <div class="mt-3 space-y-2">
                                                         <p class="text-[11px] uppercase tracking-[0.28em] text-stone-400">Your recent updates</p>
                                                         @foreach ($task->clientPortalUpdates->take(3) as $update)
                                                             <div class="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">

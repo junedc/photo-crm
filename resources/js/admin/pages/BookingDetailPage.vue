@@ -96,12 +96,14 @@ const buildTaskForm = (task = null) => ({
     date_started: task?.date_started ?? '',
     date_completed: task?.date_completed ?? '',
     remarks: task?.remarks ?? '',
+    attachments: [],
 });
 
 const editForm = ref(buildEditForm(props.data.booking));
 const editingTask = ref(null);
 const showTaskEditor = ref(false);
 const taskForm = ref(buildTaskForm());
+const taskAttachmentInput = ref(null);
 const showExpenseEditor = ref(false);
 const showExpenseDetails = ref(false);
 const selectedExpense = ref(null);
@@ -969,6 +971,10 @@ const cancelTaskEdit = () => {
     showTaskEditor.value = false;
     taskErrors.value = {};
     taskForm.value = buildTaskForm();
+
+    if (taskAttachmentInput.value) {
+        taskAttachmentInput.value.value = '';
+    }
 };
 
 const saveTask = async () => {
@@ -999,6 +1005,9 @@ const saveTask = async () => {
         formData.append('date_started', taskForm.value.date_started ?? '');
         formData.append('date_completed', taskForm.value.date_completed ?? '');
         formData.append('remarks', taskForm.value.remarks ?? '');
+        (taskForm.value.attachments ?? []).forEach((file) => {
+            formData.append('attachments[]', file);
+        });
 
         if (editingTask.value) {
             formData.append('_method', 'PUT');
@@ -1257,6 +1266,10 @@ const saveContact = async () => {
         cancelContactCreate();
         activeTab.value = 'contacts';
     } catch {}
+};
+
+const syncBookingTaskAttachments = (event) => {
+    taskForm.value.attachments = Array.from(event.target.files ?? []);
 };
 
 const removeContact = async (contact) => {
@@ -1768,6 +1781,28 @@ const removeContact = async (contact) => {
                                 <div class="xl:col-span-4">
                                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Remarks</label>
                                     <textarea v-model="taskForm.remarks" rows="4" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-cyan-300/50" />
+                                </div>
+                                <div class="xl:col-span-4">
+                                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Task Files</label>
+                                    <input ref="taskAttachmentInput" type="file" multiple accept="image/*,video/*,.pdf" class="block w-full rounded-lg border border-dashed border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-stone-300 file:mr-3 file:rounded-full file:border-0 file:bg-cyan-300/15 file:px-3 file:py-2 file:text-xs file:font-medium file:text-cyan-100 hover:file:bg-cyan-300/20" @change="syncBookingTaskAttachments">
+                                    <p class="mt-1 text-xs text-stone-400">Upload files the assignee should be able to view in the client portal. New uploads are added to the task.</p>
+                                    <p v-if="firstError(taskValidationErrors, 'attachments')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(taskValidationErrors, 'attachments') }}</p>
+                                    <p v-else-if="firstError(taskValidationErrors, 'attachments.0')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(taskValidationErrors, 'attachments.0') }}</p>
+                                </div>
+                                <div v-if="editingTask?.task_attachments?.length" class="xl:col-span-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                                    <p class="text-[11px] uppercase tracking-[0.24em] text-stone-400">Existing Files</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <a
+                                            v-for="attachment in editingTask.task_attachments"
+                                            :key="`${editingTask.id}-${attachment.url}`"
+                                            :href="attachment.url"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            class="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100 transition hover:bg-cyan-300/15"
+                                        >
+                                            {{ attachment.name }}
+                                        </a>
+                                    </div>
                                 </div>
                                 <div v-if="editingTask" class="xl:col-span-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
                                     <div class="flex flex-wrap items-center justify-between gap-3">

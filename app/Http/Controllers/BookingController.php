@@ -1611,6 +1611,14 @@ class BookingController extends Controller
             'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
             'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
+            'task_attachments' => collect($task->attachments ?? [])
+                ->map(fn ($attachment) => [
+                    'name' => $attachment['name'] ?? 'Attachment',
+                    'url' => $attachment['url'] ?? null,
+                ])
+                ->filter(fn (array $attachment) => filled($attachment['url']))
+                ->values()
+                ->all(),
             'customer_response_note' => $latestPortalUpdate?->note ?? '',
             'customer_response_at_label' => DateFormatter::dateTime($latestPortalUpdate?->created_at, 'No reply yet'),
             'customer_response_attachments' => collect($latestPortalUpdate?->attachments ?? [])

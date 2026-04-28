@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\TaskAssignedMail;
 use App\Models\Booking;
+use App\Models\ClientPortalAccess;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\Tenant;
@@ -12,9 +13,12 @@ use App\Support\TaskAssignees;
 use App\Support\TenantStatuses;
 use App\Support\TrackedEmailSender;
 use App\Tenancy\CurrentTenant;
+use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -62,7 +66,9 @@ class TaskController extends Controller
     public function store(Request $request, CurrentTenant $currentTenant, TrackedEmailSender $trackedEmailSender): RedirectResponse|JsonResponse
     {
         $tenant = $this->requireTenant($currentTenant);
-        $task = Task::query()->create($this->validateTask($request, $tenant));
+        $validated = $this->validateTask($request, $tenant);
+        $task = Task::query()->create($validated);
+        $this->syncTaskAttachments($task, $request->file('attachments', []));
         $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates']);
         $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
@@ -82,6 +88,7 @@ class TaskController extends Controller
         }
 
         $task->update($validated);
+        $this->syncTaskAttachments($task, $request->file('attachments', []));
         $task->load(['assignedUser', 'assigneeVendor', 'assigneeCustomer', 'booking.customer', 'status', 'clientPortalUpdates']);
         $this->notifyAssignee($trackedEmailSender, $tenant, $task);
 
@@ -163,6 +170,12 @@ class TaskController extends Controller
             'date_started' => ['nullable', 'date'],
             'date_completed' => ['nullable', 'date'],
             'remarks' => ['nullable', 'string'],
+            'attachments' => ['nullable', 'array', 'max:6'],
+            'attachments.*' => [
+                'file',
+                'max:20480',
+                'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/quicktime,video/x-msvideo,video/webm,application/pdf',
+            ],
         ]);
 
         $booking = ! empty($validated['booking_id'])
@@ -219,6 +232,14 @@ class TaskController extends Controller
             'date_completed' => DateFormatter::inputDate($task->date_completed) ?? '',
             'date_completed_label' => DateFormatter::date($task->date_completed, 'Not set'),
             'remarks' => $task->remarks ?? '',
+            'task_attachments' => collect($task->attachments ?? [])
+                ->map(fn ($attachment) => [
+                    'name' => $attachment['name'] ?? 'Attachment',
+                    'url' => $attachment['url'] ?? null,
+                ])
+                ->filter(fn (array $attachment) => filled($attachment['url']))
+                ->values()
+                ->all(),
             'customer_response_note' => $latestPortalUpdate?->note ?? '',
             'customer_response_at_label' => DateFormatter::dateTime($latestPortalUpdate?->created_at, 'No reply yet'),
             'customer_response_attachments' => collect($latestPortalUpdate?->attachments ?? [])
@@ -289,15 +310,16 @@ class TaskController extends Controller
             return;
         }
 
+        $actionUrl = $this->taskActionUrl($task, $recipient);
+        $actionLabel = $task->booking_id ? 'View booking' : 'View task';
+
         $trackedEmailSender->send(
             new TaskAssignedMail(
                 $tenant,
                 $task,
                 (string) ($recipient['name'] ?? 'there'),
-                $task->booking_id
-                    ? route('admin.bookings.show', $task->booking_id)
-                    : route('tasks.index', ['task' => $task->id]),
-                $task->booking_id ? 'View booking' : 'View task',
+                $actionUrl,
+                $actionLabel,
             ),
             $recipient,
             [],
@@ -306,6 +328,76 @@ class TaskController extends Controller
                 'context' => $task,
             ],
         );
+    }
+
+    private function taskActionUrl(Task $task, array $recipient): ?string
+    {
+        if ($task->booking_id && $task->assignee_type === Task::ASSIGNEE_CUSTOMER) {
+            $booking = $task->booking;
+
+            if (! $booking || blank($recipient['email'] ?? null)) {
+                return null;
+            }
+
+            $access = ClientPortalAccess::query()->updateOrCreate(
+                [
+                    'tenant_id' => $booking->tenant_id,
+                    'customer_email' => strtolower((string) $recipient['email']),
+                ],
+                [
+                    'booking_id' => $booking->id,
+                    'customer_name' => $booking->customer_name ?: (string) ($recipient['name'] ?? ''),
+                    'invite_token' => (string) Str::uuid(),
+                    'granted_at' => now(),
+                ],
+            );
+
+            if (blank($access->invite_token)) {
+                $access->forceFill([
+                    'invite_token' => (string) Str::uuid(),
+                ])->save();
+            }
+
+            return route('client.portal.login', ['access' => $access->invite_token]);
+        }
+
+        if ($task->booking_id) {
+            return route('admin.bookings.show', $task->booking_id);
+        }
+
+        return route('tasks.index', ['task' => $task->id]);
+    }
+
+    private function syncTaskAttachments(Task $task, array $files): void
+    {
+        if ($files === []) {
+            return;
+        }
+
+        $attachments = collect($task->attachments ?? []);
+
+        foreach ($files as $file) {
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
+
+            $path = $file->store(
+                sprintf('task-attachments/%d/%s/%d', $task->tenant_id, $task->booking_id ?: 'general', $task->id),
+                'public',
+            );
+
+            $attachments->push([
+                'name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'url' => Storage::disk('public')->url($path),
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        $task->forceFill([
+            'attachments' => $attachments->values()->all(),
+        ])->save();
     }
 
     private function assertTenantTask(Tenant $tenant, Task $task): void
