@@ -468,13 +468,10 @@
                     </a>
                     @php($artisanCommands = [
                         'Clear cache' => '/opt/alt/php84/usr/bin/php artisan optimize:clear',
-                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate --force',
-                        'Seed MemoShot' => '/opt/alt/php84/usr/bin/php artisan db:seed --class=MemoShotSeeder --force',
-                        'Seed demo data' => '/opt/alt/php84/usr/bin/php artisan db:seed --class=DemoSeeder --force',
-                        'Storage link' => '/opt/alt/php84/usr/bin/php artisan storage:link',
-                        'Cache config' => '/opt/alt/php84/usr/bin/php artisan config:cache',
-                        'Cache routes' => '/opt/alt/php84/usr/bin/php artisan route:cache',
-                        'Cache views' => '/opt/alt/php84/usr/bin/php artisan view:cache',
+                        'Clear link' => 'rm -f /home/u838520432/domains/memoshot.com/public_html/storage',
+                        'Storage link' => 'ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage',
+                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate --force'
+                       
                     ])
                     <div class="flex flex-wrap gap-2">
                         @foreach ($artisanCommands as $label => $command)
