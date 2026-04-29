@@ -35,7 +35,7 @@ class ClientPortalController extends Controller
         }
 
         if ($request->session()->has(ClientPortalService::AUTH_SESSION_KEY)) {
-            return redirect()->route('client.portal.index');
+            return $this->redirectToPortalTarget($request);
         }
 
         $access = $clientPortalService->resolveGrantedAccess(
@@ -47,6 +47,8 @@ class ClientPortalController extends Controller
             'tenant' => $tenant,
             'prefillEmail' => $access?->customer_email ?? old('email'),
             'accessToken' => $access?->invite_token ?? (string) $request->query('access', ''),
+            'targetBookingId' => (string) $request->query('booking', ''),
+            'targetTaskId' => (string) $request->query('task', ''),
         ]);
     }
 
@@ -58,6 +60,8 @@ class ClientPortalController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email'],
             'access' => ['nullable', 'uuid'],
+            'booking' => ['nullable', 'integer'],
+            'task' => ['nullable', 'integer'],
         ]);
 
         $access = $clientPortalService->resolveGrantedAccess(
@@ -78,6 +82,8 @@ class ClientPortalController extends Controller
             'access_id' => $access->id,
             'verification_id' => $verification->id,
             'email' => $access->customer_email,
+            'target_booking_id' => $data['booking'] ?? null,
+            'target_task_id' => $data['task'] ?? null,
         ]);
 
         return redirect()
@@ -148,6 +154,8 @@ class ClientPortalController extends Controller
         $request->session()->put(ClientPortalService::AUTH_SESSION_KEY, [
             'access_id' => $verification->access->id,
             'email' => $verification->access->customer_email,
+            'target_booking_id' => $pendingAccess['target_booking_id'] ?? null,
+            'target_task_id' => $pendingAccess['target_task_id'] ?? null,
         ]);
         $request->session()->regenerate();
 
@@ -166,7 +174,7 @@ class ClientPortalController extends Controller
             ],
         );
 
-        return redirect()->route('client.portal.index');
+        return $this->redirectToPortalTarget($request);
     }
 
     public function resend(Request $request, CurrentTenant $currentTenant, ClientPortalService $clientPortalService): RedirectResponse
@@ -188,6 +196,8 @@ class ClientPortalController extends Controller
             'access_id' => $access->id,
             'verification_id' => $verification->id,
             'email' => $access->customer_email,
+            'target_booking_id' => $pendingAccess['target_booking_id'] ?? null,
+            'target_task_id' => $pendingAccess['target_task_id'] ?? null,
         ]);
 
         return back()->with('status', 'A fresh portal code is on its way.');
@@ -228,6 +238,11 @@ class ClientPortalController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $targetBookingId = (int) ($request->query('booking') ?: ($auth['target_booking_id'] ?? 0));
+        $selectedBooking = $targetBookingId > 0
+            ? $bookings->firstWhere('id', $targetBookingId)
+            : null;
+
         $upcomingBookings = $bookings
             ->filter(fn (Booking $booking) => $booking->event_date === null || $booking->event_date->isToday() || $booking->event_date->isFuture())
             ->values();
@@ -236,12 +251,21 @@ class ClientPortalController extends Controller
             ->filter(fn (Booking $booking) => $booking->event_date !== null && $booking->event_date->isPast() && ! $booking->event_date->isToday())
             ->values();
 
+        $primaryBookings = $selectedBooking
+            ? collect([$selectedBooking])
+            : $upcomingBookings;
+
+        $otherBookings = $selectedBooking
+            ? $bookings->reject(fn (Booking $booking) => $booking->id === $selectedBooking->id)->values()
+            : $pastBookings;
+
         return view('client-portal.index', [
             'tenant' => $tenant,
             'customerEmail' => $email,
             'customerName' => $bookings->first()?->customer_name,
-            'upcomingBookings' => $upcomingBookings,
-            'pastBookings' => $pastBookings,
+            'primaryBookings' => $primaryBookings,
+            'otherBookings' => $otherBookings,
+            'selectedBooking' => $selectedBooking,
         ]);
     }
 
@@ -337,7 +361,7 @@ class ClientPortalController extends Controller
         $this->notifyTenantAdminsOfTaskResponse($trackedEmailSender, $tenant, $booking, $task->fresh(['status']), $note, $attachments);
 
         return redirect()
-            ->route('client.portal.index')
+            ->route('client.portal.index', ['booking' => $booking->id])
             ->withFragment('task-'.$task->id)
             ->with('status', 'Task update saved.');
     }
@@ -507,6 +531,27 @@ class ClientPortalController extends Controller
     private function clientAuth(Request $request): ?array
     {
         return $request->session()->get(ClientPortalService::AUTH_SESSION_KEY);
+    }
+
+    private function redirectToPortalTarget(Request $request): RedirectResponse
+    {
+        $bookingId = (int) $request->query('booking');
+        $taskId = (int) $request->query('task');
+
+        if ($bookingId <= 0) {
+            $auth = $request->session()->get(ClientPortalService::AUTH_SESSION_KEY, []);
+            $bookingId = (int) ($auth['target_booking_id'] ?? 0);
+            $taskId = (int) ($auth['target_task_id'] ?? 0);
+        }
+
+        $parameters = $bookingId > 0 ? ['booking' => $bookingId] : [];
+        $url = route('client.portal.index', $parameters);
+
+        if ($taskId > 0) {
+            $url .= '#task-'.$taskId;
+        }
+
+        return redirect()->to($url);
     }
 
     private function notifyTenantAdminsOfTaskResponse(

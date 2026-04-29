@@ -428,7 +428,11 @@ class TaskController extends Controller
                 ])->save();
             }
 
-            return route('client.portal.login', ['access' => $access->invite_token]);
+            return route('client.portal.login', [
+                'access' => $access->invite_token,
+                'booking' => $booking->id,
+                'task' => $task->id,
+            ]).'#task-'.$task->id;
         }
 
         if ($task->booking_id) {

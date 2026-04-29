@@ -38,12 +38,12 @@
         <div class="space-y-10">
             <section class="space-y-5">
                 <div>
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">Current And Upcoming</p>
-                    <h2 class="mt-1 text-xl font-semibold text-white">{{ $upcomingBookings->count() }} booking{{ $upcomingBookings->count() === 1 ? '' : 's' }}</h2>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-200">{{ $selectedBooking ? 'Selected Booking' : 'Current And Upcoming' }}</p>
+                    <h2 class="mt-1 text-xl font-semibold text-white">{{ $primaryBookings->count() }} booking{{ $primaryBookings->count() === 1 ? '' : 's' }}</h2>
                 </div>
 
                 <div class="grid gap-5">
-                    @forelse ($upcomingBookings as $booking)
+                    @forelse ($primaryBookings as $booking)
                         <article class="rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
                             @php
                                 $clientTasks = $booking->tasks;
@@ -221,7 +221,7 @@
                         </article>
                     @empty
                         <div class="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-stone-400">
-                            No current or upcoming bookings are linked to this email yet.
+                            {{ $selectedBooking ? 'That booking could not be opened for this email.' : 'No current or upcoming bookings are linked to this email yet.' }}
                         </div>
                     @endforelse
                 </div>
@@ -229,12 +229,12 @@
 
             <section class="space-y-4">
                 <div>
-                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Previous Bookings</p>
-                    <h2 class="mt-1 text-xl font-semibold text-white">{{ $pastBookings->count() }} booking{{ $pastBookings->count() === 1 ? '' : 's' }}</h2>
+                    <p class="text-[11px] uppercase tracking-[0.3em] text-stone-400">Other Bookings</p>
+                    <h2 class="mt-1 text-xl font-semibold text-white">{{ $otherBookings->count() }} booking{{ $otherBookings->count() === 1 ? '' : 's' }}</h2>
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    @forelse ($pastBookings as $booking)
+                    @forelse ($otherBookings as $booking)
                         <article class="rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
@@ -251,7 +251,7 @@
                         </article>
                     @empty
                         <div class="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-stone-400 md:col-span-2 xl:col-span-3">
-                            No previous bookings were found for this email.
+                            No other bookings were found for this email.
                         </div>
                     @endforelse
                 </div>

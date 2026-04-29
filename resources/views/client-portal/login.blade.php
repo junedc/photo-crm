@@ -30,6 +30,8 @@
         </div>
 
         <input type="hidden" name="access" value="{{ $accessToken }}">
+        <input type="hidden" name="booking" value="{{ $targetBookingId }}">
+        <input type="hidden" name="task" value="{{ $targetTaskId }}">
 
         <button type="submit" class="w-full rounded-2xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200">
             Send portal code
