@@ -11,6 +11,20 @@
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
         <style>
+            input + article .selection-indicator {
+                border-color: rgb(251 191 36 / 0.45);
+                background: rgb(255 255 255 / 0.96);
+                color: rgb(217 119 6);
+                box-shadow: 0 10px 24px rgb(15 23 42 / 0.14);
+            }
+
+            input + article:hover .selection-indicator {
+                border-color: rgb(251 191 36 / 0.75);
+                background: rgb(255 255 255);
+                color: rgb(180 83 9);
+                transform: translateY(-1px);
+            }
+
             input:checked + article .selection-indicator {
                 border-color: rgb(167 243 208);
                 background: rgb(167 243 208);
@@ -35,13 +49,47 @@
             $applyCustomerPackageDiscount = static fn (float $amount): float => round($amount * (1 - ($customerPackageDiscountPercentage / 100)), 2);
             $bookingCurrencyCode = strtoupper($tenant?->stripe_currency ?: config('services.platform_stripe.currency', 'usd'));
             $bookingCurrencyPlaceholder = $bookingCurrencyCode.' 0.00';
+            $publicAssetUrl = static function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return '';
+                }
+
+                if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//')) {
+                    $parsedPath = parse_url(str_starts_with($path, '//') ? 'https:'.$path : $path, PHP_URL_PATH);
+
+                    if (is_string($parsedPath) && $parsedPath !== '') {
+                        $storagePosition = strpos($parsedPath, '/storage/');
+
+                        if ($storagePosition !== false) {
+                            return substr($parsedPath, $storagePosition);
+                        }
+
+                        return $parsedPath;
+                    }
+
+                    return $path;
+                }
+
+                if (str_starts_with($path, '/storage/')) {
+                    $path = ltrim(substr($path, strlen('/storage/')), '/');
+                    return '/media/public/'.$path;
+                }
+
+                if (str_starts_with($path, 'storage/')) {
+                    $path = ltrim(substr($path, strlen('storage/')), '/');
+                    return '/media/public/'.$path;
+                }
+
+                return '/media/public/'.ltrim($path, '/');
+            };
             $wizardErrorSteps = [
                 'customer_name' => 1,
                 'customer_phone' => 1,
                 'customer_email' => 1,
                 'event_date' => 1,
                 'event_type' => 1,
-                'venue' => 1,
                 'start_time' => 1,
                 'end_time' => 1,
                 'total_hours' => 1,
@@ -212,21 +260,18 @@
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <p class="text-xs uppercase tracking-[0.3em] text-cyan-200">Customer Details</p>
-                            <span class="hidden text-stone-600 sm:inline">•</span>
+                            <span class="hidden text-stone-600 sm:inline">�</span>
                             <h2 class="text-lg font-semibold">Booking request</h2>
                         </div>
-                        <p id="lead-autosave-status" class="text-right text-xs text-stone-400">
-                            Customer details are saved automatically.
-                        </p>
+                        <p id="lead-autosave-status" class="hidden text-right text-xs text-stone-400"></p>
                     </div>
 
                     <div class="space-y-4">
                         <div class="grid gap-4 lg:grid-cols-12">
                             <div class="lg:col-span-5">
-                                <label class="mb-2 block text-sm text-stone-300" for="customer-name">Full name <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="customer-name" name="customer_name" type="text" value="{{ old('customer_name') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_name') ? 'border-rose-300/70' : 'border-white/10' }}" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="customer_name"></p>
-                                @error('customer_name')
+                                <label class="mb-2 block text-sm text-stone-300" for="event-name">Event name</label>
+                                <input id="event-name" name="event_name" type="text" value="{{ old('event_name') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_name') ? 'border-rose-300/70' : 'border-white/10' }}">
+                                @error('event_name')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
                             </div>
@@ -247,10 +292,18 @@
                                 @enderror
                             </div>
                         </div>
-                        <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="grid gap-4 lg:grid-cols-3">
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="venue">Venue <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="venue" name="venue" type="text" value="{{ old('venue') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('venue') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <label class="mb-2 block text-sm text-stone-300" for="customer-name">Name <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                <input id="customer-name" name="customer_name" type="text" value="{{ old('customer_name') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('customer_name') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="customer_name"></p>
+                                @error('customer_name')
+                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div>
+                                <label class="mb-2 block text-sm text-stone-300" for="venue">Venue</label>
+                                <input id="venue" name="venue" type="text" value="{{ old('venue') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('venue') ? 'border-rose-300/70' : 'border-white/10' }}">
                                 <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="venue"></p>
                                 @error('venue')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
@@ -267,10 +320,10 @@
                                 <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="event_type"></p>
                                 @error('event_type')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                  @enderror
+                              </div>
+                          </div>
+                          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             <div>
                                 <label class="mb-2 block text-sm text-stone-300" for="event-date">Event date <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <input id="event-date" name="event_date" type="date" value="{{ old('event_date') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('event_date') ? 'border-rose-300/70' : 'border-white/10' }}" onkeydown="return false" required>
@@ -280,7 +333,15 @@
                                 @enderror
                             </div>
                             <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="start-time">Start hour <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                  <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration in hours <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                  <input id="total-hours-display" type="number" min="2" step="1" value="{{ old('total_hours', '') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
+                                  <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="total_hours"></p>
+                                  @error('total_hours')
+                                      <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                  @enderror
+                              </div>
+                              <div>
+                                <label class="mb-2 block text-sm text-stone-300" for="start-time">Start time <span class="text-rose-300" aria-hidden="true">*</span></label>
                                 <select id="start-time" name="start_time" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('start_time') ? 'border-rose-300/70' : 'border-white/10' }}" required>
                                     <option value="" disabled @selected(! old('start_time'))>Select start time</option>
                                     @for ($hour = 8; $hour < 24; $hour++)
@@ -297,25 +358,17 @@
                                 @error('start_time')
                                     <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
                                 @enderror
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="end-time-display">End hour <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="end-time-display" type="text" value="{{ old('end_time') ? \App\Support\DateFormatter::time(old('end_time')) : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
-                                <input id="end-time" name="end_time" type="hidden" value="{{ old('end_time') }}" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="end_time"></p>
-                                @error('end_time')
-                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
-                                @enderror
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm text-stone-300" for="total-hours-display">Duration <span class="text-rose-300" aria-hidden="true">*</span></label>
-                                <input id="total-hours-display" type="number" min="0.25" step="0.25" value="{{ old('total_hours', '0.00') }}" class="w-full rounded-2xl border bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 {{ $errors->has('total_hours') ? 'border-rose-300/70' : 'border-white/10' }}" required>
-                                <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="total_hours"></p>
-                                @error('total_hours')
-                                    <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
-                                @enderror
-                            </div>
-                        </div>
+                              </div>
+                              <div>
+                                  <label class="mb-2 block text-sm text-stone-300" for="end-time-display">Time finishes <span class="text-rose-300" aria-hidden="true">*</span></label>
+                                  <input id="end-time-display" type="text" value="{{ old('end_time') ? \App\Support\DateFormatter::time(old('end_time')) : '' }}" class="w-full rounded-2xl border bg-stone-900/60 px-4 py-3 text-white outline-none {{ $errors->has('end_time') ? 'border-rose-300/70' : 'border-white/10' }}" readonly>
+                                  <input id="end-time" name="end_time" type="hidden" value="{{ old('end_time') }}" required>
+                                  <p class="mt-2 hidden text-xs font-medium text-rose-200" data-validation-for="end_time"></p>
+                                  @error('end_time')
+                                      <p class="mt-2 text-xs font-medium text-rose-200">{{ $message }}</p>
+                                  @enderror
+                              </div>
+                          </div>
                         <div>
                             <label class="mb-2 block text-sm text-stone-300" for="booking-notes">Notes</label>
                             <textarea id="booking-notes" name="notes" rows="5" class="w-full rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50">{{ old('notes') }}</textarea>
@@ -335,7 +388,7 @@
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-amber-200">Choose Package</span>
-                                <span class="mx-2 text-stone-500">•</span>
+                                
                                 <span>Available packages</span>
                             </h2>
                         </div>
@@ -343,6 +396,9 @@
                         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             @forelse ($packages as $package)
                                 @php
+                                    $packagePhotoUrl = $package->photo_path && Storage::disk('public')->exists($package->photo_path)
+                                        ? $publicAssetUrl($package->photo_path)
+                                        : '';
                                     $packageHourlyPrices = $package->hourlyPrices
                                         ->map(function ($tier) {
                                             return [
@@ -366,14 +422,14 @@
                                         data-package-discount-percentage="{{ number_format($customerPackageDiscountPercentage, 2, '.', '') }}"
                                         data-package-hourly-prices='@json($packageHourlyPrices)'
                                         data-package-addon-ids='@json($package->addOns->pluck('id')->values()->all())'
-                                        data-package-photo-url="{{ $package->photo_path ? Storage::disk('public')->url($package->photo_path) : '' }}"
+                                        data-package-photo-url="{{ $packagePhotoUrl }}"
                                         @checked((int) old('package_id') === $package->id)
                                         required
                                     >
                                     <article class="h-full overflow-hidden rounded-3xl border border-white/10 bg-stone-950/50 transition peer-checked:border-amber-300/60 peer-checked:bg-amber-300/10 hover:border-white/20">
                                         <div class="relative">
-                                            @if ($package->photo_path)
-                                                <img src="{{ Storage::disk('public')->url($package->photo_path) }}" alt="{{ $package->name }}" class="h-40 w-full object-cover">
+                                            @if ($packagePhotoUrl !== '')
+                                                <img src="{{ $packagePhotoUrl }}" alt="{{ $package->name }}" class="h-40 w-full bg-stone-900 object-contain">
                                             @else
                                                 <div class="flex h-40 items-center justify-center bg-stone-900 text-5xl text-stone-600">P</div>
                                             @endif
@@ -403,7 +459,7 @@
                                                 >
                                                     View details
                                                 </button>
-                                                <span class="selection-indicator flex h-8 w-8 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
+                                                <span class="selection-indicator flex h-10 w-10 items-center justify-center rounded-full border-2 text-current transition">
                                                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                                                         <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
                                                     </svg>
@@ -416,8 +472,8 @@
                                 <template id="package-details-{{ $package->id }}">
                                     <div class="space-y-5">
                                         <div class="overflow-hidden rounded-3xl border border-white/10 bg-stone-950/60">
-                                            @if ($package->photo_path)
-                                                <img src="{{ Storage::disk('public')->url($package->photo_path) }}" alt="{{ $package->name }}" class="h-56 w-full object-cover">
+                                            @if ($packagePhotoUrl !== '')
+                                                <img src="{{ $packagePhotoUrl }}" alt="{{ $package->name }}" class="h-56 w-full bg-stone-900 object-contain">
                                             @else
                                                 <div class="flex h-56 items-center justify-center bg-stone-900 text-6xl text-stone-600">P</div>
                                             @endif
@@ -453,47 +509,47 @@
                                         </div>
 
                                         <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                            <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Included Equipment</p>
-                                            @if ($package->equipment->isNotEmpty())
-                                                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                                                    @foreach ($package->equipment as $equipment)
-                                                        <div class="rounded-2xl border border-white/10 bg-stone-950/60 p-4">
-                                                            <p class="text-base font-semibold text-white">{{ $equipment->name }}</p>
-                                                            <p class="mt-1 text-xs text-stone-400">{{ $equipment->category ?: 'Uncategorized' }}</p>
-                                                            <p class="mt-3 text-sm leading-6 text-stone-300">{{ $equipment->description ?: 'No equipment description provided.' }}</p>
-                                                        </div>
-                                                    @endforeach
+                                            <div class="flex items-center justify-between gap-4">
+                                                <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Included Items</p>
+                                                <span class="rounded-full border border-white/10 bg-stone-950/60 px-3 py-1 text-xs font-semibold text-stone-300">
+                                                    {{ $package->equipment->count() + $package->addOns->count() }}
+                                                </span>
+                                            </div>
+                                            @if ($package->equipment->isNotEmpty() || $package->addOns->isNotEmpty())
+                                                <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-stone-950/60">
+                                                    <table class="min-w-full divide-y divide-white/10 text-left">
+                                                        <thead class="bg-white/[0.03] text-xs uppercase tracking-[0.28em] text-stone-400">
+                                                            <tr>
+                                                                <th class="px-4 py-3 font-medium">Type</th>
+                                                                <th class="px-4 py-3 font-medium">Item</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-white/10 text-sm text-stone-200">
+                                                            @foreach ($package->equipment as $equipment)
+                                                                <tr class="align-top">
+                                                                    <td class="px-4 py-3">
+                                                                        <span class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">Equipment</span>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <p class="font-semibold text-white">{{ $equipment->name }}</p>
+                                                                    </td>
+                                                                </tr>
+                                                            @endforeach
+                                                            @foreach ($package->addOns as $packageAddOn)
+                                                                <tr class="align-top">
+                                                                    <td class="px-4 py-3">
+                                                                        <span class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">Add-On</span>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <p class="font-semibold text-white">{{ $packageAddOn->name }}</p>
+                                                                    </td>
+                                                                </tr>
+                                                            @endforeach
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             @else
-                                                <p class="mt-4 text-sm text-stone-400">No equipment has been assigned to this package yet.</p>
-                                            @endif
-                                        </div>
-
-                                        <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                            <p class="text-sm uppercase tracking-[0.3em] text-emerald-200">Included Add-Ons</p>
-                                            @if ($package->addOns->isNotEmpty())
-                                                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                                                    @foreach ($package->addOns as $packageAddOn)
-                                                        <div class="rounded-2xl border border-white/10 bg-stone-950/60 p-4">
-                                                            <p class="text-base font-semibold text-white">{{ $packageAddOn->name }}</p>
-                                                            <p class="mt-1 text-xs text-stone-400">
-                                                                {{ $packageAddOn->sku ?: 'Add-On' }}
-                                                                @if ($packageAddOn->duration)
-                                                                    · {{ $packageAddOn->duration }}
-                                                                @endif
-                                                            </p>
-                                                            <div class="mt-2 flex items-center gap-2">
-                                                                <p class="text-sm text-emerald-100">${{ number_format($packageAddOn->discountedUnitPrice(), 2) }}</p>
-                                                                @if ((float) ($packageAddOn->discount_percentage ?? 0) > 0)
-                                                                    <span class="text-xs text-stone-500 line-through">${{ number_format((float) $packageAddOn->unit_price, 2) }}</span>
-                                                                @endif
-                                                            </div>
-                                                            <p class="mt-3 text-sm leading-6 text-stone-300">{{ $packageAddOn->description ?: 'No add-on description provided.' }}</p>
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                            @else
-                                                <p class="mt-4 text-sm text-stone-400">No add-ons are included with this package yet.</p>
+                                                <p class="mt-4 text-sm text-stone-400">No equipment or add-ons have been assigned to this package yet.</p>
                                             @endif
                                         </div>
                                     </div>
@@ -543,9 +599,9 @@
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-emerald-200">Choose Add-Ons</span>
-                                <span class="mx-2 text-stone-500">•</span>
+                                
                                 <span>Optional extras</span>
-                                <span class="mx-2 text-stone-500">•</span>
+                                
                                 <span class="text-sm font-normal text-stone-300">Select any add-ons you would like included with your booking.</span>
                             </h2>
                         </div>
@@ -573,6 +629,11 @@
                                 <span class="text-right">Details</span>
                             </div>
                             @forelse ($addOns as $addOn)
+                                @php
+                                    $addOnPhotoUrl = $addOn->photo_path && Storage::disk('public')->exists($addOn->photo_path)
+                                        ? $publicAssetUrl($addOn->photo_path)
+                                        : '';
+                                @endphp
                                 <label class="block cursor-pointer border-b border-white/10 last:border-b-0" data-addon-card data-addon-id="{{ $addOn->id }}" data-addon-category="{{ $addOn->type ?: 'Items' }}">
                                     <input
                                         type="checkbox"
@@ -584,12 +645,12 @@
                                         data-addon-id="{{ $addOn->id }}"
                                         data-addon-category="{{ $addOn->type ?: 'Items' }}"
                                         data-addon-description="{{ Str::limit($addOn->description ?: 'No add-on description provided yet.', 120) }}"
-                                        data-addon-photo-url="{{ $addOn->photo_path ? Storage::disk('public')->url($addOn->photo_path) : '' }}"
+                                        data-addon-photo-url="{{ $addOnPhotoUrl }}"
                                         @checked(collect(old('add_on_ids', []))->map(fn ($id) => (int) $id)->contains($addOn->id))
                                     >
                                     <article class="grid gap-3 px-4 py-3 transition peer-checked:bg-emerald-300/10 hover:bg-white/[0.03] lg:grid-cols-[3rem_minmax(0,1.6fr)_8rem_8rem_7rem_8rem] lg:items-center">
                                         <div class="flex items-center justify-between gap-3 lg:justify-center">
-                                            <span class="selection-indicator flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-stone-950/85 text-transparent shadow-lg shadow-black/30 transition">
+                                            <span class="selection-indicator flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-current transition">
                                                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                                                     <path d="M4.5 10.5 8.2 14l7.3-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
                                                 </svg>
@@ -635,8 +696,8 @@
                                 <template id="addon-details-{{ $addOn->id }}">
                                     <div class="space-y-5">
                                         <div class="overflow-hidden rounded-3xl border border-white/10 bg-stone-950/60">
-                                            @if ($addOn->photo_path)
-                                                <img src="{{ Storage::disk('public')->url($addOn->photo_path) }}" alt="{{ $addOn->name }}" class="h-56 w-full object-cover">
+                                            @if ($addOnPhotoUrl !== '')
+                                                <img src="{{ $addOnPhotoUrl }}" alt="{{ $addOn->name }}" class="h-56 w-full bg-stone-900 object-contain">
                                             @else
                                                 <div class="flex h-56 items-center justify-center bg-stone-900 text-6xl text-stone-600">A</div>
                                             @endif
@@ -710,7 +771,7 @@
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-cyan-200">Location Address</span>
-                                <span class="mx-2 text-stone-500">&bull;</span>
+                                
                                 <span>Calculate travel fee</span>
                             </h2>
                         </div>
@@ -725,7 +786,7 @@
                                 @enderror
                                 <h2 class="sr-only">
                                     <span class="text-cyan-200">Travel Fee</span>
-                                    <span class="mx-2 text-stone-500">•</span>
+                                    
                                     <span>Auto distance pricing</span>
                                 </h2>
                                 <p id="travel-fee-note" class="mt-1 text-xs text-stone-400">
@@ -758,7 +819,7 @@
                         <div class="mb-5">
                             <h2 class="text-lg font-semibold text-white">
                                 <span class="text-cyan-200">Summary</span>
-                                <span class="mx-2 text-stone-500">&bull;</span>
+                                
                                 <span>Review your booking</span>
                             </h2>
                         </div>
@@ -787,7 +848,10 @@
                             </div>
 
                             <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
-                                <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
+                                <div class="flex items-center justify-between gap-4">
+                                    <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Selected Items</p>
+                                    <span id="wizard-summary-items-total" class="text-base font-semibold text-cyan-100">{{ $bookingCurrencyPlaceholder }}</span>
+                                </div>
                                 <div id="wizard-summary-items" class="mt-4 text-sm text-stone-200">
                                     <p class="text-stone-400">No package selected.</p>
                                 </div>
@@ -798,6 +862,31 @@
                                 <div class="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
                                     <span class="text-stone-400">Calculated travel fee</span>
                                     <span id="wizard-summary-travel-fee" class="font-semibold text-cyan-200">{{ $bookingCurrencyPlaceholder }}</span>
+                                </div>
+                            </div>
+
+                            <div class="rounded-3xl border border-white/10 bg-stone-950/50 p-5 lg:col-span-2">
+                                <p class="text-sm uppercase tracking-[0.3em] text-violet-200">Discount</p>
+                                <div class="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                                    <div class="flex items-center justify-between gap-4 text-sm">
+                                        <div class="min-w-0">
+                                            <p id="wizard-summary-discount-name" class="truncate font-medium text-white">No discount selected.</p>
+                                            <p id="wizard-summary-discount-note" class="mt-1 text-xs text-stone-400">Enter a discount code to apply savings before continuing.</p>
+                                        </div>
+                                        <span id="wizard-summary-discount-amount" class="shrink-0 font-semibold text-violet-200">-{{ $bookingCurrencyPlaceholder }}</span>
+                                    </div>
+                                    <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+                                        <input
+                                            id="wizard-discount-code"
+                                            type="text"
+                                            autocomplete="off"
+                                            placeholder="Enter discount code"
+                                            class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-violet-300/50"
+                                        >
+                                        <button type="button" id="wizard-discount-apply" class="rounded-2xl border border-violet-300/30 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-300/10">
+                                            Apply
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -882,29 +971,19 @@
                         <div id="book-now-selection-list" class="mt-4 space-y-2 text-sm text-stone-200">
                             <p class="text-stone-400">No package selected.</p>
                         </div>
+                        <div class="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-stone-950/55 px-4 py-3 text-sm">
+                            <div class="min-w-0">
+                                <p class="text-stone-200">Discount</p>
+                                <p id="book-now-discount-name" class="mt-1 truncate text-sm font-medium text-white">No discount selected.</p>
+                            </div>
+                            <p id="book-now-discount-amount" class="shrink-0 font-semibold text-violet-100">-{{ $bookingCurrencyPlaceholder }}</p>
+                        </div>
                     </section>
 
-                    <p id="book-now-discount-name" class="hidden">No discount selected.</p>
-                    <p id="book-now-discount-amount" class="hidden">-{{ $bookingCurrencyPlaceholder }}</p>
-
                     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                        <label class="text-sm uppercase tracking-[0.3em] text-violet-200" for="book-now-discount-code">
-                            Discount Code
-                        </label>
-                        <div class="mt-3 flex flex-col gap-3 sm:flex-row">
-                            <input
-                                id="book-now-discount-code"
-                                type="text"
-                                autocomplete="off"
-                                placeholder="Enter code"
-                                class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-stone-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-violet-300/50"
-                            >
-                            <button type="button" id="book-now-discount-apply" class="rounded-2xl border border-violet-300/30 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-300/10">
-                                Apply
-                            </button>
-                        </div>
+                        <p class="text-sm uppercase tracking-[0.3em] text-violet-200">Applied Discount</p>
                         <p id="book-now-discount-feedback" class="mt-3 text-sm text-stone-400">
-                            Enter a discount code if you have one.
+                            No discount has been applied to this booking.
                         </p>
                     </section>
 
@@ -1038,8 +1117,6 @@
                 const bookNowSelectionTotal = document.getElementById('book-now-selection-total');
                 const bookNowDiscountName = document.getElementById('book-now-discount-name');
                 const bookNowDiscountAmount = document.getElementById('book-now-discount-amount');
-                const bookNowDiscountCode = document.getElementById('book-now-discount-code');
-                const bookNowDiscountApply = document.getElementById('book-now-discount-apply');
                 const bookNowDiscountFeedback = document.getElementById('book-now-discount-feedback');
                 const bookNowDepositAmount = document.getElementById('book-now-deposit-amount');
                 const bookNowTravelFee = document.getElementById('book-now-travel-fee');
@@ -1051,16 +1128,23 @@
                 const wizardNextButtons = Array.from(document.querySelectorAll('[data-wizard-next]'));
                 const wizardPrevButtons = Array.from(document.querySelectorAll('[data-wizard-prev]'));
                 const wizardSummaryItems = document.getElementById('wizard-summary-items');
+                const wizardSummaryItemsTotal = document.getElementById('wizard-summary-items-total');
                 const wizardSummaryCustomer = document.getElementById('wizard-summary-customer');
                 const wizardSummaryDate = document.getElementById('wizard-summary-date');
                 const wizardSummaryVenue = document.getElementById('wizard-summary-venue');
                 const wizardSummaryLocation = document.getElementById('wizard-summary-location');
                 const wizardSummaryTravelFee = document.getElementById('wizard-summary-travel-fee');
+                const wizardSummaryDiscountName = document.getElementById('wizard-summary-discount-name');
+                const wizardSummaryDiscountNote = document.getElementById('wizard-summary-discount-note');
+                const wizardSummaryDiscountAmount = document.getElementById('wizard-summary-discount-amount');
+                const wizardDiscountCode = document.getElementById('wizard-discount-code');
+                const wizardDiscountApply = document.getElementById('wizard-discount-apply');
                 const wizardSummaryTotal = document.getElementById('wizard-summary-total');
                 const wizardSummaryDeposit = document.getElementById('wizard-summary-deposit');
                 const customerNameInput = document.getElementById('customer-name');
                 const customerEmailInput = document.getElementById('customer-email');
                 const customerPhoneInput = document.getElementById('customer-phone');
+                const isPaperLightTheme = (document.body.dataset.theme || '').toLowerCase() === 'paper light';
                 const autosaveFields = [
                     customerNameInput,
                     customerEmailInput,
@@ -1071,7 +1155,7 @@
                     document.getElementById('booking-notes'),
                 ].filter(Boolean);
 
-                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountCode || !bookNowDiscountApply || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTravelFee || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryTravelFee || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
+                if (!modal || !modalLabel || !modalTitle || !modalContent || !closeButton || !summaryPackage || !summaryTotal || !summaryTravel || !summaryDiscount || !summaryDeposit || !bookingCartToggle || !bookingCartClose || !bookingCartPanel || !bookingCartCount || !bookingCartContent || !toast || !toastMessage || !form || !leadTokenInput || !packageHourlyPriceIdInput || !travelDistanceInput || !travelFeeInput || !totalHoursInput || !totalHoursDisplay || !eventLocationInput || !startTimeInput || !endTimeInput || !endTimeDisplay || !packageTierSummary || !packageTierTitle || !packageTierSelectedLabel || !packageTierSelectedPrice || !packageTierModal || !packageTierModalTitle || !openPackageTierModalButton || !closePackageTierModalButton || !packageTierOptions || !autosaveStatus || !travelDistanceLabel || !travelFeeLabel || !travelFeeNote || !discountSelect || !discountAmountLabel || !discountNote || !bookNowModal || !openBookNowButton || !closeBookNowButton || !cancelBookNowButton || !confirmBookNowButton || !termsAcceptedCheckbox || !termsError || !bookNowSelectionList || !bookNowSelectionTotal || !bookNowDiscountName || !bookNowDiscountAmount || !bookNowDiscountFeedback || !bookNowDepositAmount || !bookNowTravelFee || !bookNowTotalAmount || wizardSteps.length !== 5 || !wizardSummaryItems || !wizardSummaryItemsTotal || !wizardSummaryCustomer || !wizardSummaryDate || !wizardSummaryLocation || !wizardSummaryTravelFee || !wizardSummaryDiscountName || !wizardSummaryDiscountNote || !wizardSummaryDiscountAmount || !wizardDiscountCode || !wizardDiscountApply || !wizardSummaryTotal || !wizardSummaryDeposit || !wizardSummaryVenue || !venueInput) {
                     return;
                 }
 
@@ -1208,16 +1292,16 @@
                 };
 
                 const fieldLabels = {
-                    customer_name: 'Full name',
+                    customer_name: 'Name',
                     customer_phone: 'Phone number',
                     customer_email: 'Email address',
                     event_date: 'Event date',
                     event_type: 'Event type',
                     venue: 'Venue',
                     event_location: 'Location address',
-                    start_time: 'Start hour',
-                    end_time: 'End hour',
-                    total_hours: 'Duration',
+                    start_time: 'Start time',
+                    end_time: 'Time finishes',
+                    total_hours: 'Duration in hours',
                 };
 
                 const fieldKey = (field) => {
@@ -1313,6 +1397,10 @@
                         return 'Duration must be at least 2 hours.';
                     }
 
+                    if (key === 'total_hours' && value && !Number.isInteger(parseAmount(value))) {
+                        return 'Duration in hours must be a whole number.';
+                    }
+
                     return '';
                 };
 
@@ -1402,8 +1490,26 @@
                     ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name)}" class="h-12 w-12 rounded-2xl object-cover">`
                     : `<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-lg font-semibold text-stone-600">${fallback}</div>`;
 
+                const bookNowTableClasses = isPaperLightTheme
+                    ? {
+                        wrapper: 'overflow-x-auto rounded-2xl border border-stone-300 bg-white',
+                        head: 'bg-stone-100 text-[11px] uppercase tracking-[0.18em] text-stone-600',
+                        row: 'border-t border-stone-200',
+                        packageName: 'font-semibold text-stone-950',
+                        packageMeta: 'mt-1 text-xs text-stone-600',
+                        addOnName: 'font-medium text-stone-950',
+                    }
+                    : {
+                        wrapper: 'overflow-x-auto rounded-2xl border border-white/10 bg-stone-950/45',
+                        head: 'bg-stone-950/80 text-[11px] uppercase tracking-[0.18em] text-stone-500',
+                        row: 'border-t border-white/10',
+                        packageName: 'font-semibold text-white',
+                        packageMeta: 'mt-1 text-xs text-stone-200',
+                        addOnName: 'font-medium text-white',
+                    };
+
                 const cartRemoveButton = (type, value, label) =>
-                    `<button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-300/30 bg-rose-300/10 text-sm font-bold leading-none text-rose-100 transition hover:bg-rose-300/20" data-cart-remove-type="${type}" data-cart-remove-value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}">×</button>`;
+                    `<button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-rose-300/30 bg-rose-300/10 text-sm font-bold leading-none text-rose-100 transition hover:bg-rose-300/20" data-cart-remove-type="${type}" data-cart-remove-value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}">�</button>`;
 
                 const renderBookingCart = () => {
                     const totals = quoteTotals();
@@ -1464,6 +1570,11 @@
 
                     bookNowDiscountFeedback.textContent = message;
                     bookNowDiscountFeedback.className = `mt-3 text-sm ${toneClasses[tone] || toneClasses.neutral}`;
+                };
+
+                const syncDiscountCodeInput = () => {
+                    const selectedDiscount = selectedDiscountOption();
+                    wizardDiscountCode.value = selectedDiscount?.dataset.discountCode || '';
                 };
 
                 const selectedPackageIncludedAddOnIds = () => {
@@ -1873,6 +1984,8 @@
                         discountSelect.value = '';
                     }
 
+                    syncDiscountCodeInput();
+
                     if (!selectedPackage) {
                         discountNote.textContent = 'Choose a package to see valid discount options.';
                     } else if (!hasApplicableOption) {
@@ -1883,13 +1996,13 @@
                 };
 
                 const applyDiscountCode = () => {
-                    const code = bookNowDiscountCode.value.trim();
+                    const code = wizardDiscountCode.value.trim();
 
                     if (!code) {
                         discountSelect.value = '';
                         updateSummary();
                         updateBookNowAmounts();
-                        setDiscountFeedback('Enter a discount code if you have one.');
+                        setDiscountFeedback('No discount has been applied to this booking.');
                         return;
                     }
 
@@ -2020,37 +2133,32 @@
                     const packageTotal = packagePriceForSelection(selectedPackage);
                     const addOnTotal = selectedAddOns.reduce((total, input) => total + parseAmount(input.dataset.addonPrice), 0);
                     const travelFee = parseAmount(travelFeeInput.value);
-                    const total = Math.max(0, packageTotal + addOnTotal + travelFee);
+                    const subtotal = Math.max(0, packageTotal + addOnTotal + travelFee);
+                    const selectedDiscount = selectedDiscountOption();
+                    const discountAmount = discountAmountForSelection(selectedPackage, packageTotal);
+                    const total = Math.max(0, subtotal - discountAmount);
 
                     return {
                         selectedPackage,
                         selectedTiming,
                         selectedAddOns,
-                        packageName: selectedTiming ? `${packageName} · ${parseAmount(selectedTiming.dataset.hours).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')} hrs` : packageName,
+                        selectedDiscount,
+                        packageName: selectedTiming ? `${packageName} � ${parseAmount(selectedTiming.dataset.hours).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')} hrs` : packageName,
                         packageTotal,
                         addOnTotal,
                         travelFee,
-                        total,
-                        depositAmount: total * (depositPercentage / 100),
-                    };
-                };
-
-                const bookNowTotals = () => {
-                    const totals = quoteTotals();
-                    const discountAmount = discountAmountForSelection(totals.selectedPackage, totals.packageTotal);
-                    const total = Math.max(0, totals.total - discountAmount);
-
-                    return {
-                        ...totals,
-                        selectedDiscount: selectedDiscountOption(),
+                        subtotal,
                         discountAmount,
                         total,
                         depositAmount: total * (depositPercentage / 100),
                     };
                 };
 
+                const bookNowTotals = () => quoteTotals();
+
                 const renderWizardSummary = () => {
                     const totals = quoteTotals();
+                    const discountedTotals = bookNowTotals();
                     const customerName = document.getElementById('customer-name')?.value.trim();
                     const eventDate = document.getElementById('event-date')?.value;
                     const venue = venueInput.value.trim();
@@ -2059,10 +2167,23 @@
                     wizardSummaryTotal.textContent = formatCurrency(totals.total);
                     wizardSummaryDeposit.textContent = formatCurrency(totals.depositAmount);
                     wizardSummaryTravelFee.textContent = formatCurrency(totals.travelFee);
+                    wizardSummaryItemsTotal.textContent = formatCurrency(totals.packageTotal + totals.addOnTotal);
                     wizardSummaryCustomer.textContent = customerName || 'Not entered';
                     wizardSummaryDate.textContent = eventDate || 'Not selected';
                     wizardSummaryVenue.textContent = venue || 'Not entered';
                     wizardSummaryLocation.textContent = eventLocation || 'Not entered';
+                    wizardSummaryDiscountAmount.textContent = `-${formatCurrency(discountedTotals.discountAmount)}`;
+
+                    if (discountedTotals.selectedDiscount && discountedTotals.discountAmount > 0) {
+                        wizardSummaryDiscountName.textContent = discountedTotals.selectedDiscount.textContent.trim();
+                        wizardSummaryDiscountNote.textContent = 'This discount has already been applied to the total below.';
+                    } else if (discountSelect.value) {
+                        wizardSummaryDiscountName.textContent = 'Selected discount is not available for this package.';
+                        wizardSummaryDiscountNote.textContent = 'The final total below does not include a discount.';
+                    } else {
+                        wizardSummaryDiscountName.textContent = 'No discount selected.';
+                        wizardSummaryDiscountNote.textContent = 'Enter a discount code to apply savings before continuing.';
+                    }
 
                     if (!totals.selectedPackage) {
                         wizardSummaryItems.innerHTML = '<p class="text-stone-400">No package selected.</p>';
@@ -2084,10 +2205,10 @@
                 };
 
                 const syncEndTimeFromDuration = () => {
-                    const selectedDuration = parseAmount(totalHoursDisplay.value);
+                    const selectedDuration = Math.max(0, Math.round(parseAmount(totalHoursDisplay.value)));
                     const computedEndTime = selectedDuration > 0 ? addHoursToTime(startTimeInput.value, selectedDuration) : '';
 
-                    totalHoursInput.value = selectedDuration > 0 ? selectedDuration.toFixed(2) : '0.00';
+                    totalHoursInput.value = selectedDuration > 0 ? String(Math.round(selectedDuration)) : '';
                     endTimeInput.value = computedEndTime;
                     endTimeDisplay.value = formatTimeLabel(computedEndTime);
 
@@ -2101,7 +2222,7 @@
                     const selectedDuration = enteredDuration > 0 ? enteredDuration : 0;
 
                     packageHourlyPriceIdInput.value = matchedTiming ? String(matchedTiming.id) : '';
-                    totalHoursDisplay.value = selectedDuration > 0 ? selectedDuration.toFixed(2) : '';
+                    totalHoursDisplay.value = selectedDuration > 0 ? String(Math.round(selectedDuration)) : '';
 
                     if (matchedTiming) {
                         packageTierSelectedPrice.textContent = formatCurrency(applyPackageDiscount(matchedTiming.price));
@@ -2118,17 +2239,17 @@
                     clearInvalidDiscountSelection();
                     const totals = quoteTotals();
 
-                    summaryPackage.textContent = totals.packageName;
+                    summaryPackage.textContent ='fffff';
                     summaryTotal.textContent = formatSummaryCurrency(totals.total);
                     summaryTravel.textContent = formatSummaryCurrency(totals.travelFee);
-                    summaryDiscount.textContent = `-${formatSummaryCurrency(0)}`;
+                    summaryDiscount.textContent = `-${formatSummaryCurrency(totals.discountAmount)}`;
                     summaryDeposit.textContent = formatSummaryCurrency(totals.depositAmount);
 
                     const discountedTotals = bookNowTotals();
                     discountAmountLabel.textContent = `-${formatCurrency(discountedTotals.discountAmount)}`;
 
                     if (discountedTotals.selectedDiscount && discountedTotals.discountAmount > 0) {
-                        discountNote.textContent = `${discountedTotals.selectedDiscount.textContent.trim()} will be applied only with Book Now.`;
+                        discountNote.textContent = `${discountedTotals.selectedDiscount.textContent.trim()} is applied to the total shown below.`;
                     } else if (discountSelect.value) {
                         discountNote.textContent = 'This offer does not apply to the current package selection.';
                     }
@@ -2268,7 +2389,7 @@
                     updateBookNowAmounts();
 
                     const packageRow = totals.selectedPackage
-                        ? `<tr class="border-t border-white/10"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100">Package</span></td><td class="px-3 py-3"><p class="font-semibold text-white">${escapeHtml(totals.packageName)}</p><p class="mt-1 text-xs text-stone-400">Creates your booking, invoice, and deposit payment.</p></td><td class="px-3 py-3 text-right font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</td></tr>`
+                        ? `<tr class="${bookNowTableClasses.row}"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-medium text-cyan-100">Package</span></td><td class="px-3 py-3"><p class="${bookNowTableClasses.packageName}">${escapeHtml(totals.packageName)}</p><p class="${bookNowTableClasses.packageMeta}">Creates your booking, invoice, and deposit payment.</p></td><td class="px-3 py-3 text-right font-semibold text-cyan-100">${formatCurrency(totals.packageTotal)}</td></tr>`
                         : '';
 
                     const addOnRows = totals.selectedAddOns
@@ -2276,18 +2397,20 @@
                             const name = input.dataset.addonName || 'Add-On';
                             const price = formatCurrency(parseAmount(input.dataset.addonPrice));
 
-                            return `<tr class="border-t border-white/10"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">Add-on</span></td><td class="px-3 py-3"><p class="font-medium text-white">${escapeHtml(name)}</p></td><td class="px-3 py-3 text-right font-medium text-emerald-100">${price}</td></tr>`;
+                            return `<tr class="${bookNowTableClasses.row}"><td class="px-3 py-3"><span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-medium text-emerald-100">Add-on</span></td><td class="px-3 py-3"><p class="${bookNowTableClasses.addOnName}">${escapeHtml(name)}</p></td><td class="px-3 py-3 text-right font-medium text-emerald-100">${price}</td></tr>`;
                         })
                         .join('');
 
                     bookNowSelectionList.innerHTML = packageRow || addOnRows
-                        ? `<div class="overflow-x-auto rounded-2xl border border-white/10 bg-stone-950/45"><table class="w-full min-w-[28rem] border-collapse text-left text-sm"><thead class="bg-stone-950/80 text-[11px] uppercase tracking-[0.18em] text-stone-500"><tr><th class="w-28 px-3 py-2.5 font-medium">Type</th><th class="px-3 py-2.5 font-medium">Name</th><th class="w-32 px-3 py-2.5 text-right font-medium">Amount</th></tr></thead><tbody>${packageRow}${addOnRows}</tbody></table></div>`
+                        ? `<div class="${bookNowTableClasses.wrapper}"><table class="w-full min-w-[28rem] border-collapse text-left text-sm"><thead class="${bookNowTableClasses.head}"><tr><th class="w-28 px-3 py-2.5 font-medium">Type</th><th class="px-3 py-2.5 font-medium">Name</th><th class="w-32 px-3 py-2.5 text-right font-medium">Amount</th></tr></thead><tbody>${packageRow}${addOnRows}</tbody></table></div>`
                         : '<p class="text-stone-400">No package selected.</p>';
 
-                    if (bookNowDiscountCode.value.trim()) {
-                        applyDiscountCode();
+                    if (totals.selectedDiscount && totals.discountAmount > 0) {
+                        setDiscountFeedback(`${totals.selectedDiscount.textContent.trim()} applied. You save ${formatCurrency(totals.discountAmount)} on this booking.`, 'success');
+                    } else if (discountSelect.value) {
+                        setDiscountFeedback('The selected discount does not apply to this booking total.', 'neutral');
                     } else {
-                        setDiscountFeedback('Enter a discount code if you have one.');
+                        setDiscountFeedback('No discount has been applied to this booking.');
                     }
 
                     termsAcceptedCheckbox.checked = false;
@@ -2386,17 +2509,20 @@
                 });
 
                 discountSelect.addEventListener('change', () => {
+                    syncDiscountCodeInput();
                     updateSummary();
                     updateBookNowAmounts();
                 });
 
-                let discountCodeTimeout;
-                bookNowDiscountCode.addEventListener('input', () => {
-                    window.clearTimeout(discountCodeTimeout);
-                    discountCodeTimeout = window.setTimeout(applyDiscountCode, 250);
+                wizardDiscountApply.addEventListener('click', () => {
+                    applyDiscountCode();
                 });
-                bookNowDiscountApply.addEventListener('click', () => {
-                    window.clearTimeout(discountCodeTimeout);
+                wizardDiscountCode.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+
+                    event.preventDefault();
                     applyDiscountCode();
                 });
                 wizardNextButtons.forEach((button) => {
@@ -2436,6 +2562,7 @@
                 restoreCustomerSessionDetails();
                 renderPackageTimingOptions();
                 refreshDiscountOptions();
+                syncDiscountCodeInput();
                 syncPackageIncludedAddOnVisibility();
                 applyAddOnCategoryFilter(activeAddOnCategory);
                 updateSummary();
@@ -2451,15 +2578,8 @@
                 let lastAutosaveFingerprint = '';
 
                 const setAutosaveStatus = (message, tone = 'neutral') => {
-                    const toneClasses = {
-                        neutral: 'text-stone-400',
-                        saving: 'text-amber-200',
-                        saved: 'text-emerald-200',
-                        error: 'text-rose-200',
-                    };
-
-                    autosaveStatus.textContent = message;
-                    autosaveStatus.className = `text-right text-xs ${toneClasses[tone] || toneClasses.neutral}`;
+                    autosaveStatus.textContent = '';
+                    autosaveStatus.className = 'hidden text-right text-xs text-stone-400';
                 };
 
                 const collectAutosavePayload = () => {
@@ -2491,7 +2611,7 @@
                             .some((field) => (payload.get(field) || '').trim() !== '');
 
                         if (!hasContent && !leadTokenInput.value) {
-                            setAutosaveStatus('Customer details are saved automatically.', 'neutral');
+                            setAutosaveStatus('', 'neutral');
                             return;
                         }
 
@@ -2568,8 +2688,8 @@
                 totalHoursDisplay.addEventListener('input', updateTotalHours);
                 totalHoursDisplay.addEventListener('change', updateTotalHours);
                 totalHoursDisplay.addEventListener('blur', () => {
-                    const normalizedDuration = parseAmount(totalHoursDisplay.value);
-                    totalHoursDisplay.value = normalizedDuration > 0 ? normalizedDuration.toFixed(2) : '';
+                    const normalizedDuration = Math.round(parseAmount(totalHoursDisplay.value));
+                    totalHoursDisplay.value = normalizedDuration > 0 ? String(normalizedDuration) : '';
                     updateTotalHours();
                 });
                 eventLocationInput.addEventListener('input', queueTravelCalculation);
@@ -2663,3 +2783,5 @@
         </script>
     </body>
 </html>
+
+

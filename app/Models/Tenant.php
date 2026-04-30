@@ -43,6 +43,7 @@ class Tenant extends Model
         'contact_phone',
         'abn',
         'address',
+        'home_url',
         'invoice_deposit_percentage',
         'travel_free_kilometers',
         'travel_fee_per_kilometer',
@@ -51,6 +52,7 @@ class Tenant extends Model
         'stripe_webhook_secret',
         'stripe_currency',
         'quote_prefix',
+        'booking_number_prefix',
         'invoice_prefix',
         'customer_package_discount_percentage',
     ];

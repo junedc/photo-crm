@@ -201,6 +201,8 @@ const confirmDeleteBooking = async () => {
                 <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-white">{{ entry.display_name || entry.customer_name }}</p>
                     <p class="mt-1 truncate text-xs text-stone-400">{{ entry.quote_number || 'No quote number' }}</p>
+                    <p v-if="entry.booking_no" class="mt-1 truncate text-xs text-stone-500">Booking No: {{ entry.booking_no }}</p>
+                    <p v-if="entry.event_name" class="mt-1 truncate text-xs text-stone-500">Event: {{ entry.event_name }}</p>
                 </div>
                 <div>
                     <p class="mb-1 text-[10px] uppercase tracking-[0.2em] text-stone-500 lg:hidden">Type</p>

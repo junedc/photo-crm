@@ -25,18 +25,25 @@
             @endif
 
             <section class="rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-300/15 via-stone-900 to-emerald-300/10 p-6 shadow-2xl shadow-black/20 sm:p-8">
-                <div class="mb-5 flex items-center gap-4">
-                    @if ($tenant->logo_path)
-                        <img src="{{ Storage::disk('public')->url($tenant->logo_path) }}" alt="{{ $tenant->name }} logo" class="h-14 w-14 rounded-2xl object-cover shadow-lg shadow-black/20">
-                    @else
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-stone-300">
-                            {{ \Illuminate\Support\Str::of($tenant->name)->substr(0, 1) }}
+                <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="flex items-center gap-4">
+                        @if ($tenant->logo_path)
+                            <img src="{{ Storage::disk('public')->url($tenant->logo_path) }}" alt="{{ $tenant->name }} logo" class="h-14 w-14 rounded-2xl object-cover shadow-lg shadow-black/20">
+                        @else
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-stone-300">
+                                {{ \Illuminate\Support\Str::of($tenant->name)->substr(0, 1) }}
+                            </div>
+                        @endif
+                        <div>
+                            <p class="text-sm font-semibold text-white">{{ $tenant->name }}</p>
+                            <p class="text-xs uppercase tracking-[0.3em] text-stone-400">Customer Invoice</p>
                         </div>
-                    @endif
-                    <div>
-                        <p class="text-sm font-semibold text-white">{{ $tenant->name }}</p>
-                        <p class="text-xs uppercase tracking-[0.3em] text-stone-400">Customer Invoice</p>
                     </div>
+                    @if (filled($tenant->home_url) && (float) $invoice->amount_paid > 0)
+                        <a href="{{ $tenant->home_url }}" class="inline-flex items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-300/20">
+                            Home
+                        </a>
+                    @endif
                 </div>
                 <p class="text-sm uppercase tracking-[0.35em] text-cyan-200">Invoice</p>
                 <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ $invoice->invoice_number }}</h1>

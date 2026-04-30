@@ -12,8 +12,104 @@ const props = defineProps({
     },
 });
 
+const emptyBookingRecord = () => ({
+    id: null,
+    display_name: '',
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    booking_kind: 'customer',
+    booking_kind_label: 'Customer Booking',
+    quote_number: '',
+    booking_no: '',
+    event_name: '',
+    event_type: '',
+    event_type_label: '',
+    event_date: '',
+    event_date_label: 'Not set',
+    start_time: '',
+    start_time_label: 'Not set',
+    end_time: '',
+    end_time_label: 'Not set',
+    total_hours: '0.00',
+    event_location: '',
+    notes: '',
+    status: 'pending',
+    status_label: 'Pending',
+    customer_response_status: 'pending',
+    customer_response_label: 'Pending',
+    customer_responded_at_label: '',
+    package: null,
+    package_id: '',
+    package_name: '',
+    package_price: '0.00',
+    discount: null,
+    discount_id: '',
+    discount_amount: '0.00',
+    booking_discount_source: 'none',
+    booking_discount_type: 'amount',
+    booking_discount_value: '',
+    booking_total: '0.00',
+    travel_fee: '0.00',
+    travel_distance_km: '',
+    entry_name: '',
+    entry_description: '',
+    client_portal_access_granted: false,
+    client_portal_access_granted_at_label: '',
+    client_portal_access_url: null,
+    grant_client_access_url: null,
+    update_url: null,
+    invoice_create_url: null,
+    show_url: null,
+    invoice: null,
+    equipment: [],
+    addons: [],
+    tasks: [],
+    contacts: [],
+    expenses: [],
+    documents: [],
+    task_assignees: [],
+    equipment_ids: [],
+    add_on_ids: [],
+    equipment_discount_types: {},
+    equipment_discount_values: {},
+    add_on_discount_types: {},
+    add_on_discount_values: {},
+});
+
+const normalizeBookingRecord = (record) => {
+    const base = emptyBookingRecord();
+    const nextRecord = record && typeof record === 'object' ? record : {};
+
+    return {
+        ...base,
+        ...nextRecord,
+        equipment: Array.isArray(nextRecord.equipment) ? nextRecord.equipment : [],
+        addons: Array.isArray(nextRecord.addons) ? nextRecord.addons : [],
+        tasks: Array.isArray(nextRecord.tasks) ? nextRecord.tasks : [],
+        contacts: Array.isArray(nextRecord.contacts) ? nextRecord.contacts : [],
+        expenses: Array.isArray(nextRecord.expenses) ? nextRecord.expenses : [],
+        documents: Array.isArray(nextRecord.documents) ? nextRecord.documents : [],
+        task_assignees: Array.isArray(nextRecord.task_assignees) ? nextRecord.task_assignees : [],
+        equipment_ids: Array.isArray(nextRecord.equipment_ids) ? nextRecord.equipment_ids : [],
+        add_on_ids: Array.isArray(nextRecord.add_on_ids) ? nextRecord.add_on_ids : [],
+        equipment_discount_types: nextRecord.equipment_discount_types && typeof nextRecord.equipment_discount_types === 'object'
+            ? nextRecord.equipment_discount_types
+            : {},
+        equipment_discount_values: nextRecord.equipment_discount_values && typeof nextRecord.equipment_discount_values === 'object'
+            ? nextRecord.equipment_discount_values
+            : {},
+        add_on_discount_types: nextRecord.add_on_discount_types && typeof nextRecord.add_on_discount_types === 'object'
+            ? nextRecord.add_on_discount_types
+            : {},
+        add_on_discount_values: nextRecord.add_on_discount_values && typeof nextRecord.add_on_discount_values === 'object'
+            ? nextRecord.add_on_discount_values
+            : {},
+    };
+};
+
 const { saving, fieldErrors, submitForm, deleteRecord } = useWorkspaceCrud();
-const bookingRecord = ref(props.data.booking);
+const bookingRecord = ref(normalizeBookingRecord(props.data.booking));
 const activeTab = ref('overview');
 const isEditing = ref(false);
 const editErrors = ref({});
@@ -23,12 +119,17 @@ const expenseErrors = ref({});
 const documentErrors = ref({});
 const contactErrors = ref({});
 const manualPaymentErrors = ref({});
-const tasks = ref([...(props.data.booking?.tasks ?? [])]);
-const contacts = ref([...(props.data.booking?.contacts ?? [])]);
+const tasks = ref([...(bookingRecord.value.tasks ?? [])]);
+const contacts = ref([...(bookingRecord.value.contacts ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 const quoteResponseStatusOptions = computed(() => props.data.quoteResponseStatusOptions ?? []);
-const isLightTheme = computed(() => props.data.tenant?.theme === 'light');
+const isLightTheme = computed(() => ['light', 'paper light'].includes(String(props.data.tenant?.theme ?? '').toLowerCase()));
+const bookingReady = computed(() => {
+    const record = bookingRecord.value;
+
+    return Boolean(record && (record.id || record.quote_number || record.customer_name || record.display_name));
+});
 const defaultTaskStatusId = computed(() => String(localTaskStatuses.value.find((status) => String(status.name ?? '').toLowerCase() === 'new')?.id ?? ''));
 const resolvedDefaultTaskStatusId = computed(() => defaultTaskStatusId.value || String(localTaskStatuses.value[0]?.id ?? ''));
 const resolveBookingStatusId = (record) => {
@@ -69,6 +170,8 @@ const buildEditForm = (record) => ({
     customer_name: record?.customer_name ?? '',
     customer_email: record?.customer_email ?? '',
     customer_phone: record?.customer_phone ?? '',
+    event_name: record?.event_name ?? '',
+    booking_no: record?.booking_no ?? '',
     event_type: record?.event_type ?? (props.data.eventTypes?.[0] ?? 'Wedding'),
     event_date: record?.event_date ?? '',
     start_time: record?.start_time ?? '',
@@ -153,6 +256,16 @@ const buildManualPaymentForm = () => ({
 const manualPaymentForm = ref(buildManualPaymentForm());
 const pendingDelete = ref(null);
 const showDeleteConfirm = ref(false);
+function formatHours(value) {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return '0';
+    }
+
+    return numericValue % 1 === 0 ? String(numericValue) : numericValue.toFixed(2).replace(/\.?0+$/, '');
+}
+
 const defaultInvoiceDescription = (record) => {
     const packageName = record?.package?.name || record?.package_name || 'Booking package';
     const hoursLabel = record?.total_hours ? ` - ${formatHours(record.total_hours)} hrs` : '';
@@ -278,15 +391,6 @@ const clampDiscountPercentage = (value) => Math.min(100, Math.max(0, Number(valu
 const clampDiscountAmount = (value) => Math.max(0, Number(value) || 0);
 const formatMoney = (value) => Number(value || 0).toFixed(2);
 const formatIntegerQuantity = (value = 1) => String(Math.max(0, Math.round(Number(value || 0))));
-const formatHours = (value) => {
-    const numericValue = Number(value);
-
-    if (!Number.isFinite(numericValue)) {
-        return '0';
-    }
-
-    return numericValue % 1 === 0 ? String(numericValue) : numericValue.toFixed(2).replace(/\.?0+$/, '');
-};
 const itemDiscountTypeMapKey = (selectionKey) => (
     selectionKey === 'equipment_ids' ? 'equipment_discount_types' : 'add_on_discount_types'
 );
@@ -580,12 +684,17 @@ const openDatePicker = (event) => {
 };
 
 const syncBooking = (record) => {
-    bookingRecord.value = record;
-    editForm.value = buildEditForm(record);
-    invoiceForm.value = buildInvoiceForm(record.invoice);
-    tasks.value = [...(record.tasks ?? [])];
-    contacts.value = [...(record.contacts ?? [])];
-    window.history.replaceState({}, '', record.show_url);
+    const normalizedRecord = normalizeBookingRecord(record);
+
+    bookingRecord.value = normalizedRecord;
+    editForm.value = buildEditForm(normalizedRecord);
+    invoiceForm.value = buildInvoiceForm(normalizedRecord.invoice);
+    tasks.value = [...(normalizedRecord.tasks ?? [])];
+    contacts.value = [...(normalizedRecord.contacts ?? [])];
+
+    if (normalizedRecord.show_url) {
+        window.history.replaceState({}, '', normalizedRecord.show_url);
+    }
 };
 
 const syncPackageTimingDefaults = () => {
@@ -1319,6 +1428,11 @@ const removeContact = async (contact) => {
 </script>
 
 <template>
+    <section v-if="!bookingReady" class="rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-4 text-sm text-amber-100 shadow-lg shadow-black/10">
+        Booking details could not be loaded for this record yet. Please return to the booking list and open it again.
+    </section>
+
+    <template v-else>
     <section class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 shadow-lg shadow-black/10">
         <p class="text-[11px] uppercase tracking-[0.35em] text-rose-200">Bookings Workspace</p>
         <h2 class="text-sm font-bold italic text-white">{{ bookingRecord.display_name || bookingRecord.customer_name }}</h2>
@@ -1401,6 +1515,14 @@ const removeContact = async (contact) => {
                     <div>
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Phone</label>
                         <input v-model="editForm.customer_phone" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(editValidationErrors, 'customer_phone') ? 'border-rose-300/60' : ''">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Name</label>
+                        <input v-model="editForm.event_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Booking No</label>
+                        <input v-model="editForm.booking_no" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-white outline-none transition focus:border-rose-300/50">
                     </div>
                     <div v-if="isEntryBooking" class="xl:col-span-4">
                         <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Entry Description</label>
@@ -1596,6 +1718,14 @@ const removeContact = async (contact) => {
                         <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
                             <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Phone</p>
                             <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.customer_phone }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Event Name</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.event_name || 'Not set' }}</p>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5">
+                            <p class="text-[11px] uppercase tracking-[0.3em] text-stone-500">Booking No</p>
+                            <p class="mt-1.5 text-sm font-medium text-stone-200">{{ bookingRecord.booking_no || 'Not set' }}</p>
                         </div>
                     </div>
                     <div v-if="bookingRecord.entry_description" class="rounded-xl border border-white/10 bg-slate-950/50 p-2.5 lg:col-span-12">
@@ -2505,4 +2635,5 @@ const removeContact = async (contact) => {
         @cancel="cancelDelete"
         @confirm="confirmDelete"
     />
+    </template>
 </template>

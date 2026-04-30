@@ -5,12 +5,27 @@ namespace App\Http\Controllers;
 use App\Models\Package;
 use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\File;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class PublicCatalogController extends Controller
 {
+    public function media(string $path): Response
+    {
+        $normalizedPath = ltrim($path, '/');
+        abort_unless($normalizedPath !== '' && Storage::disk('public')->exists($normalizedPath), 404);
+
+        $absolutePath = Storage::disk('public')->path($normalizedPath);
+        $mimeType = File::mimeType($absolutePath) ?: 'application/octet-stream';
+
+        return response()->file($absolutePath, [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
     public function packages(Request $request): JsonResponse
     {
         if ($request->isMethod('OPTIONS')) {

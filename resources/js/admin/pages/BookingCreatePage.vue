@@ -208,6 +208,8 @@ const resetCreateForm = () => {
         customer_name: '',
         customer_email: '',
         customer_phone: '',
+        event_name: '',
+        booking_no: '',
         event_type: props.data.eventTypes?.[0] ?? 'Wedding',
         venue: '',
         event_date: '',
@@ -622,6 +624,16 @@ const blockCreateSubmit = () => {};
                     </div>
                 </template>
 
+                <div>
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Event Name</label>
+                    <input v-model="createForm.event_name" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Booking No</label>
+                    <input v-model="createForm.booking_no" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50">
+                </div>
+
                 <div :class="isEntryBooking ? 'sm:col-span-2 xl:col-span-4' : 'sm:col-span-2 xl:col-span-2'">
                     <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.2em] text-stone-400">Venue</label>
                     <input v-model="createForm.venue" type="text" class="w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none transition focus:border-rose-300/50" :class="firstError(createValidationErrors, 'venue') ? 'border-rose-300/60' : ''">
@@ -799,6 +811,8 @@ const blockCreateSubmit = () => {};
                         <p><span class="text-stone-500">Name:</span> <span class="text-white">{{ createBookingSummaryName }}</span></p>
                         <p><span class="text-stone-500">Email:</span> <span class="text-white">{{ createForm.customer_email || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Phone:</span> <span class="text-white">{{ createForm.customer_phone || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">Event name:</span> <span class="text-white">{{ createForm.event_name || 'Not entered' }}</span></p>
+                        <p><span class="text-stone-500">Booking no:</span> <span class="text-white">{{ createForm.booking_no || 'Not entered' }}</span></p>
                         <p><span class="text-stone-500">Type:</span> <span class="text-white">{{ bookingKindLabel(createForm.booking_kind) }}</span></p>
                     </div>
                 </div>

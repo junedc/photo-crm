@@ -32,6 +32,7 @@ class MemoShotSeeder extends Seeder
                 'travel_free_kilometers' => null,
                 'travel_fee_per_kilometer' => null,
                 'quote_prefix' => null,
+                'booking_number_prefix' => null,
                 'invoice_prefix' => null,
             ]
         );

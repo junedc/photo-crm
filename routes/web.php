@@ -58,6 +58,9 @@ Route::prefix('admin')->name('super-admin.')->group(function () {
 });
 
 Route::middleware('tenant.required')->group(function () {
+    Route::get('/media/public/{path}', [PublicCatalogController::class, 'media'])
+        ->where('path', '.*')
+        ->name('public.media');
     Route::get('/bookings/terms-and-conditions', [BookingController::class, 'terms'])->name('bookings.terms');
     Route::get('/bookings/create', [BookingController::class, 'create'])->name('bookings.create');
     Route::get('/quotes/{booking:quote_token}/{response}', [BookingController::class, 'respondToQuote'])

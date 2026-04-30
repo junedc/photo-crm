@@ -31,6 +31,8 @@ class Booking extends Model
         'customer_name',
         'customer_email',
         'customer_phone',
+        'event_name',
+        'booking_no',
         'event_type',
         'venue',
         'event_date',
@@ -77,8 +79,17 @@ class Booking extends Model
         });
 
         static::created(function (self $booking): void {
+            $tenant = Tenant::query()->withoutGlobalScopes()->find($booking->tenant_id);
+
+            if (blank($booking->booking_no)) {
+                $bookingPrefix = $tenant?->booking_number_prefix ?: 'BK';
+
+                $booking->forceFill([
+                    'booking_no' => sprintf('%s-%06d', strtoupper($bookingPrefix), $booking->id),
+                ])->saveQuietly();
+            }
+
             if (blank($booking->quote_number)) {
-                $tenant = Tenant::query()->withoutGlobalScopes()->find($booking->tenant_id);
                 $prefix = $tenant?->quote_prefix ?: 'QT';
 
                 $booking->forceFill([

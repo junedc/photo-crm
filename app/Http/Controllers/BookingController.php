@@ -140,7 +140,7 @@ class BookingController extends Controller
                 ->where('is_active', true)
                 ->with([
                     'equipment',
-                    'addOns' => fn ($query) => $query->where('is_publicly_displayed', true),
+                    'addOns',
                     'hourlyPrices',
                 ])
                 ->latest()
@@ -201,6 +201,8 @@ class BookingController extends Controller
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
+            'event_name' => ['nullable', 'string', 'max:255'],
+            'booking_no' => ['nullable', 'string', 'max:255'],
             'event_date' => ['nullable', 'date'],
             'venue' => ['nullable', 'string', 'max:255'],
             'event_location' => ['nullable', 'string', 'max:255'],
@@ -212,6 +214,8 @@ class BookingController extends Controller
             $data['customer_name'] ?? null,
             $data['customer_email'] ?? null,
             $data['customer_phone'] ?? null,
+            $data['event_name'] ?? null,
+            $data['booking_no'] ?? null,
             $data['event_date'] ?? null,
             $data['venue'] ?? null,
             $data['event_location'] ?? null,
@@ -230,6 +234,8 @@ class BookingController extends Controller
             'customer_name' => $data['customer_name'] ?? null,
             'customer_email' => $data['customer_email'] ?? null,
             'customer_phone' => $data['customer_phone'] ?? null,
+            'event_name' => $data['event_name'] ?? null,
+            'booking_no' => $data['booking_no'] ?? null,
             'event_date' => $data['event_date'] ?? null,
             'venue' => $data['venue'] ?? null,
             'event_location' => $data['event_location'] ?? null,
@@ -266,12 +272,14 @@ class BookingController extends Controller
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
+            'event_name' => ['nullable', 'string', 'max:255'],
+            'booking_no' => ['nullable', 'string', 'max:255'],
             'event_type' => ['required', Rule::in($this->eventTypes(app(CurrentTenant::class)->get()))],
-            'venue' => ['required', 'string', 'max:255'],
+            'venue' => ['nullable', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
-            'total_hours' => ['required', 'numeric', 'min:0.25'],
+            'total_hours' => ['required', 'integer', 'min:2'],
             'event_location' => ['required', 'string', 'max:255'],
             'travel_distance_km' => ['nullable', 'numeric', 'min:0'],
             'travel_fee' => ['nullable', 'numeric', 'min:0'],
@@ -398,6 +406,8 @@ class BookingController extends Controller
                 'customer_name',
                 'customer_email',
                 'customer_phone',
+                'event_name',
+                'booking_no',
                 'event_type',
                 'venue',
                 'event_date',
@@ -432,12 +442,14 @@ class BookingController extends Controller
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
+            'event_name' => ['nullable', 'string', 'max:255'],
+            'booking_no' => ['nullable', 'string', 'max:255'],
             'event_type' => ['required', Rule::in($this->eventTypes(app(CurrentTenant::class)->get()))],
-            'venue' => ['required', 'string', 'max:255'],
+            'venue' => ['nullable', 'string', 'max:255'],
             'event_date' => ['required', 'date', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
             'end_time' => ['required', 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/', 'after:start_time'],
-            'total_hours' => ['required', 'numeric', 'min:0.25'],
+            'total_hours' => ['required', 'integer', 'min:2'],
             'event_location' => ['required', 'string', 'max:255'],
             'travel_distance_km' => ['nullable', 'numeric', 'min:0'],
             'travel_fee' => ['nullable', 'numeric', 'min:0'],
@@ -586,6 +598,8 @@ class BookingController extends Controller
             'customer_name',
             'customer_email',
             'customer_phone',
+            'event_name',
+            'booking_no',
             'event_type',
             'venue',
             'event_date',
@@ -637,6 +651,8 @@ class BookingController extends Controller
                 'customer_name' => ['nullable', 'string', 'max:255'],
                 'customer_email' => ['required', 'email', 'max:255'],
                 'customer_phone' => ['required', 'string', 'max:50'],
+                'event_name' => ['nullable', 'string', 'max:255'],
+                'booking_no' => ['nullable', 'string', 'max:255'],
                 'event_type' => ['required', Rule::in($this->eventTypes($tenant))],
                 'venue' => ['nullable', 'string', 'max:255'],
                 'event_date' => ['required', 'date'],
@@ -1249,13 +1265,21 @@ class BookingController extends Controller
         $eventDateTo = trim((string) $request->query('event_date_to', ''));
 
         return Booking::query()
-            ->with(['package', 'addOns', 'equipment', 'discount', 'bookingStatus', 'invoice'])
+            ->with([
+                'package:id,name',
+                'addOns:id,unit_price',
+                'equipment:id,daily_rate',
+                'bookingStatus',
+                'invoice:id,booking_id,status,amount_paid,total_amount',
+            ])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
                     $nested
                         ->where('customer_name', 'like', "%{$search}%")
                         ->orWhere('entry_name', 'like', "%{$search}%")
                         ->orWhere('customer_email', 'like', "%{$search}%")
+                        ->orWhere('event_name', 'like', "%{$search}%")
+                        ->orWhere('booking_no', 'like', "%{$search}%")
                         ->orWhere('quote_number', 'like', "%{$search}%")
                         ->orWhereHas('package', fn ($packageQuery) => $packageQuery->where('name', 'like', "%{$search}%"));
                 });
@@ -1399,9 +1423,11 @@ class BookingController extends Controller
         return [
             'id' => $booking->id,
             'quote_number' => $booking->quote_number,
+            'booking_no' => $booking->booking_no,
             'booking_kind' => $booking->booking_kind ?? 'customer',
             'booking_kind_label' => $this->bookingKindLabel($booking->booking_kind ?? 'customer'),
             'display_name' => $booking->entry_name ?: $booking->customer_name,
+            'event_name' => $booking->event_name,
             'customer_name' => $booking->customer_name,
             'event_date_label' => DateFormatter::date($booking->event_date),
             'start_time_label' => $this->timeLabel($booking->start_time),
@@ -1455,6 +1481,7 @@ class BookingController extends Controller
         return [
             'id' => $booking->id,
             'quote_number' => $booking->quote_number,
+            'booking_no' => $booking->booking_no,
             'booking_kind' => $booking->booking_kind ?? 'customer',
             'booking_kind_label' => $this->bookingKindLabel($booking->booking_kind ?? 'customer'),
             'display_name' => $booking->entry_name ?: $booking->customer_name,
@@ -1463,6 +1490,7 @@ class BookingController extends Controller
             'customer_name' => $booking->customer_name,
             'customer_email' => $booking->customer_email,
             'customer_phone' => $booking->customer_phone,
+            'event_name' => $booking->event_name,
             'client_portal_access_granted' => $clientPortalAccess !== null,
             'client_portal_access_granted_at_label' => DateFormatter::dateTime($clientPortalAccess?->granted_at),
             'client_portal_access_url' => $clientPortalAccess?->invite_token
@@ -2410,8 +2438,7 @@ class BookingController extends Controller
     {
         $documents = collect();
 
-        $quoteAttachment = app(BookingAddonsPdfGenerator::class)->makeForBooking($booking);
-        if ($quoteAttachment !== null) {
+        if ($booking->package_id) {
             $documents->push([
                 'id' => 'quote-'.$booking->id,
                 'title' => $booking->quote_number ?: 'Quote',
@@ -2422,7 +2449,7 @@ class BookingController extends Controller
                 'notes' => 'Quote PDF attached to the booking email.',
                 'created_at_label' => DateFormatter::dateTime($booking->created_at),
                 'created_at_sort' => optional($booking->created_at)->toIso8601String(),
-                'file_name' => $quoteAttachment->name,
+                'file_name' => ($booking->quote_number ?: 'quote').'.pdf',
                 'file_size_label' => null,
                 'url' => route('admin.bookings.quote-pdf', $booking),
                 'delete_url' => null,

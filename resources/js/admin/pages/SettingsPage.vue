@@ -119,6 +119,7 @@ const workspaceForm = ref({
     contact_email: tenantRecord.value.contact_email ?? '',
     contact_phone: tenantRecord.value.contact_phone ?? '',
     address: tenantRecord.value.address ?? '',
+    home_url: tenantRecord.value.home_url ?? '',
     theme: tenantRecord.value.theme ?? 'dark',
     timezone: tenantRecord.value.timezone ?? 'UTC',
     subscription_id: tenantRecord.value.subscription_id ?? '',
@@ -130,6 +131,7 @@ const workspaceForm = ref({
     stripe_webhook_secret: tenantRecord.value.stripe_webhook_secret ?? '',
     stripe_currency: tenantRecord.value.stripe_currency ?? 'aud',
     quote_prefix: tenantRecord.value.quote_prefix ?? 'QT',
+    booking_number_prefix: tenantRecord.value.booking_number_prefix ?? 'BK',
     invoice_prefix: tenantRecord.value.invoice_prefix ?? 'INV',
     customer_package_discount_percentage: tenantRecord.value.customer_package_discount_percentage ?? '0.00',
 });
@@ -264,6 +266,7 @@ const saveWorkspace = async () => {
     formData.append('contact_email', workspaceForm.value.contact_email ?? '');
     formData.append('contact_phone', workspaceForm.value.contact_phone ?? '');
     formData.append('address', workspaceForm.value.address ?? '');
+    formData.append('home_url', workspaceForm.value.home_url ?? '');
     formData.append('theme', workspaceForm.value.theme ?? 'dark');
     formData.append('timezone', workspaceForm.value.timezone ?? 'UTC');
     formData.append('subscription_id', workspaceForm.value.subscription_id ?? '');
@@ -275,6 +278,7 @@ const saveWorkspace = async () => {
     formData.append('stripe_webhook_secret', workspaceForm.value.stripe_webhook_secret ?? '');
     formData.append('stripe_currency', workspaceForm.value.stripe_currency ?? '');
     formData.append('quote_prefix', workspaceForm.value.quote_prefix ?? '');
+    formData.append('booking_number_prefix', workspaceForm.value.booking_number_prefix ?? '');
     formData.append('invoice_prefix', workspaceForm.value.invoice_prefix ?? '');
     formData.append('customer_package_discount_percentage', workspaceForm.value.customer_package_discount_percentage ?? '');
 
@@ -296,6 +300,7 @@ const saveWorkspace = async () => {
             contact_email: record.contact_email ?? '',
             contact_phone: record.contact_phone ?? '',
             address: record.address ?? '',
+            home_url: record.home_url ?? '',
             theme: record.theme ?? 'dark',
             timezone: record.timezone ?? 'UTC',
             subscription_id: record.subscription_id ?? '',
@@ -307,6 +312,7 @@ const saveWorkspace = async () => {
             stripe_webhook_secret: record.stripe_webhook_secret ?? '',
             stripe_currency: record.stripe_currency ?? 'aud',
             quote_prefix: record.quote_prefix ?? 'QT',
+            booking_number_prefix: record.booking_number_prefix ?? 'BK',
             invoice_prefix: record.invoice_prefix ?? 'INV',
             customer_package_discount_percentage: record.customer_package_discount_percentage ?? '0.00',
         };
@@ -600,6 +606,11 @@ onMounted(() => {
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Address</label>
                         <input v-model="workspaceForm.address" type="text" data-google-address="true" autocomplete="street-address" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                     </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Home Button URL</label>
+                        <input v-model="workspaceForm.home_url" type="url" placeholder="https://your-site.com" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'home_url') ? 'border-rose-300/60' : ''">
+                        <p v-if="firstError(workspaceValidationErrors, 'home_url')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'home_url') }}</p>
+                    </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Theme</label>
                         <select v-model="workspaceForm.theme" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
@@ -668,6 +679,10 @@ onMounted(() => {
                         <div>
                             <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Quote Number Prefix</label>
                             <input v-model="workspaceForm.quote_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Booking Number Prefix</label>
+                            <input v-model="workspaceForm.booking_number_prefix" type="text" maxlength="20" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
                         </div>
                         <div>
                             <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Invoice Number Prefix</label>
