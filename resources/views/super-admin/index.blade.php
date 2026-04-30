@@ -467,16 +467,13 @@
                         Open SSH
                     </a>
                     @php($artisanCommands = [
-                        'Goto Laravel' => 'cd /home/u838520432/domains/memoshot.com/laravel_app',
-                        'Clear cache' => '/opt/alt/php84/usr/bin/php artisan optimize:clear',
-                        'Clear link' => 'rm -f /home/u838520432/domains/memoshot.com/public_html/storage',
-                        'Storage link' => 'ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage',
-                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate',
-                        'All' => 'cd /home/u838520432/domains/memoshot.com/laravel_app && \
+                        'Run in server' => 'cd /home/u838520432/domains/memoshot.com/laravel_app && \
 /opt/alt/php84/usr/bin/php artisan optimize:clear && \
 rm -f /home/u838520432/domains/memoshot.com/public_html/storage && \
 ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage && \
-/opt/alt/php84/usr/bin/php artisan migrate
+/opt/alt/php84/usr/bin/php artisan migrate',
+'Demo Seeder' => 'cd /home/u838520432/domains/memoshot.com/laravel_app && \
+/opt/alt/php84/usr/bin/php artisan db:seed --class=DemoSeeder
 '])
                     <div class="flex flex-wrap gap-2">
                         @foreach ($artisanCommands as $label => $command)
