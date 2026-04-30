@@ -15,7 +15,6 @@
                 <section class="space-y-7">
                     <div class="flex items-center justify-between gap-4">
                         <p class="text-xl font-semibold tracking-tight text-white">MemoShot</p>
-                        <a href="{{ route('login') }}" class="rounded-full border border-white/10 bg-white/8 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-cyan-300/40 hover:text-white">Login</a>
                     </div>
 
                     <p class="inline-flex items-center rounded-full border border-amber-300/30 bg-amber-300/15 px-3 py-1 text-sm font-medium text-amber-100">

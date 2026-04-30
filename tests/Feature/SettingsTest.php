@@ -36,7 +36,6 @@ class SettingsTest extends TestCase
                 'contact_email' => 'hello@memoshot.test',
                 'contact_phone' => '0400123456',
                 'address' => '123 Queen Street, Brisbane',
-                'theme' => 'light',
                 'timezone' => 'Australia/Brisbane',
                 'invoice_deposit_percentage' => 35,
                 'travel_free_kilometers' => 20,
@@ -55,7 +54,6 @@ class SettingsTest extends TestCase
             ->assertJsonPath('record.name', 'MemoShot Brisbane')
             ->assertJsonPath('record.abn', '12 345 678 901')
             ->assertJsonPath('record.contact_email', 'hello@memoshot.test')
-            ->assertJsonPath('record.theme', 'light')
             ->assertJsonPath('record.timezone', 'Australia/Brisbane')
             ->assertJsonPath('record.invoice_deposit_percentage', '35.00')
             ->assertJsonPath('record.travel_free_kilometers', '20.00')
@@ -77,7 +75,6 @@ class SettingsTest extends TestCase
         $this->assertSame('hello@memoshot.test', $tenant->contact_email);
         $this->assertSame('0400123456', $tenant->contact_phone);
         $this->assertSame('123 Queen Street, Brisbane', $tenant->address);
-        $this->assertSame('light', $tenant->theme);
         $this->assertSame('Australia/Brisbane', $tenant->timezone);
         $this->assertSame('35.00', number_format((float) $tenant->invoice_deposit_percentage, 2, '.', ''));
         $this->assertSame('20.00', number_format((float) $tenant->travel_free_kilometers, 2, '.', ''));

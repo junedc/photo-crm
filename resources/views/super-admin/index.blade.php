@@ -156,7 +156,7 @@
                                 <tr class="align-top">
                                     <td class="px-5 py-5">
                                         <p class="font-semibold text-white">{{ $tenant->name }}</p>
-                                        <p class="mt-1 text-sm text-slate-400">{{ $tenant->slug }}.{{ $baseDomain }} · theme: {{ $tenant->theme ?: 'dark' }}</p>
+                                        <p class="mt-1 text-sm text-slate-400">{{ $tenant->slug }}.{{ $baseDomain }}</p>
                                     </td>
                                     <td class="px-5 py-5 text-sm text-slate-300">
                                         {{ $tenant->users_count }}
@@ -471,9 +471,13 @@
                         'Clear cache' => '/opt/alt/php84/usr/bin/php artisan optimize:clear',
                         'Clear link' => 'rm -f /home/u838520432/domains/memoshot.com/public_html/storage',
                         'Storage link' => 'ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage',
-                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate'
-                       
-                    ])
+                        'Migrate' => '/opt/alt/php84/usr/bin/php artisan migrate',
+                        'All' => 'cd /home/u838520432/domains/memoshot.com/laravel_app && \
+/opt/alt/php84/usr/bin/php artisan optimize:clear && \
+rm -f /home/u838520432/domains/memoshot.com/public_html/storage && \
+ln -s /home/u838520432/domains/memoshot.com/laravel_app/storage/app/public /home/u838520432/domains/memoshot.com/public_html/storage && \
+/opt/alt/php84/usr/bin/php artisan migrate
+'])
                     <div class="flex flex-wrap gap-2">
                         @foreach ($artisanCommands as $label => $command)
                             <button

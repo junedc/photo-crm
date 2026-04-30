@@ -40,7 +40,7 @@
             }
         </style>
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
+    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="dark">
         <script>
             window.googleMapsApiKey = @json($googleMapsApiKey);
         </script>
@@ -2783,5 +2783,4 @@
         </script>
     </body>
 </html>
-
 

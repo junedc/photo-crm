@@ -715,7 +715,6 @@ class CampaignController extends Controller
             'name' => $tenant->name,
             'slug' => $tenant->slug,
             'logo_url' => $tenant->logo_path ? '/storage/'.ltrim($tenant->logo_path, '/') : null,
-            'theme' => $tenant->theme ?: 'dark',
             'contact_email' => $tenant->contact_email,
             'contact_phone' => $tenant->contact_phone,
             'address' => $tenant->address,

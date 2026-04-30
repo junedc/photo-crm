@@ -12,7 +12,7 @@
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
+    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="dark">
         <main class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
             @if (request('payment') === 'success')
                 <div id="invoice-payment-toast" class="mb-6 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-4 text-sm text-cyan-100">

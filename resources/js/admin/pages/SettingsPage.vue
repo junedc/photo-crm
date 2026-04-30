@@ -120,7 +120,6 @@ const workspaceForm = ref({
     contact_phone: tenantRecord.value.contact_phone ?? '',
     address: tenantRecord.value.address ?? '',
     home_url: tenantRecord.value.home_url ?? '',
-    theme: tenantRecord.value.theme ?? 'dark',
     timezone: tenantRecord.value.timezone ?? 'UTC',
     subscription_id: tenantRecord.value.subscription_id ?? '',
     invoice_deposit_percentage: tenantRecord.value.invoice_deposit_percentage ?? '30.00',
@@ -267,7 +266,6 @@ const saveWorkspace = async () => {
     formData.append('contact_phone', workspaceForm.value.contact_phone ?? '');
     formData.append('address', workspaceForm.value.address ?? '');
     formData.append('home_url', workspaceForm.value.home_url ?? '');
-    formData.append('theme', workspaceForm.value.theme ?? 'dark');
     formData.append('timezone', workspaceForm.value.timezone ?? 'UTC');
     formData.append('subscription_id', workspaceForm.value.subscription_id ?? '');
     formData.append('invoice_deposit_percentage', workspaceForm.value.invoice_deposit_percentage ?? '');
@@ -301,7 +299,6 @@ const saveWorkspace = async () => {
             contact_phone: record.contact_phone ?? '',
             address: record.address ?? '',
             home_url: record.home_url ?? '',
-            theme: record.theme ?? 'dark',
             timezone: record.timezone ?? 'UTC',
             subscription_id: record.subscription_id ?? '',
             invoice_deposit_percentage: record.invoice_deposit_percentage ?? '30.00',
@@ -610,13 +607,6 @@ onMounted(() => {
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Home Button URL</label>
                         <input v-model="workspaceForm.home_url" type="url" placeholder="https://your-site.com" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50" :class="firstError(workspaceValidationErrors, 'home_url') ? 'border-rose-300/60' : ''">
                         <p v-if="firstError(workspaceValidationErrors, 'home_url')" class="mt-1 text-xs font-medium text-rose-300">{{ firstError(workspaceValidationErrors, 'home_url') }}</p>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Theme</label>
-                        <select v-model="workspaceForm.theme" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-slate-300/50">
-                            <option value="dark">Dark theme</option>
-                            <option value="light">Paper light theme</option>
-                        </select>
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Timezone</label>

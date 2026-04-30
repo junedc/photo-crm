@@ -62,7 +62,7 @@ const parseViewFromUrl = () => {
     return 'month';
 };
 const selectedView = ref(parseViewFromUrl());
-const isLightTheme = computed(() => props.data.tenant?.theme === 'light');
+const isLightTheme = computed(() => document.body?.dataset.theme === 'light');
 const useDarkCalendar = computed(() => !isLightTheme.value);
 const tenantTimezone = computed(() => props.data.tenant?.timezone ?? 'UTC');
 

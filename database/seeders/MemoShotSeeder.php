@@ -24,7 +24,6 @@ class MemoShotSeeder extends Seeder
             [
                 'name' => 'MemoShot',
                 'logo_path' => null,
-                'theme' => 'dark',
                 'contact_email' => null,
                 'contact_phone' => null,
                 'address' => null,

@@ -7,11 +7,31 @@
         @if (!empty($props['tenant']['logo_url']))
             <link rel="icon" type="image/png" href="{{ url($props['tenant']['logo_url']) }}">
         @endif
+        <script>
+            (() => {
+                const options = ['light', 'dark', 'system'];
+                let stored = null;
+
+                try {
+                    stored = localStorage.getItem('memoshot.theme');
+                } catch {
+                    stored = null;
+                }
+
+                const defaultTheme = 'dark';
+                const preference = options.includes(stored) ? stored : defaultTheme;
+                const systemTheme = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                const theme = preference === 'system' ? systemTheme : preference;
+
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-preference', preference);
+            })();
+        </script>
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $props['tenant']['theme'] ?? 'dark' }}">
+    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="dark">
         @php
             $allowedScreens = null;
             $tenantId = $props['tenant']['id'] ?? null;

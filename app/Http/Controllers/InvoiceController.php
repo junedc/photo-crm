@@ -44,7 +44,6 @@ class InvoiceController extends Controller
                     'id' => $tenant?->id,
                     'name' => $tenant?->name,
                     'slug' => $tenant?->slug,
-                    'theme' => $tenant?->theme ?: 'dark',
                     'logo_url' => $tenant?->logo_path ? '/storage/'.ltrim($tenant->logo_path, '/') : null,
                     'contact_email' => $tenant?->contact_email,
                     'contact_phone' => $tenant?->contact_phone,

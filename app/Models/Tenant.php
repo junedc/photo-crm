@@ -32,7 +32,6 @@ class Tenant extends Model
         'slug',
         'referral_code',
         'logo_path',
-        'theme',
         'timezone',
         'subscription_id',
         'subscription_enabled',

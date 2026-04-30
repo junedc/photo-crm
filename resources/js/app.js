@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import AdminApp from './admin/AdminApp.vue';
 import ClientPortalDesignEditor from './client/ClientPortalDesignEditor.vue';
 import { autoAttachGoogleAddressInputs, calculateGoogleAddressDistanceKm } from './googleAddressAutocomplete';
+import { initThemeSwitcher } from './themeSwitcher';
 
 const appElement = document.getElementById('app');
 
@@ -22,6 +23,8 @@ if (clientPortalDesignElement && window.clientPortalDesignProps) {
 }
 
 if (typeof document !== 'undefined') {
+    initThemeSwitcher();
+
     window.autoAttachGoogleAddressInputs = autoAttachGoogleAddressInputs;
     window.calculateGoogleAddressDistanceKm = calculateGoogleAddressDistanceKm;
 

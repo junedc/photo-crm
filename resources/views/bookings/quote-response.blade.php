@@ -12,7 +12,7 @@
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
+    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="dark">
         <main class="mx-auto flex min-h-screen max-w-4xl items-center px-4 py-10 sm:px-6 lg:px-8">
             <section class="w-full rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-300/15 via-stone-900 to-emerald-300/10 p-6 shadow-2xl shadow-black/20 sm:p-8">
                 <div class="mb-5 flex items-center gap-4">

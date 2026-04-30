@@ -8,7 +8,7 @@
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="{{ $tenant->theme ?: 'dark' }}">
+    <body class="min-h-screen bg-stone-950 text-stone-50" data-theme="dark">
         <main class="flex min-h-screen items-center justify-center px-6">
             <section class="max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl shadow-black/30">
                 <p class="text-[11px] uppercase tracking-[0.35em] text-rose-200">Campaign Preferences</p>

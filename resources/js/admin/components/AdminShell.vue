@@ -445,6 +445,27 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="flex items-center gap-3">
+                    <div class="hidden sm:block">
+                        <div class="theme-switcher" aria-label="Theme">
+                            <button type="button" class="theme-switcher__button" data-theme-option="light" aria-label="Use light theme" aria-pressed="false">
+                                <svg class="theme-switcher__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M18.4 5.6l1.4-1.4M4.2 19.8l1.4-1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                            <button type="button" class="theme-switcher__button" data-theme-option="dark" aria-label="Use dark theme" aria-pressed="false">
+                                <svg class="theme-switcher__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                            <button type="button" class="theme-switcher__button" data-theme-option="system" aria-label="Use system theme" aria-pressed="false">
+                                <svg class="theme-switcher__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M4 5h16v10H4V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                                    <path d="M9 20h6M12 15v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="relative">
                         <button
                             ref="notificationButton"

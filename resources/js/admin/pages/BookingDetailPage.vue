@@ -124,7 +124,7 @@ const contacts = ref([...(bookingRecord.value.contacts ?? [])]);
 const localTaskStatuses = ref([...(props.data.taskStatuses ?? [])]);
 const bookingStatusOptions = computed(() => props.data.bookingStatusOptions ?? []);
 const quoteResponseStatusOptions = computed(() => props.data.quoteResponseStatusOptions ?? []);
-const isLightTheme = computed(() => ['light', 'paper light'].includes(String(props.data.tenant?.theme ?? '').toLowerCase()));
+const isLightTheme = computed(() => document.body?.dataset.theme === 'light');
 const bookingReady = computed(() => {
     const record = bookingRecord.value;
 
