@@ -2239,7 +2239,7 @@
                     clearInvalidDiscountSelection();
                     const totals = quoteTotals();
 
-                    summaryPackage.textContent ='fffff';
+                    summaryPackage.textContent = totals.packageName;
                     summaryTotal.textContent = formatSummaryCurrency(totals.total);
                     summaryTravel.textContent = formatSummaryCurrency(totals.travelFee);
                     summaryDiscount.textContent = `-${formatSummaryCurrency(totals.discountAmount)}`;
